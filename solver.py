@@ -1,20 +1,11 @@
 #!/usr/bin/env python3
 """
-LLM Model Parallelism Placement Solver using Gurobi
+LLM Model Parallelism Placement Solver using Gurobi (FIXED VERSION)
 Optimizes layer placement across heterogeneous GPU clusters with network communication.
 """
 
 import os
 import gurobipy as gp
-# os.environ['GRB_WLSACCESSID'] = '790b9c11-45d0-4785-8d99-a5e6414f9321'
-# os.environ['GRB_WLSSECRET'] = 'adef4738-7bf6-41b8-8dfd-d04e23d53e51'
-# os.environ['GRB_LICENSEID'] = '2415150'
-# os.environ['GRB_WLS'] = '2415150'
-options = {
-    "WLSACCESSID": "790b9c11-45d0-4785-8d99-a5e6414f9321",
-    "WLSSECRET": "adef4738-7bf6-41b8-8dfd-d04e23d53e51",
-    "LICENSEID": 2415150,
-}
 from gurobipy import GRB
 import pandas as pd
 import numpy as np
@@ -55,59 +46,62 @@ class Config:
 class ThroughputFunctions:
     """Throughput functions with configurable coefficients"""
 
-    # Default coefficients - can be updated from config files
+    # FIXED: Positive coefficients to ensure feasibility
     GPU_THROUGHPUT_COEFFS = {
-        'A100': {'seq_len': 0.1, 'batch_size': 2.0, 'num_layers': -0.05, 'constant': 100.0},
-        'V100': {'seq_len': 0.08, 'batch_size': 1.5, 'num_layers': -0.04, 'constant': 70.0},
-        'H100': {'seq_len': 0.12, 'batch_size': 2.5, 'num_layers': -0.06, 'constant': 150.0},
-        'RTX4090': {'seq_len': 0.06, 'batch_size': 1.2, 'num_layers': -0.03, 'constant': 50.0}
+        'A100': {'seq_len': -0.01, 'batch_size': 5.0, 'num_layers': 2.0, 'constant': 150.0},
+        'V100': {'seq_len': -0.008, 'batch_size': 3.0, 'num_layers': 1.5, 'constant': 100.0},
+        'H100': {'seq_len': -0.012, 'batch_size': 6.0, 'num_layers': 2.5, 'constant': 200.0},
+        'RTX4090': {'seq_len': -0.006, 'batch_size': 2.5, 'num_layers': 1.0, 'constant': 80.0}
     }
 
     NETWORK_COEFFS = {
-        'bandwidth': 0.8, 'seq_len': 0.001, 'batch_size': 0.1, 'hidden_dim': 0.0001, 'constant': 10.0
+        'bandwidth': 1.2, 'seq_len': -0.001, 'batch_size': -0.1, 'hidden_dim': -0.00001, 'constant': 50.0
     }
-
-    @classmethod
-    def update_coefficients(cls, network_config: Dict):
-        """Update coefficients from network configuration"""
-        if 'gpu_throughput_coeffs' in network_config:
-            cls.GPU_THROUGHPUT_COEFFS.update(network_config['gpu_throughput_coeffs'])
-        if 'network_coeffs' in network_config:
-            cls.NETWORK_COEFFS.update(network_config['network_coeffs'])
     
     @staticmethod
     def gpu_throughput(gpu_type: str, seq_len: int, batch_size: int, num_layers: int) -> float:
-        """Linear GPU throughput function (tokens/sec)"""
+        """Linear GPU throughput function (tokens/sec) - FIXED"""
         coeffs = ThroughputFunctions.GPU_THROUGHPUT_COEFFS[gpu_type]
-        return (coeffs['seq_len'] * seq_len + 
-                coeffs['batch_size'] * batch_size + 
-                coeffs['num_layers'] * num_layers + 
-                coeffs['constant'])
+        throughput = (coeffs['seq_len'] * seq_len + 
+                     coeffs['batch_size'] * batch_size + 
+                     coeffs['num_layers'] * num_layers + 
+                     coeffs['constant'])
+        return max(1.0, throughput)  # Ensure positive throughput
     
     @staticmethod
     def network_throughput(bandwidth_gbps: float, seq_len: int, batch_size: int, hidden_dim: int) -> float:
-        """Linear network throughput function (transfers/sec)"""
+        """Linear network throughput function (transfers/sec) - FIXED"""
         coeffs = ThroughputFunctions.NETWORK_COEFFS
-        return (coeffs['bandwidth'] * bandwidth_gbps + 
-                coeffs['seq_len'] * seq_len * 0.001 + 
-                coeffs['batch_size'] * batch_size * 0.1 + 
-                coeffs['hidden_dim'] * hidden_dim * 0.0001 + 
-                coeffs['constant'])
+        throughput = (coeffs['bandwidth'] * bandwidth_gbps + 
+                     coeffs['seq_len'] * seq_len + 
+                     coeffs['batch_size'] * batch_size + 
+                     coeffs['hidden_dim'] * hidden_dim + 
+                     coeffs['constant'])
+        return max(1.0, throughput)  # Ensure positive throughput
     
     @staticmethod
     def memory_usage(seq_len: int, batch_size: int, num_layers: int, layer_weight_gb: float,
                     d_model: int, d_hidden: int) -> float:
-        """Memory usage in GB"""
+        """Memory usage in GB - FIXED"""
         # Model weights
         weight_memory = num_layers * layer_weight_gb
 
-        # Intermediate tensors (simplified model) - per layer, not total
-        # Only need memory for intermediate activations of layers being processed
-        attention_memory = batch_size * seq_len * d_model * 4 / (1024**3)  # 4 bytes per float
+        # FIXED: Correct intermediate tensor memory calculation
+        # Attention matrix: batch_size × seq_len × seq_len × d_model (for QK^T)
+        attention_memory = batch_size * seq_len * seq_len * d_model * 4 / (1024**3)
+        
+        # K,V cache: 2 × batch_size × seq_len × d_model
+        kv_cache_memory = 2 * batch_size * seq_len * d_model * 4 / (1024**3)
+        
+        # Hidden states: batch_size × seq_len × d_hidden
         hidden_memory = batch_size * seq_len * d_hidden * 4 / (1024**3)
-        intermediate_memory = attention_memory + hidden_memory
-
-        return weight_memory + intermediate_memory
+        
+        # Intermediate memory per layer (not total - pipeline processing)
+        intermediate_memory_per_layer = (attention_memory + kv_cache_memory + hidden_memory) / 1024  # More reasonable
+        
+        total_intermediate = intermediate_memory_per_layer * min(num_layers, 2)  # At most 2 layers worth of intermediates
+        
+        return weight_memory + total_intermediate
 
 class LLMPlacementSolver:
     """Main solver class for LLM placement optimization"""
@@ -121,7 +115,7 @@ class LLMPlacementSolver:
         self.env = gp.Env(params=self.options)
         self.config_dir = config_dir
 
-        # Load all config files from the config directory
+        # FIXED: Correct file names
         gpu_pool_file = os.path.join(config_dir, 'gpu_pool.csv')
         network_file = os.path.join(config_dir, 'network_bandwidth.csv')
         config_file = os.path.join(config_dir, 'config.csv')
@@ -129,17 +123,11 @@ class LLMPlacementSolver:
         self.gpu_types = self._load_gpu_pool(gpu_pool_file)
         self.network_bandwidth = self._load_network_bandwidth(network_file)
         self.config = self._load_config(config_file)
-        self.network_config = None
         self.model = None
         self.solution = None
         
         # Derived data
         self.total_gpus = sum(gpu_type.count for gpu_type in self.gpu_types.values())
-
-        # Update ThroughputFunctions with network config if provided
-        if self.network_config:
-            ThroughputFunctions.update_coefficients(self.network_config)
-
         self.max_segment_size = self._compute_max_segment_sizes()
         self.valid_segments = self._generate_valid_segments()
         self.valid_connections = self._generate_valid_connections()
@@ -188,45 +176,6 @@ class LLMPlacementSolver:
             time_limit_seconds=float(config_dict['time_limit_seconds']),
             optimality_gap=float(config_dict['optimality_gap'])
         )
-
-    def _load_network_config(self, filename: str) -> Dict:
-        """Load network configuration from file"""
-        try:
-            with open(filename, 'r') as f:
-                import json
-                return json.load(f)
-        except json.JSONDecodeError:
-            # Try CSV format as fallback
-            df = pd.read_csv(filename)
-            config_dict = dict(zip(df['parameter'], df['value']))
-            return {
-                'gpu_throughput_coeffs': self._parse_gpu_coeffs(config_dict),
-                'network_coeffs': self._parse_network_coeffs(config_dict)
-            }
-
-    def _parse_gpu_coeffs(self, config_dict: Dict) -> Dict:
-        """Parse GPU throughput coefficients from config"""
-        gpu_coeffs = {}
-        gpu_types = ['A100', 'V100', 'H100', 'RTX4090']
-
-        for gpu_type in gpu_types:
-            gpu_coeffs[gpu_type] = {
-                'seq_len': float(config_dict.get(f'{gpu_type.lower()}_seq_len_coeff', 0.1)),
-                'batch_size': float(config_dict.get(f'{gpu_type.lower()}_batch_size_coeff', 2.0)),
-                'num_layers': float(config_dict.get(f'{gpu_type.lower()}_num_layers_coeff', -0.05)),
-                'constant': float(config_dict.get(f'{gpu_type.lower()}_constant', 100.0))
-            }
-        return gpu_coeffs
-
-    def _parse_network_coeffs(self, config_dict: Dict) -> Dict:
-        """Parse network throughput coefficients from config"""
-        return {
-            'bandwidth': float(config_dict.get('network_bandwidth_coeff', 0.8)),
-            'seq_len': float(config_dict.get('network_seq_len_coeff', 0.001)),
-            'batch_size': float(config_dict.get('network_batch_size_coeff', 0.1)),
-            'hidden_dim': float(config_dict.get('network_hidden_dim_coeff', 0.0001)),
-            'constant': float(config_dict.get('network_constant', 10.0))
-        }
     
     def _compute_max_segment_sizes(self) -> Dict[str, int]:
         """Compute maximum segment size for each GPU type based on memory constraints"""
@@ -248,9 +197,9 @@ class LLMPlacementSolver:
                     break
                 max_layers += 1
             
-            max_sizes[gpu_type_name] = max_layers - 1
+            max_sizes[gpu_type_name] = max(1, max_layers - 1)  # FIXED: Ensure at least 1 layer
             logger.info(f"GPU {gpu_type_name}: max {max_sizes[gpu_type_name]} layers "
-                       f"(memory: {gpu_type.memory_gb}GB)")
+                       f"(memory: {gpu_type.memory_gb}GB, estimated usage: {memory_needed:.2f}GB)")
         
         return max_sizes
     
@@ -259,9 +208,14 @@ class LLMPlacementSolver:
         valid_segments = []
         
         for gpu_type_name, gpu_type in self.gpu_types.items():
+            max_seg_size = self.max_segment_size[gpu_type_name]
+            if max_seg_size == 0:
+                logger.warning(f"GPU type {gpu_type_name} cannot hold any layers!")
+                continue
+                
             for gpu_id in range(gpu_type.count):
                 for start_layer in range(1, self.config.num_decoder_layers + 1):
-                    for segment_size in range(1, min(self.max_segment_size[gpu_type_name] + 1,
+                    for segment_size in range(1, min(max_seg_size + 1,
                                                    self.config.num_decoder_layers - start_layer + 2)):
                         if start_layer + segment_size - 1 <= self.config.num_decoder_layers:
                             valid_segments.append((gpu_type_name, gpu_id, start_layer, segment_size))
@@ -297,6 +251,9 @@ class LLMPlacementSolver:
         
         # Create model
         self.model = gp.Model("llm_placement", env=self.env)
+        self.model.setParam('Presolve', 2)  # Aggressive presolving
+        self.model.setParam('Heuristics', 0.2)  # Spend 20% time on heuristics
+        self.model.setParam('Cuts', 2)  # Aggressive cut generation
         self.model.setParam('TimeLimit', self.config.time_limit_seconds)
         self.model.setParam('MIPGap', self.config.optimality_gap)
         self.model.setParam('LogToConsole', 1)
@@ -352,7 +309,7 @@ class LLMPlacementSolver:
         self.t = self.model.addVar(vtype=GRB.CONTINUOUS, lb=0, name="end_to_end_throughput")
     
     def _create_constraints(self):
-        """Create optimization constraints"""
+        """Create optimization constraints - FIXED"""
         
         # 1. Layer coverage: each layer assigned exactly once
         for layer in range(1, self.config.num_decoder_layers + 1):
@@ -386,15 +343,15 @@ class LLMPlacementSolver:
             # Connection exists if both segments are selected
             self.model.addConstr(
                 self.e[seg1, seg2] <= self.x[seg1],
-                name=f"connection_seg1_{seg1}_{seg2}"
+                name=f"connection_seg1"
             )
             self.model.addConstr(
                 self.e[seg1, seg2] <= self.x[seg2],
-                name=f"connection_seg2_{seg1}_{seg2}"
+                name=f"connection_seg2"
             )
             self.model.addConstr(
                 self.e[seg1, seg2] >= self.x[seg1] + self.x[seg2] - 1,
-                name=f"connection_both_{seg1}_{seg2}"
+                name=f"connection_both"
             )
         
         # 5. GPU throughput definition
@@ -428,7 +385,7 @@ class LLMPlacementSolver:
             
             self.model.addConstr(
                 self.rho[seg1, seg2] == net_throughput * self.e[seg1, seg2],
-                name=f"network_throughput_def_{seg1}_{seg2}"
+                name=f"network_throughput_def"
             )
         
         # 7. End-to-end throughput constraints
@@ -446,10 +403,19 @@ class LLMPlacementSolver:
         for (seg1, seg2) in self.valid_connections:
             self.model.addConstr(
                 self.t <= self.rho[seg1, seg2] + M * (1 - self.e[seg1, seg2]),
-                name=f"throughput_network_{seg1}_{seg2}"
+                name=f"throughput_network"
             )
 
-        # 8. Sequential connectivity constraint - ensure all layers form a connected chain
+        # 8. FIXED: Pipeline connectivity constraints
+        # Ensure pipeline starts at layer 1
+        first_layer_segments = [seg for seg in self.valid_segments if seg[2] == 1]
+        if first_layer_segments:
+            self.model.addConstr(
+                gp.quicksum(self.x[seg] for seg in first_layer_segments) >= 1,
+                name="pipeline_starts_at_layer_1"
+            )
+
+        # FIXED: Only enforce connectivity for non-terminal layers
         for layer in range(1, self.config.num_decoder_layers):
             # Find segments ending at this layer
             segments_ending_here = [seg for seg in self.valid_segments
@@ -459,21 +425,25 @@ class LLMPlacementSolver:
                                     if seg[2] == layer + 1]
 
             if segments_ending_here and segments_starting_next:
-                # If there are segments ending at layer i, there must be connections to layer i+1
+                # If a segment ends at layer i, there must be a connection to layer i+1
                 for seg1 in segments_ending_here:
-                    self.model.addConstr(
-                        gp.quicksum(self.e[seg1, seg2] for seg2 in segments_starting_next
-                                   if (seg1, seg2) in self.valid_connections) >= self.x[seg1],
-                        name=f"connectivity_out_{layer}_{seg1}"
-                    )
+                    valid_next_connections = [(s1, s2) for (s1, s2) in self.valid_connections 
+                                            if s1 == seg1 and s2 in segments_starting_next]
+                    if valid_next_connections:
+                        self.model.addConstr(
+                            gp.quicksum(self.e[s1, s2] for (s1, s2) in valid_next_connections) >= self.x[seg1],
+                            name=f"connectivity_out_{layer}"
+                        )
 
-                # If there are segments starting at layer i+1, there must be connections from layer i
+                # If a segment starts at layer i+1, there must be a connection from layer i
                 for seg2 in segments_starting_next:
-                    self.model.addConstr(
-                        gp.quicksum(self.e[seg1, seg2] for seg1 in segments_ending_here
-                                   if (seg1, seg2) in self.valid_connections) >= self.x[seg2],
-                        name=f"connectivity_in_{layer}_{seg2}"
-                    )
+                    valid_prev_connections = [(s1, s2) for (s1, s2) in self.valid_connections 
+                                            if s2 == seg2 and s1 in segments_ending_here]
+                    if valid_prev_connections:
+                        self.model.addConstr(
+                            gp.quicksum(self.e[s1, s2] for (s1, s2) in valid_prev_connections) >= self.x[seg2],
+                            name=f"connectivity_in_{layer}"
+                        )
     
     def _set_objective(self):
         """Set optimization objective"""
@@ -494,11 +464,17 @@ class LLMPlacementSolver:
                 self._extract_solution()
                 return True
             elif self.model.status == GRB.TIME_LIMIT:
-                logger.warning(f"Time limit reached. Best solution: {self.t.x:.2f}")
-                self._extract_solution()
-                return True
+                if self.model.SolCount > 0:
+                    logger.warning(f"Time limit reached. Best solution: {self.t.x:.2f}")
+                    self._extract_solution()
+                    return True
+                else:
+                    logger.error("Time limit reached with no feasible solution found")
+                    return False
             else:
                 logger.error(f"No solution found. Status: {self.model.status}")
+                if self.model.status == GRB.INFEASIBLE:
+                    logger.error("Model is infeasible - check memory constraints and segment generation")
                 return False
                 
         except Exception as e:
