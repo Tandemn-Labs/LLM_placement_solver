@@ -1,0 +1,3 @@
+gurobi-machinelearning
+gurobipy
+gurobipy-pandas
