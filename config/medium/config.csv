@@ -14,3 +14,8 @@ bytes_per_element,2
 enable_segment_quantization,true
 max_pipeline_stages,8
 min_layers_per_stage,5
+cost_throughput_weight,0.95
+max_hourly_cost,999.0
+max_cost_per_token,0.002
+throughput_normalization,10000.0
+cost_normalization,1.0
