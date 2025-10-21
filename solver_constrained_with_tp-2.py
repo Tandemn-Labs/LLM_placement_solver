@@ -156,7 +156,7 @@ class LLMPlacementSolverWithTP:
                  enable_symmetry_breaking: bool = True,
                  enable_upper_bound: bool = True, enable_tight_bigm: bool = True,
                  enable_flow_conservation: bool = True, threads: Optional[int] = None,
-                 max_threads: int = 32):
+                 max_threads: int = 32, generate_network: Optional[Tuple[float, float]] = None):
         self.options = {
             "WLSACCESSID": "790b9c11-45d0-4785-8d99-a5e6414f9321",
             "WLSSECRET": "adef4738-7bf6-41b8-8dfd-d04e23d53e51",
@@ -179,7 +179,16 @@ class LLMPlacementSolverWithTP:
         config_file = os.path.join(config_dir, 'config.csv')
 
         self.gpu_types = self._load_gpu_pool(gpu_pool_file)
-        self.network_bandwidth = self._load_network_bandwidth(network_file)
+        
+        # Load or generate network bandwidth
+        if generate_network is not None:
+            intra_bw, inter_bw = generate_network
+            self.network_bandwidth = self._generate_network_bandwidth(intra_bw, inter_bw)
+            logger.info(f"Generated network bandwidth matrix: intra={intra_bw} GB/s, inter={inter_bw} GB/s")
+        else:
+            self.network_bandwidth = self._load_network_bandwidth(network_file)
+            logger.info(f"Loaded network bandwidth from {network_file}")
+        
         self.config = self._load_config(config_file)
         self.model = None
         self.solution = None
@@ -248,6 +257,46 @@ class LLMPlacementSolverWithTP:
         if matrix.shape[0] != matrix.shape[1]:
             raise ValueError(f"Network bandwidth matrix must be square, got {matrix.shape}")
         
+        return matrix
+    
+    def _generate_network_bandwidth(self, intra_bandwidth: float, inter_bandwidth: float) -> np.ndarray:
+        """
+        Generate network bandwidth matrix programmatically.
+        
+        Args:
+            intra_bandwidth: Bandwidth (GB/s) between GPUs of the same type
+            inter_bandwidth: Bandwidth (GB/s) between GPUs of different types
+        
+        Returns:
+            Network bandwidth matrix (total_gpus × total_gpus)
+        """
+        total_gpus = sum(gpu_type.count for gpu_type in self.gpu_types.values())
+        matrix = np.zeros((total_gpus, total_gpus))
+        
+        # Build a mapping from global_id to gpu_type
+        global_id_to_type = {}
+        for gpu_type, gpu_obj in self.gpu_types.items():
+            for global_id in gpu_obj.global_ids:
+                global_id_to_type[global_id] = gpu_type
+        
+        # Fill the matrix
+        for i in range(total_gpus):
+            for j in range(total_gpus):
+                if i == j:
+                    # Self-connection: infinite bandwidth (set to large value)
+                    matrix[i, j] = 10000.0
+                else:
+                    gpu_type_i = global_id_to_type[i]
+                    gpu_type_j = global_id_to_type[j]
+                    
+                    if gpu_type_i == gpu_type_j:
+                        # Same GPU type: use intra_bandwidth
+                        matrix[i, j] = intra_bandwidth
+                    else:
+                        # Different GPU types: use inter_bandwidth
+                        matrix[i, j] = inter_bandwidth
+        
+        logger.info(f"Generated {total_gpus}×{total_gpus} network bandwidth matrix")
         return matrix
     
     def _load_config(self, filename: str) -> Config:
@@ -1629,7 +1678,7 @@ class LLMPlacementSolverWithTP:
             
             if alt_cost_per_token < actual_cpt:
                 diff_pct = (actual_cpt/alt_cost_per_token - 1)*100
-                logger.warning(f"  🚨 SINGLE-SEGMENT is {diff_pct:.1f}% BETTER in $/token!")
+                logger.warning(f"  SINGLE-SEGMENT is {diff_pct:.1f}% BETTER in $/token!")
                 logger.warning(f"  The solver found a suboptimal solution!")
             else:
                 diff_pct = (alt_cost_per_token/actual_cpt - 1)*100
@@ -1982,6 +2031,11 @@ def main():
     parser.add_argument('--method', type=str, choices=['weighted', 'enumeration'], default='weighted',
                        help='Optimization method: weighted (fast, approximate) or enumeration (slow, guaranteed optimal)')
     
+    # Network bandwidth generation arguments
+    parser.add_argument('--generate-network', type=float, nargs=2, metavar=('INTRA_BW', 'INTER_BW'),
+                       help='Generate network bandwidth matrix instead of reading from CSV. '
+                            'Args: intra_bandwidth (GB/s within same GPU type) inter_bandwidth (GB/s between different GPU types)')
+    
     args = parser.parse_args()
     
     if args.verbose:
@@ -1990,13 +2044,20 @@ def main():
     start_time = time.time()
     
     try:
+        # Prepare network generation parameters
+        generate_network = None
+        if args.generate_network:
+            generate_network = tuple(args.generate_network)
+            logger.info(f"Network generation mode: intra={generate_network[0]} GB/s, inter={generate_network[1]} GB/s")
+        
         solver_kwargs = {
             'enable_symmetry_breaking': args.enable_symmetry_breaking,
             'enable_upper_bound': args.enable_upper_bound,
             'enable_tight_bigm': args.enable_tight_bigm,
             'enable_flow_conservation': args.enable_flow_conservation,
             'threads': args.threads,
-            'max_threads': args.max_threads
+            'max_threads': args.max_threads,
+            'generate_network': generate_network
         }
         
         if args.search_all_tp:
