@@ -46,7 +46,8 @@ class GPUType:
 class Config:
     """Runtime configuration"""
     sequence_length: int
-    batch_size: int
+    min_batch_size: int
+    max_batch_size: int
     model_name: str
     num_decoder_layers: int
     d_model: int
@@ -88,16 +89,21 @@ class ThroughputFunctions:
     """Throughput functions with TP support"""
 
     GPU_SPECS = {
-        'H100': {'tflops': 989, 'mem_bw': 3350, 'efficiency': 0.65},
-        'A100': {'tflops': 312, 'mem_bw': 2039, 'efficiency': 0.60},
-        'L40S': {'tflops': 362, 'mem_bw': 864, 'efficiency': 0.55},
-        'A40': {'tflops': 150, 'mem_bw': 696, 'efficiency': 0.55},
-        'L40': {'tflops': 181, 'mem_bw': 864, 'efficiency': 0.50},
-        'V100': {'tflops': 125, 'mem_bw': 900, 'efficiency': 0.55},
+        # Modern GPUs optimized for LLM inference (FP16/BF16 with modern tensor cores)
+        'H100': {'tflops': 989, 'mem_bw': 3350, 'efficiency': 0.70},  # Best for LLMs
+        'A100': {'tflops': 312, 'mem_bw': 2039, 'efficiency': 0.65},  # Excellent for LLMs
+        'L40S': {'tflops': 362, 'mem_bw': 864, 'efficiency': 0.58},   # Good Ada Lovelace
+        'A40': {'tflops': 150, 'mem_bw': 696, 'efficiency': 0.52},    # Ampere workstation
+        'L40': {'tflops': 181, 'mem_bw': 864, 'efficiency': 0.55},    # Ada Lovelace
+        
+        # Older GPUs - lower efficiency for modern LLM workloads
+        'V100': {'tflops': 125, 'mem_bw': 900, 'efficiency': 0.42},   # Volta - old tensor cores
         'RTX4090': {'tflops': 165, 'mem_bw': 1008, 'efficiency': 0.50},
-        'L20': {'tflops': 119, 'mem_bw': 480, 'efficiency': 0.50},
-        'A10': {'tflops': 125, 'mem_bw': 600, 'efficiency': 0.45},
-        'T4': {'tflops': 65, 'mem_bw': 320, 'efficiency': 0.40}
+        
+        # Budget GPUs
+        'L20': {'tflops': 119, 'mem_bw': 480, 'efficiency': 0.48},    # Budget Ada
+        'A10': {'tflops': 125, 'mem_bw': 600, 'efficiency': 0.45},    # Budget Ampere
+        'T4': {'tflops': 65, 'mem_bw': 320, 'efficiency': 0.38}       # Old Turing
     }
 
     # TP efficiency factors based on empirical observations
@@ -107,6 +113,28 @@ class ThroughputFunctions:
         4: 0.80,  # 20% overhead
         8: 0.70   # 30% overhead
     }
+    
+    @staticmethod
+    def batch_efficiency_factor(batch_size: int) -> float:
+        """
+        Batch size efficiency factor - larger batches improve GPU utilization.
+        Based on empirical observations:
+        - Small batches (1-4): Poor GPU utilization (50-80%)
+        - Medium batches (8-16): Good utilization (90-95%)
+        - Large batches (32+): Near-optimal utilization (95-100%)
+        """
+        if batch_size >= 32:
+            return 1.0      # Optimal utilization
+        elif batch_size >= 16:
+            return 0.95     # Very good
+        elif batch_size >= 8:
+            return 0.90     # Good
+        elif batch_size >= 4:
+            return 0.80     # Moderate
+        elif batch_size >= 2:
+            return 0.65     # Poor
+        else:
+            return 0.50     # Very poor (batch=1)
     
     @staticmethod
     def gpu_throughput(gpu_type: str, seq_len: int, batch_size: int, num_layers: int, d_model: int, bytes_per_element: int) -> float:
@@ -134,7 +162,9 @@ class ThroughputFunctions:
         time_per_batch = max(time_compute, time_memory)
         tokens_per_batch = batch_size * seq_len
         
-        return tokens_per_batch / time_per_batch
+        base_throughput = tokens_per_batch / time_per_batch
+        # Apply batch efficiency factor - larger batches utilize GPU better
+        return base_throughput * ThroughputFunctions.batch_efficiency_factor(batch_size)
     
     @staticmethod
     def gpu_throughput_with_tp(gpu_type: str, seq_len: int, batch_size: int, 
@@ -306,7 +336,8 @@ class LLMPlacementSolverWithTP:
         
         return Config(
             sequence_length=int(config_dict['sequence_length']),
-            batch_size=int(config_dict['batch_size']),
+            min_batch_size=int(config_dict['min_batch_size']),
+            max_batch_size=int(config_dict['max_batch_size']),
             model_name=config_dict['model_name'],
             num_decoder_layers=int(config_dict['num_decoder_layers']),
             d_model=int(config_dict['d_model']),
@@ -458,12 +489,12 @@ class LLMPlacementSolverWithTP:
         logger.info(f"  Reduced from ~14 to {len(sizes)} sizes for performance")
         return sizes
     
-    def _calculate_activation_memory(self, tp_degree: int = 1) -> float:
+    def _calculate_activation_memory(self, tp_degree: int = 1, batch_size: int = None) -> float:
         """
         Calculate peak activation memory per GPU with TP.
         Accounts for all-reduce operations and KV cache sharding.
         """
-        batch = self.config.batch_size
+        batch = batch_size if batch_size is not None else self.config.min_batch_size
         seq_len = self.config.sequence_length
         hidden = self.config.d_model
         d_hidden = self.config.d_hidden
@@ -509,21 +540,21 @@ class LLMPlacementSolverWithTP:
         
         return max_feasible
     
-    def _compute_max_segment_size_for_tp(self, gpu_type: str, tp_degree: int) -> int:
-        """Compute max segment size for a specific (gpu_type, tp_degree)"""
+    def _compute_max_segment_size_for_tp(self, gpu_type: str, tp_degree: int, batch_size: int) -> int:
+        """Compute max segment size for a specific (gpu_type, tp_degree, batch_size)"""
         gpu_obj = self.gpu_types[gpu_type]
         weight_per_gpu_per_layer = self.config.layer_weight_memory_gb / tp_degree
-        activation_memory = self._calculate_activation_memory(tp_degree)
+        activation_memory = self._calculate_activation_memory(tp_degree, batch_size)
         
         return self._binary_search_max_layers(
             gpu_obj.memory_gb, weight_per_gpu_per_layer, activation_memory
         )
 
-    def _compute_min_segment_size_for_tp(self, gpu_type: str, tp_degree: int) -> int:
-        """Compute min segment size for a specific (gpu_type, tp_degree)"""
+    def _compute_min_segment_size_for_tp(self, gpu_type: str, tp_degree: int, batch_size: int) -> int:
+        """Compute min segment size for a specific (gpu_type, tp_degree, batch_size)"""
         gpu_obj = self.gpu_types[gpu_type]
         weight_per_layer = self.config.layer_weight_memory_gb / tp_degree
-        activation_memory = self._calculate_activation_memory(tp_degree)
+        activation_memory = self._calculate_activation_memory(tp_degree, batch_size)
         
         min_layers = max(1, math.ceil(
             (self.config.min_memory_utilization * gpu_obj.memory_gb - activation_memory) / weight_per_layer
@@ -532,47 +563,68 @@ class LLMPlacementSolverWithTP:
         if activation_memory > self.config.min_memory_utilization * gpu_obj.memory_gb:
             min_layers = 1
         
-        max_layers = self._compute_max_segment_size_for_tp(gpu_type, tp_degree)
+        max_layers = self._compute_max_segment_size_for_tp(gpu_type, tp_degree, batch_size)
         return min(min_layers, max_layers)
 
+    def _get_batch_size_options(self) -> List[int]:
+        """
+        Generate power-of-2 batch sizes between min and max (inclusive).
+        Example: min=8, max=64 → [8, 16, 32, 64]
+        """
+        batch_sizes = []
+        b = self.config.min_batch_size
+        while b <= self.config.max_batch_size:
+            batch_sizes.append(b)
+            b *= 2
+        # Ensure max_batch_size is included even if not exact power of 2
+        if batch_sizes[-1] != self.config.max_batch_size:
+            batch_sizes.append(self.config.max_batch_size)
+        logger.info(f"Batch size options: {batch_sizes}")
+        return batch_sizes
+    
     def _generate_valid_segments(self) -> List[Tuple]:
-        """Generate segments with variable TP degree per segment"""
+        """Generate segments with variable TP degree and batch size per segment"""
         valid_segments = []
+        batch_size_options = self._get_batch_size_options()
+        print(f"Batch size options: {batch_size_options}")
         # MAX_SEGMENTS = 10000 # NOTE: Hardcoded max segment. not ideal though... it prevents combinatorial explosion
         for gpu_type, allocations in self.tp_allocations.items():
             for gpu_set, tp_degree, partition_id in allocations:
-                # Get max/min segment sizes for this specific TP degree
-                max_seg_size = self._compute_max_segment_size_for_tp(gpu_type, tp_degree)
-                min_seg_size = self._compute_min_segment_size_for_tp(gpu_type, tp_degree)
-                
-                if max_seg_size == 0:
-                    continue
-                
-                for start_layer in range(1, self.config.num_decoder_layers + 1):
-                    # Determine valid segment sizes
-                    if self.quantized_sizes:
-                        valid_sizes = [s for s in self.quantized_sizes 
-                                    if min_seg_size <= s <= max_seg_size 
-                                    and start_layer + s - 1 <= self.config.num_decoder_layers]
-                    else:
-                        valid_sizes = range(min_seg_size, 
-                                        min(max_seg_size + 1,
-                                            self.config.num_decoder_layers - start_layer + 2))
+                for batch_size in batch_size_options:
+                    # Get max/min segment sizes for this specific TP degree and batch_size
+                    max_seg_size = self._compute_max_segment_size_for_tp(gpu_type, tp_degree, batch_size)
+                    min_seg_size = self._compute_min_segment_size_for_tp(gpu_type, tp_degree, batch_size)
                     
-                    for segment_size in valid_sizes:
-                        if segment_size < self.config.min_layers_per_stage:
-                            continue
-                        if start_layer + segment_size - 1 <= self.config.num_decoder_layers:
-                            # NEW FORMAT: (gpu_type, gpu_set, tp_degree, partition_id, start_layer, segment_size)
-                            segment = (gpu_type, gpu_set, tp_degree, partition_id, start_layer, segment_size)
-                            valid_segments.append(segment)
+                    if max_seg_size == 0:
+                        continue
+                    
+                    for start_layer in range(1, self.config.num_decoder_layers + 1):
+                        # Determine valid segment sizes
+                        if self.quantized_sizes:
+                            valid_sizes = [s for s in self.quantized_sizes 
+                                        if min_seg_size <= s <= max_seg_size 
+                                        and start_layer + s - 1 <= self.config.num_decoder_layers]
+                        else:
+                            valid_sizes = range(min_seg_size, 
+                                            min(max_seg_size + 1,
+                                                self.config.num_decoder_layers - start_layer + 2))
+                        
+                        for segment_size in valid_sizes:
+                            if segment_size < self.config.min_layers_per_stage:
+                                continue
+                            if start_layer + segment_size - 1 <= self.config.num_decoder_layers:
+                                # NEW FORMAT: (gpu_type, gpu_set, tp_degree, partition_id, start_layer, segment_size, batch_size)
+                                segment = (gpu_type, gpu_set, tp_degree, partition_id, start_layer, segment_size, batch_size)
+                                valid_segments.append(segment)
                             
                             # # SAFETY CHECK
                             # if len(valid_segments) > MAX_SEGMENTS:
                             #     logger.warning(f"Hit segment limit of {MAX_SEGMENTS}, stopping generation")
                             #     return valid_segments
         
-        logger.info(f"Generated {len(valid_segments)} segments with variable TP")
+        logger.info(f"Generated {len(valid_segments)} segments with variable TP and batch size")
+        logger.info(f"  Batch size options: {batch_size_options}")
+        logger.info(f"  Segments per config increased by {len(batch_size_options)}x")
         return valid_segments
     
     def _generate_valid_connections(self) -> List[Tuple]:
@@ -584,7 +636,7 @@ class LLMPlacementSolverWithTP:
         segments_by_start_layer = {}
         
         for seg in self.valid_segments:
-            gpu_type, gpu_set, tp_degree, partition_id, start_layer, segment_size = seg
+            gpu_type, gpu_set, tp_degree, partition_id, start_layer, segment_size, batch_size = seg
             end_layer = start_layer + segment_size - 1
             
             if end_layer not in segments_by_end_layer:
@@ -602,10 +654,12 @@ class LLMPlacementSolverWithTP:
             
             for seg1 in ending_segments:
                 gpu_set1 = seg1[1]
+                batch_size1 = seg1[6]  # Extract batch_size
                 for seg2 in starting_segments:
                     gpu_set2 = seg2[1]
-                    # Connection valid only if GPU sets don't overlap
-                    if not gpu_set1.intersection(gpu_set2):
+                    batch_size2 = seg2[6]  # Extract batch_size
+                    # Connection valid only if GPU sets don't overlap AND batch_sizes match
+                    if not gpu_set1.intersection(gpu_set2) and batch_size1 == batch_size2:
                         valid_connections.append((seg1, seg2))
         
         logger.info(f"Generated {len(valid_connections)} connections (before bandwidth filter)")
@@ -664,17 +718,21 @@ class LLMPlacementSolverWithTP:
         """
         gpu_pair_throughputs = {}
         
-        # Full tensor size after all-reduce (NOT sharded)
-        tensor_size_gb = (self.config.batch_size * self.config.sequence_length *
-                        self.config.d_model * self.config.bytes_per_element) / (1024**3)
-        
         for seg1, seg2 in self.valid_connections:
+            # Extract segment info (NEW: segments now include batch_size at index 6)
             gpu_type1 = seg1[0]
             gpu_type2 = seg2[0]
             gpu_set1 = seg1[1]
             gpu_set2 = seg2[1]
             tp_degree1 = seg1[2]
             tp_degree2 = seg2[2]
+            batch_size1 = seg1[6]
+            batch_size2 = seg2[6]
+            
+            # Full tensor size after all-reduce (NOT sharded)
+            # NOTE: batch_size1 should equal batch_size2 due to global constraint
+            tensor_size_gb = (batch_size1 * self.config.sequence_length *
+                            self.config.d_model * self.config.bytes_per_element) / (1024**3)
             
             # Step 1: All-reduce within source TP group (ring all-reduce)
             if tp_degree1 > 1:
@@ -724,7 +782,7 @@ class LLMPlacementSolverWithTP:
             if effective_bandwidth_gbps > 0:
                 transfer_time_sec = tensor_size_gb / effective_bandwidth_gbps
                 # Throughput in tokens/sec
-                tokens_per_batch = self.config.batch_size * self.config.sequence_length
+                tokens_per_batch = batch_size1 * self.config.sequence_length
                 throughput = tokens_per_batch / transfer_time_sec
             else:
                 throughput = 1e9  # Infinite throughput if no communication needed
@@ -856,6 +914,33 @@ class LLMPlacementSolverWithTP:
                         name=f"partition_usage_{gpu_type}_{partition_id}"
                     )
         
+        # 3b. Global batch size consistency: all segments must use the same batch_size
+        # For each pair of segments, if both are active, their batch_sizes must match
+        # We implement this by: for each segment, if it's active, batch_size must equal a global value
+        # Simpler approach: Create binary variables for each batch_size option
+        batch_size_options = self._get_batch_size_options()
+        
+        # Binary variable b[bs] = 1 if batch_size bs is chosen
+        self.b = {}
+        for bs in batch_size_options:
+            self.b[bs] = self.model.addVar(vtype=gp.GRB.BINARY, name=f"batch_size_{bs}")
+        
+        # Exactly one batch size must be chosen
+        self.model.addConstr(
+            gp.quicksum(self.b[bs] for bs in batch_size_options) == 1,
+            name="batch_size_choice"
+        )
+        
+        # For each segment, it can only be active if its batch_size is chosen
+        for seg in self.valid_segments:
+            seg_batch_size = seg[6]
+            self.model.addConstr(
+                self.x[seg] <= self.b[seg_batch_size],
+                name=f"batch_consistency_{seg}"
+            )
+        
+        logger.info(f"Added global batch size consistency constraint with {len(batch_size_options)} options: {batch_size_options}")
+        
         # 4. Maximum pipeline depth constraint (PRACTICAL CONSTRAINT)
         self.model.addConstr(
             gp.quicksum(self.z[key] for key in self.z.keys()) <= self.config.max_pipeline_stages,
@@ -897,7 +982,7 @@ class LLMPlacementSolverWithTP:
                     throughput_expr = gp.quicksum(
                         ThroughputFunctions.gpu_throughput_with_tp(
                             gpu_type, self.config.sequence_length,
-                            self.config.batch_size, seg[5], self.config.d_model, self.config.bytes_per_element, seg[2]  # seg[5]=segment_size, seg[2]=tp_degree
+                            seg[6], seg[5], self.config.d_model, self.config.bytes_per_element, seg[2]  # seg[6]=batch_size, seg[5]=segment_size, seg[2]=tp_degree
                         ) * self.x[seg]
                         for seg in self.valid_segments 
                         if seg[0] == gpu_type and seg[3] == partition_id  # seg[3]=partition_id
@@ -957,9 +1042,10 @@ class LLMPlacementSolverWithTP:
             max_size = self.max_segment_size[(gpu_type, tp_degree)]
             
             if max_size > 0:
+                # Use max_batch_size for upper bound calculation
                 max_throughput = ThroughputFunctions.gpu_throughput_with_tp(
                     gpu_type, self.config.sequence_length,
-                    self.config.batch_size, max_size, self.config.d_model, self.config.bytes_per_element, tp_degree
+                    self.config.max_batch_size, max_size, self.config.d_model, self.config.bytes_per_element, tp_degree
                 )
                 # Only create M for partitions that exist
                 for gpu_set, tp_degree_alloc, partition_id in allocations:
@@ -1119,11 +1205,12 @@ class LLMPlacementSolverWithTP:
         logger.info(f"{'='*80}")
         logger.info(f"Target $/token: ${target_cpt:.9f}")
         
-        # Step 1: Estimate minimum throughput (single GPU, single layer)
+        # Step 1: Estimate minimum throughput (single GPU, single layer, min batch)
         min_tp_estimates = []
         for gpu_type in self.gpu_types:
+            # Use min_batch_size for lower bound estimation
             t_est = ThroughputFunctions.gpu_throughput(
-                gpu_type, self.config.sequence_length, self.config.batch_size,
+                gpu_type, self.config.sequence_length, self.config.min_batch_size,
                 1, self.config.d_model, self.config.bytes_per_element
             )
             min_tp_estimates.append(t_est)
@@ -1380,11 +1467,11 @@ class LLMPlacementSolverWithTP:
             target = self.config.max_cost_per_token
             if best_cpt <= target:
                 improvement = (target - best_cpt) / target * 100
-                logger.info(f"\n✅ MEETS TARGET: ${best_cpt:.9f} ≤ ${target:.9f}")
+                logger.info(f"\nMEETS TARGET: ${best_cpt:.9f} ≤ ${target:.9f}")
                 logger.info(f"   {improvement:.1f}% better than target!")
             else:
                 shortfall = (best_cpt - target) / target * 100
-                logger.info(f"\n⚠️  MISSES TARGET: ${best_cpt:.9f} > ${target:.9f}")
+                logger.info(f"\nMISSES TARGET: ${best_cpt:.9f} > ${target:.9f}")
                 logger.info(f"   {shortfall:.1f}% worse than target (infeasible to meet)")
             
             # Log Pareto frontier
@@ -1477,13 +1564,22 @@ class LLMPlacementSolverWithTP:
             logger.info(f"  Net objective (t_norm - cost): {t_norm - cost_contribution:.6f}")
             logger.info(f"  (Should match objective value: {self.model.ObjVal:.6f})")
         
+        # Extract optimal batch size
+        optimal_batch_size = None
+        for bs in self._get_batch_size_options():
+            if self.b[bs].x > 0.5:
+                optimal_batch_size = bs
+                break
+        
         logger.info(f"\nCore Metrics:")
+        logger.info(f"  Batch Size: {optimal_batch_size}")
         logger.info(f"  Throughput: {throughput_per_sec:.2f} tokens/sec")
         logger.info(f"  Cost: ${cost_per_hour:.2f}/hour")
         logger.info(f"  $/token: ${cost_per_token:.9f}")
         
         self.solution = {
             'objective_value': self.model.ObjVal,
+            'batch_size': optimal_batch_size,
             'throughput_tokens_per_sec': throughput_per_sec,
             'cost_per_hour': cost_per_hour,
             'cost_per_token': cost_per_token,
@@ -1498,7 +1594,7 @@ class LLMPlacementSolverWithTP:
         # Extract GPU assignments
         for seg in self.valid_segments:
             if self.x[seg].x > 0.5:
-                gpu_type, gpu_set, tp_degree, partition_id, start_layer, segment_size = seg
+                gpu_type, gpu_set, tp_degree, partition_id, start_layer, segment_size, batch_size = seg
                 
                 assignment = {
                     'gpu_type': gpu_type,
@@ -1536,8 +1632,82 @@ class LLMPlacementSolverWithTP:
         # Sort assignments by start layer
         self.solution['gpu_assignments'].sort(key=lambda x: x['start_layer'])
         
+        # Batch size analysis
+        self._log_batch_size_analysis()
+        
         # NEW: Detailed GPU utilization analysis
         self._log_solution_analysis()
+    
+    def _log_batch_size_analysis(self):
+        """Analyze and explain the batch size selection"""
+        logger.info("\n" + "="*80)
+        logger.info("BATCH SIZE ANALYSIS")
+        logger.info("="*80)
+        
+        batch_size_options = self._get_batch_size_options()
+        optimal_batch = self.solution.get('batch_size')
+        
+        logger.info(f"\nBatch Size Selection:")
+        logger.info(f"  Optimal: {optimal_batch}")
+        logger.info(f"  Search range: [{self.config.min_batch_size}, {self.config.max_batch_size}]")
+        logger.info(f"  Options considered: {batch_size_options}")
+        
+        # Show batch efficiency factor
+        if optimal_batch:
+            efficiency = ThroughputFunctions.batch_efficiency_factor(optimal_batch)
+            logger.info(f"\nBatch Efficiency Factor: {efficiency:.1%}")
+            logger.info(f"  (Larger batches improve GPU utilization)")
+            
+            # Explain the efficiency
+            if optimal_batch >= 32:
+                logger.info(f"  ✓ Optimal utilization (batch ≥ 32)")
+            elif optimal_batch >= 16:
+                logger.info(f"  ✓ Very good utilization (batch ≥ 16)")
+            elif optimal_batch >= 8:
+                logger.info(f"  → Good utilization (batch ≥ 8)")
+            else:
+                logger.info(f"  ⚠ Sub-optimal utilization (batch < 8)")
+        
+        # If we have multiple batch size options, show comparison
+        if len(batch_size_options) > 1 and optimal_batch and len(self.solution['gpu_assignments']) > 0:
+            logger.info(f"\nBatch Size Impact (estimated for current GPU configuration):")
+            logger.info("-" * 80)
+            logger.info(f"  {'Batch':<8} {'Efficiency':<12} {'Est. Throughput':<18} {'$/token Impact':<15}")
+            logger.info("-" * 80)
+            
+            # Get a representative GPU assignment for estimation
+            repr_assignment = self.solution['gpu_assignments'][0]
+            gpu_type = repr_assignment['gpu_type']
+            tp_degree = repr_assignment['tp_degree']
+            segment_size = repr_assignment['segment_size']
+            
+            base_throughput = self.solution['throughput_tokens_per_sec']
+            base_cost = self.solution['cost_per_hour']
+            
+            for bs in batch_size_options:
+                efficiency = ThroughputFunctions.batch_efficiency_factor(bs)
+                
+                # Estimate throughput scaling based on efficiency factor
+                # The actual optimal batch throughput is known
+                if bs == optimal_batch:
+                    est_throughput = base_throughput
+                    est_cost_per_token = self.solution['cost_per_token']
+                    marker = " ← OPTIMAL"
+                else:
+                    # Scale throughput by relative efficiency
+                    optimal_efficiency = ThroughputFunctions.batch_efficiency_factor(optimal_batch)
+                    est_throughput = base_throughput * (efficiency / optimal_efficiency)
+                    est_cost_per_token = base_cost / (est_throughput * 3600) if est_throughput > 0 else float('inf')
+                    
+                    # Show percentage difference
+                    diff_pct = (est_cost_per_token - self.solution['cost_per_token']) / self.solution['cost_per_token'] * 100
+                    if diff_pct > 0:
+                        marker = f" (+{diff_pct:.1f}% worse)"
+                    else:
+                        marker = f" ({abs(diff_pct):.1f}% better)"
+                
+                logger.info(f"  {bs:<8} {efficiency:<12.1%} {est_throughput:<18.0f} "
+                           f"${est_cost_per_token:.9f}{marker}")
     
     def _log_solution_analysis(self):
         """Comprehensive analysis of why the solution looks the way it does"""
@@ -1606,9 +1776,10 @@ class LLMPlacementSolverWithTP:
                 gpu_obj = self.gpu_types[gpu_type]
                 efficiency_rank = next(i for i, (gt, _) in enumerate(sorted_efficiency, 1) if gt == gpu_type)
                 
-                # Check max segment size
+                # Check max segment size (use optimal batch_size from solution)
                 max_tp = self.tp_max_configuration[gpu_type]
-                max_seg = self._compute_max_segment_size_for_tp(gpu_type, max_tp)
+                optimal_batch = self.solution.get('batch_size', self.config.max_batch_size)
+                max_seg = self._compute_max_segment_size_for_tp(gpu_type, max_tp, optimal_batch)
                 
                 logger.info(f"  {gpu_type:<10} count={gpu_obj.count}, ${gpu_obj.cost_per_hour:.2f}/h, "
                            f"efficiency rank #{efficiency_rank}")
@@ -1616,8 +1787,9 @@ class LLMPlacementSolverWithTP:
                 
                 # Hypothetical: what if we used this GPU?
                 if max_seg >= 5:  # Can fit at least 5 layers
+                    # Use max_batch_size for optimistic throughput estimate
                     hyp_throughput = ThroughputFunctions.gpu_throughput_with_tp(
-                        gpu_type, self.config.sequence_length, self.config.batch_size,
+                        gpu_type, self.config.sequence_length, self.config.max_batch_size,
                         5, self.config.d_model, self.config.bytes_per_element, 4
                     )
                     hyp_cost = gpu_obj.cost_per_hour * 4  # TP=4
@@ -1647,7 +1819,8 @@ class LLMPlacementSolverWithTP:
         
         best_gpu = self.gpu_types[best_gpu_type]
         max_tp = self.tp_max_configuration[best_gpu_type]
-        max_seg_size = self._compute_max_segment_size_for_tp(best_gpu_type, max_tp)
+        optimal_batch = self.solution.get('batch_size', self.config.max_batch_size)
+        max_seg_size = self._compute_max_segment_size_for_tp(best_gpu_type, max_tp, optimal_batch)
         
         logger.info(f"\n{best_gpu_type} specs:")
         logger.info(f"  Available: {best_gpu.count} GPUs")
@@ -1657,8 +1830,9 @@ class LLMPlacementSolverWithTP:
         
         if max_seg_size >= self.config.num_decoder_layers:
             # Can fit entire model in one segment!
+            # Use max_batch_size for optimal throughput estimate
             alt_throughput = ThroughputFunctions.gpu_throughput_with_tp(
-                best_gpu_type, self.config.sequence_length, self.config.batch_size,
+                best_gpu_type, self.config.sequence_length, self.config.max_batch_size,
                 self.config.num_decoder_layers, self.config.d_model, 
                 self.config.bytes_per_element, max_tp
             )
@@ -1707,11 +1881,13 @@ class LLMPlacementSolverWithTP:
             if best_gpu_type not in gpu_usage:
                 best_gpu = self.gpu_types[best_gpu_type]
                 max_tp = self.tp_max_configuration[best_gpu_type]
-                max_seg_size = self._compute_max_segment_size_for_tp(best_gpu_type, max_tp)
+                # Use max_batch_size for capacity check
+                max_seg_size = self._compute_max_segment_size_for_tp(best_gpu_type, max_tp, self.config.max_batch_size)
                 
                 if max_seg_size >= self.config.num_decoder_layers:
+                    # Use max_batch_size for optimal throughput estimate
                     t_alt = ThroughputFunctions.gpu_throughput_with_tp(
-                        best_gpu_type, self.config.sequence_length, self.config.batch_size,
+                        best_gpu_type, self.config.sequence_length, self.config.max_batch_size,
                         self.config.num_decoder_layers, self.config.d_model,
                         self.config.bytes_per_element, max_tp
                     )
@@ -1737,7 +1913,8 @@ class LLMPlacementSolverWithTP:
         print(f"LLM PLACEMENT OPTIMIZATION RESULTS (COST-AWARE)")
         print("="*100)
         print(f"Model: {self.config.model_name} ({self.config.num_decoder_layers} layers)")
-        print(f"Batch Size: {self.config.batch_size}, Sequence Length: {self.config.sequence_length}")
+        print(f"Batch Size: {self.solution['batch_size']} (optimal), Sequence Length: {self.config.sequence_length}")
+        print(f"  Available batch sizes: [{self.config.min_batch_size}...{self.config.max_batch_size}]")
         print(f"TP Configuration: {self.solution['tp_configuration']}")
         print(f"Pipeline Stages: {self.solution['num_pipeline_stages']} (max: {self.config.max_pipeline_stages})")
         print()
@@ -1813,7 +1990,9 @@ class LLMPlacementSolverWithTP:
                 'model_name': self.config.model_name,
                 'num_decoder_layers': self.config.num_decoder_layers,
                 'sequence_length': self.config.sequence_length,
-                'batch_size': self.config.batch_size,
+                'min_batch_size': self.config.min_batch_size,
+                'max_batch_size': self.config.max_batch_size,
+                'optimal_batch_size': self.solution.get('batch_size', None),
                 'd_model': self.config.d_model,
                 'd_hidden': self.config.d_hidden,
                 'max_pipeline_stages': self.config.max_pipeline_stages,
@@ -2135,4 +2314,7 @@ def main():
 
 
 if __name__ == "__main__":
+    start_time = time.time()
     exit(main())
+    end_time = time.time()
+    print(f"Total solver runtime: {end_time - start_time:.0f} seconds")
