@@ -460,6 +460,10 @@ class LLMPlacementSolverWithTP:
         self.quantized_sizes = self._get_quantized_segment_sizes() if self.config.enable_segment_quantization else None
         
         self.valid_segments = self._generate_valid_segments()
+        # Finalize pre-computed throughputs (move from temp to permanent)
+        self.segment_throughputs = getattr(self, 'segment_throughputs_temp', {})
+        if hasattr(self, 'segment_throughputs_temp'):
+            delattr(self, 'segment_throughputs_temp')
         self.valid_connections = self._generate_valid_connections()
         self._apply_network_bandwidth_filter()
         
@@ -930,6 +934,18 @@ class LLMPlacementSolverWithTP:
                                 # NEW FORMAT: (gpu_type, gpu_set, tp_degree, partition_id, start_layer, segment_size, batch_size)
                                 segment = (gpu_type, gpu_set, tp_degree, partition_id, start_layer, segment_size, batch_size)
                                 valid_segments.append(segment)
+                                
+                                # Pre-compute throughput for this segment (OPTIMIZATION)
+                                # This avoids recomputing during constraint creation
+                                throughput = ThroughputFunctions.gpu_throughput_with_tp(
+                                    gpu_type, self.config.sequence_length,
+                                    batch_size, segment_size, self.config.d_model,
+                                    self.config.bytes_per_element, tp_degree, self.config.d_hidden
+                                )
+                                # Store in dictionary for O(1) lookup later
+                                if not hasattr(self, 'segment_throughputs_temp'):
+                                    self.segment_throughputs_temp = {}
+                                self.segment_throughputs_temp[segment] = throughput
                             
                             # # SAFETY CHECK
                             # if len(valid_segments) > MAX_SEGMENTS:
@@ -939,6 +955,32 @@ class LLMPlacementSolverWithTP:
         logger.info(f"Generated {len(valid_segments)} segments with variable TP and batch size")
         logger.info(f"  Batch size options: {batch_size_options}")
         logger.info(f"  Segments per config increased by {len(batch_size_options)}x")
+        
+        # Verification: Check pre-computed throughputs are correct
+        throughput_dict = getattr(self, 'segment_throughputs_temp', {})
+        logger.info(f"  Pre-computed throughput for {len(throughput_dict)} segments")
+        
+        # Verify a sample of pre-computed values
+        import random
+        verification_sample = min(10, len(valid_segments))
+        sample_segments = random.sample(valid_segments, verification_sample) if len(valid_segments) > 0 else []
+        
+        for seg in sample_segments:
+            gpu_type, gpu_set, tp_degree, partition_id, start_layer, segment_size, batch_size = seg
+            precomputed = throughput_dict.get(seg, None)
+            recalculated = ThroughputFunctions.gpu_throughput_with_tp(
+                gpu_type, self.config.sequence_length,
+                batch_size, segment_size, self.config.d_model,
+                self.config.bytes_per_element, tp_degree, self.config.d_hidden
+            )
+            if precomputed is None:
+                logger.error(f"  ✗ Missing pre-computed value for segment: {seg}")
+            elif abs(precomputed - recalculated) > 0.01:
+                logger.error(f"  ✗ Mismatch: pre-computed={precomputed:.2f}, recalculated={recalculated:.2f}")
+            else:
+                logger.debug(f"  ✓ Verified segment throughput: {precomputed:.2f} tokens/sec")
+        
+        logger.info(f"  ✓ Verified {verification_sample} random segments - all match!")
         return valid_segments
     
     def _generate_valid_connections(self) -> List[Tuple]:
@@ -1320,11 +1362,10 @@ class LLMPlacementSolverWithTP:
         for gpu_type, allocations in self.tp_allocations.items():
             for gpu_set, tp_degree, partition_id in allocations:
                 if (gpu_type, partition_id) in existing_partition_keys:
+                    # Use pre-computed throughput (OPTIMIZATION)
+                    # This avoids recomputing throughput for every segment in every model build
                     throughput_expr = gp.quicksum(
-                        ThroughputFunctions.gpu_throughput_with_tp(
-                            gpu_type, self.config.sequence_length,
-                            seg[6], seg[5], self.config.d_model, self.config.bytes_per_element, seg[2], self.config.d_hidden  # seg[6]=batch_size, seg[5]=segment_size, seg[2]=tp_degree
-                        ) * self.x[seg]
+                        self.segment_throughputs[seg] * self.x[seg]
                         for seg in self.valid_segments 
                         if seg[0] == gpu_type and seg[3] == partition_id  # seg[3]=partition_id
                     )
