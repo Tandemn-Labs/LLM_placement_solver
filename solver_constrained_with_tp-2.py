@@ -1353,7 +1353,7 @@ class LLMPlacementSolverWithTP:
         for key in self.z.keys():
             self.model.addConstr(
                 self.t <= self.tau[key] + M_partition[key] * (1 - self.z[key]),
-                name=f"throughput_partition"
+                name=f"throughput_partition[{key[0]},{key[1]}]"
             )
         
         # Network throughput constraints
@@ -1374,9 +1374,18 @@ class LLMPlacementSolverWithTP:
             self._add_flow_conservation_constraints()
     
     def _compute_tight_bigM(self) -> Tuple[Dict, float]:
-        """Compute tight Big-M values"""
+        """Compute tight Big-M values
+        
+        CRITICAL: Big-M must be based on the MAXIMUM throughput across ALL GPU types,
+        not per-type, because self.t is a global variable representing system-wide throughput.
+        Using per-type Big-M causes slower GPUs to incorrectly constrain self.t.
+        """
         M_partition = {}
         existing_partition_keys = set((seg[0], seg[3]) for seg in self.valid_segments)
+        
+        # STEP 1: Find the maximum possible throughput across ALL GPU types
+        max_throughput_global = 0
+        throughput_by_type = {}
         
         for gpu_type, allocations in self.tp_allocations.items():
             tp_degree = self.tp_max_configuration[gpu_type]
@@ -1386,16 +1395,27 @@ class LLMPlacementSolverWithTP:
                 # Use max_batch_size for upper bound calculation
                 max_throughput = ThroughputFunctions.gpu_throughput_with_tp(
                     gpu_type, self.config.sequence_length,
-                    self.config.max_batch_size, max_size, self.config.d_model, self.config.bytes_per_element, tp_degree, self.config.d_hidden
+                    self.config.max_batch_size, max_size, self.config.d_model, 
+                    self.config.bytes_per_element, tp_degree, self.config.d_hidden
                 )
-                # Only create M for partitions that exist
-                for gpu_set, tp_degree_alloc, partition_id in allocations:
-                    if (gpu_type, partition_id) in existing_partition_keys:
-                        M_partition[(gpu_type, partition_id)] = max_throughput * 3
+                throughput_by_type[gpu_type] = max_throughput
+                max_throughput_global = max(max_throughput_global, max_throughput)
+        
+        # STEP 2: Use the GLOBAL maximum for ALL partitions (with safety factor)
+        M_global = max_throughput_global * 3
+        
+        for gpu_type, allocations in self.tp_allocations.items():
+            for gpu_set, tp_degree_alloc, partition_id in allocations:
+                if (gpu_type, partition_id) in existing_partition_keys:
+                    M_partition[(gpu_type, partition_id)] = M_global
         
         M_network = max(self.gpu_pair_throughputs.values()) * 2 if self.gpu_pair_throughputs else 1000.0
         
-        logger.info(f"Tight Big-M computed: M_network={M_network:.2f}")
+        logger.info(f"Tight Big-M computed:")
+        logger.info(f"  Max throughput by GPU type: {', '.join(f'{k}={v:,.0f}' for k,v in throughput_by_type.items())}")
+        logger.info(f"  Global max throughput: {max_throughput_global:,.0f} tokens/sec")
+        logger.info(f"  M_partition (global): {M_global:,.0f} (3x safety factor)")
+        logger.info(f"  M_network: {M_network:,.0f}")
         return M_partition, M_network
     
     def _add_pipeline_connectivity_constraints(self):
@@ -1574,9 +1594,10 @@ class LLMPlacementSolverWithTP:
             target_cpt = self.config.max_cost_per_token
         
         logger.info(f"\n{'='*80}")
-        logger.info(f"ITERATIVE $/TOKEN OPTIMIZATION")
+        logger.info(f"ITERATIVE $/M TOKENS OPTIMIZATION")
         logger.info(f"{'='*80}")
-        logger.info(f"Target $/token: ${target_cpt:.9f}")
+        target_cpm = target_cpt * 1_000_000
+        logger.info(f"Target $/M tokens: ${target_cpm:.6f}")
         
         # Step 1: Estimate minimum throughput (single GPU, single layer, min batch)
         min_tp_estimates = []
@@ -1624,7 +1645,8 @@ class LLMPlacementSolverWithTP:
             
             if success:
                 actual_cpt = self.solution['cost_per_token']
-                logger.info(f"  Result: $/token = ${actual_cpt:.9f}")
+                actual_cpm = actual_cpt * 1_000_000
+                logger.info(f"  Result: $/M tokens = ${actual_cpm:.6f}")
                 
                 if actual_cpt < best_cpt:
                     best_cpt = actual_cpt
@@ -1647,7 +1669,8 @@ class LLMPlacementSolverWithTP:
         
         if best_solution:
             self.solution = best_solution
-            logger.info(f"\nBest $/token found: ${best_cpt:.9f}")
+            best_cpm = best_cpt * 1_000_000
+            logger.info(f"\nBest $/M tokens found: ${best_cpm:.6f}")
             return True
         
         return False
@@ -1707,9 +1730,10 @@ class LLMPlacementSolverWithTP:
         if target_cpt < 0.0001:
             # Very aggressive target - focus on cheaper GPUs
             max_budget = min(max_budget, max_cost * 0.8)
-            logger.info(f"  Aggressive $/token target detected, focusing on lower budgets")
+            logger.info(f"  Aggressive $/M tokens target detected, focusing on lower budgets")
         
-        logger.info(f"Competitive budget range for $/token <= ${target_cpt:.9f}:")
+        target_cpm_display = target_cpt * 1_000_000
+        logger.info(f"Competitive budget range for $/M tokens <= ${target_cpm_display:.6f}:")
         logger.info(f"  GPU cost range: ${min_cost:.2f} - ${max_cost:.2f}/hour")
         logger.info(f"  Search budget range: ${min_budget:.2f} - ${max_budget:.2f}/hour")
         
@@ -1755,9 +1779,10 @@ class LLMPlacementSolverWithTP:
             use_smart_hybrid: If True, uses iterative first to focus search (faster)
         """
         logger.info(f"\n{'='*80}")
-        logger.info(f"OPTIMAL $/TOKEN SEARCH {'(Smart Hybrid)' if use_smart_hybrid and budget_points is None else '(Full Enumeration)'}")
+        logger.info(f"OPTIMAL $/M TOKENS SEARCH {'(Smart Hybrid)' if use_smart_hybrid and budget_points is None else '(Full Enumeration)'}")
         logger.info(f"{'='*80}")
-        logger.info(f"Target $/token (from config): ${self.config.max_cost_per_token:.9f}")
+        target_cpm_display = self.config.max_cost_per_token * 1_000_000
+        logger.info(f"Target $/M tokens (from config): ${target_cpm_display:.6f}")
         
         # Auto-generate budget range if not provided
         if budget_points is None:
@@ -1772,13 +1797,15 @@ class LLMPlacementSolverWithTP:
                     phase1_time = time.time() - phase1_start
                     ballpark_cost = self.solution['cost_per_hour']
                     ballpark_cpt = self.solution['cost_per_token']
-                    logger.info(f"Ballpark found: ${ballpark_cost:.2f}/h, ${ballpark_cpt:.9f}/token (Phase 1 time: {phase1_time:.1f}s)")
+                    ballpark_cpm = ballpark_cpt * 1_000_000
+                    logger.info(f"Ballpark found: ${ballpark_cost:.2f}/h, ${ballpark_cpm:.6f}/M tokens (Phase 1 time: {phase1_time:.1f}s)")
                     
                     # Check if ballpark meets target
+                    target_cpm = self.config.max_cost_per_token * 1_000_000
                     if ballpark_cpt <= self.config.max_cost_per_token:
-                        logger.info(f"Ballpark meets target (${ballpark_cpt:.9f} <= ${self.config.max_cost_per_token:.9f})")
+                        logger.info(f"Ballpark meets target (${ballpark_cpm:.6f} <= ${target_cpm:.6f})")
                     else:
-                        logger.warning(f"Ballpark exceeds target (${ballpark_cpt:.9f} > ${self.config.max_cost_per_token:.9f})")
+                        logger.warning(f"Ballpark exceeds target (${ballpark_cpm:.6f} > ${target_cpm:.6f})")
                     
                     # PERFORMANCE OPTIMIZATION: Reduced from 12 to 6-8 budget points
                     # COMPETITIVE OPTIMIZATION: Focus on range that can beat competitor
@@ -1878,10 +1905,11 @@ class LLMPlacementSolverWithTP:
             
             if success:
                 cpt = self.solution['cost_per_token']
+                cpm = cpt * 1_000_000
                 throughput = self.solution['throughput_tokens_per_sec']
                 cost = self.solution['cost_per_hour']
                 
-                logger.info(f"  Result: {throughput:.0f} tokens/s, ${cost:.2f}/h, ${cpt:.9f}/token")
+                logger.info(f"  Result: {throughput:.0f} tokens/s, ${cost:.2f}/h, ${cpm:.6f}/M tokens")
                 logger.info(f"  Timing: solve={solve_time:.1f}s, total iteration={iteration_time:.1f}s")
                 
                 all_results.append({
@@ -1895,7 +1923,7 @@ class LLMPlacementSolverWithTP:
                 if cpt < best_cpt:
                     best_cpt = cpt
                     best_solution = self.solution.copy()
-                    logger.info(f"  OK New best $/token!")
+                    logger.info(f"  OK New best $/M tokens!")
             else:
                 logger.info(f"  Infeasible")
                 logger.info(f"  Timing: solve={solve_time:.1f}s, total iteration={iteration_time:.1f}s")
@@ -1942,30 +1970,33 @@ class LLMPlacementSolverWithTP:
         
         if best_solution:
             self.solution = best_solution
+            best_cpm = best_cpt * 1_000_000
             logger.info(f"\n{'='*80}")
-            logger.info(f"OPTIMAL $/TOKEN FOUND")
+            logger.info(f"OPTIMAL $/M TOKENS FOUND")
             logger.info(f"{'='*80}")
-            logger.info(f"Best $/token: ${best_cpt:.9f}")
+            logger.info(f"Best $/M tokens: ${best_cpm:.6f}")
             logger.info(f"  Throughput: {best_solution['throughput_tokens_per_sec']:.0f} tokens/sec")
             logger.info(f"  Cost: ${best_solution['cost_per_hour']:.2f}/hour")
             logger.info(f"  Pipeline stages: {best_solution['num_pipeline_stages']}")
             
             # Check against target
             target = self.config.max_cost_per_token
+            target_per_million = target * 1_000_000
             if best_cpt <= target:
                 improvement = (target - best_cpt) / target * 100
-                logger.info(f"\nMEETS TARGET: ${best_cpt:.9f} <= ${target:.9f}")
+                logger.info(f"\nMEETS TARGET: ${best_cpm:.6f} <= ${target_per_million:.6f}")
                 logger.info(f"   {improvement:.1f}% better than target!")
             else:
                 shortfall = (best_cpt - target) / target * 100
-                logger.info(f"\nMISSES TARGET: ${best_cpt:.9f} > ${target:.9f}")
+                logger.info(f"\nMISSES TARGET: ${best_cpm:.6f} > ${target_per_million:.6f}")
                 logger.info(f"   {shortfall:.1f}% worse than target (infeasible to meet)")
             
             # Log Pareto frontier
             logger.info(f"\nPareto Frontier (all solutions):")
             for r in sorted(all_results, key=lambda x: x['cost_per_token']):
                 marker = "*" if r['cost_per_token'] <= target else " "
-                logger.info(f"  {marker} ${r['cost_per_token']:.9f}/token: "
+                r_cpm = r['cost_per_token'] * 1_000_000
+                logger.info(f"  {marker} ${r_cpm:.6f}/M tokens: "
                            f"{r['throughput']:.0f} tokens/s, ${r['cost']:.2f}/h")
             
             return True
@@ -2042,6 +2073,9 @@ class LLMPlacementSolverWithTP:
         else:
             cost_per_token = float('inf')
         
+        # $/M tokens for display
+        cost_per_million_tokens = cost_per_token * 1_000_000
+        
         # NEW: Detailed objective breakdown logging
         logger.info("\n" + "="*80)
         logger.info("SOLUTION ANALYSIS - OBJECTIVE BREAKDOWN")
@@ -2073,7 +2107,7 @@ class LLMPlacementSolverWithTP:
         logger.info(f"  Batch Size: {optimal_batch_size}")
         logger.info(f"  Throughput: {throughput_per_sec:.2f} tokens/sec")
         logger.info(f"  Cost: ${cost_per_hour:.2f}/hour")
-        logger.info(f"  $/token: ${cost_per_token:.9f}")
+        logger.info(f"  $/M tokens: ${cost_per_million_tokens:.6f}")
         
         self.solution = {
             'objective_value': self.model.ObjVal,
@@ -2173,7 +2207,7 @@ class LLMPlacementSolverWithTP:
         if len(batch_size_options) > 1 and optimal_batch and len(self.solution['gpu_assignments']) > 0:
             logger.info(f"\nBatch Size Impact (estimated for current GPU configuration):")
             logger.info("-" * 80)
-            logger.info(f"  {'Batch':<8} {'Efficiency':<12} {'Est. Throughput':<18} {'$/token Impact':<15}")
+            logger.info(f"  {'Batch':<8} {'Efficiency':<12} {'Est. Throughput':<18} {'$/M tokens':<15}")
             logger.info("-" * 80)
             
             # Get a representative GPU assignment for estimation
@@ -2207,8 +2241,9 @@ class LLMPlacementSolverWithTP:
                     else:
                         marker = f" ({abs(diff_pct):.1f}% better)"
                 
+                est_cost_per_million = est_cost_per_token * 1_000_000
                 logger.info(f"  {bs:<8} {efficiency:<12.1%} {est_throughput:<18.0f} "
-                           f"${est_cost_per_token:.9f}{marker}")
+                           f"${est_cost_per_million:<14.6f}{marker}")
     
     def _log_roofline_analysis(self):
         """Analyze and log roofline model insights for the solution"""
@@ -2466,21 +2501,23 @@ class LLMPlacementSolverWithTP:
             )
             alt_cost = best_gpu.cost_per_hour * max_tp
             alt_cost_per_token = alt_cost / (alt_throughput * 3600)
+            alt_cost_per_million = alt_cost_per_token * 1_000_000
             
             logger.info(f"\nCAN FIT Single segment with TP={max_tp}:")
             logger.info(f"  Throughput: {alt_throughput:.0f} tokens/sec")
             logger.info(f"  Cost: ${alt_cost:.2f}/hour")
-            logger.info(f"  $/token: ${alt_cost_per_token:.9f}")
+            logger.info(f"  $/M tokens: ${alt_cost_per_million:.6f}")
             
             # Compare with actual solution
             actual_cpt = self.solution['cost_per_token']
+            actual_cpm = actual_cpt * 1_000_000
             logger.info(f"\nComparison with current multi-segment solution:")
-            logger.info(f"  Current solution $/token: ${actual_cpt:.9f}")
-            logger.info(f"  Single-segment $/token:   ${alt_cost_per_token:.9f}")
+            logger.info(f"  Current solution $/M tokens: ${actual_cpm:.6f}")
+            logger.info(f"  Single-segment $/M tokens:   ${alt_cost_per_million:.6f}")
             
             if alt_cost_per_token < actual_cpt:
                 diff_pct = (actual_cpt/alt_cost_per_token - 1)*100
-                logger.warning(f"  SINGLE-SEGMENT is {diff_pct:.1f}% BETTER in $/token!")
+                logger.warning(f"  SINGLE-SEGMENT is {diff_pct:.1f}% BETTER in $/M tokens!")
                 logger.warning(f"  The solver found a suboptimal solution!")
             else:
                 diff_pct = (alt_cost_per_token/actual_cpt - 1)*100
@@ -2551,7 +2588,8 @@ class LLMPlacementSolverWithTP:
         logger.info("-" * 100)
         logger.info(f"  Throughput:        {self.solution['throughput_tokens_per_sec']:.2f} tokens/sec")
         logger.info(f"  Cost:              ${self.solution['cost_per_hour']:.2f}/hour")
-        logger.info(f"  $/token:           ${self.solution['cost_per_token']:.9f}")  # Changed to 9 decimals
+        cost_per_million = self.solution['cost_per_token'] * 1_000_000
+        logger.info(f"  $/M tokens:        ${cost_per_million:.6f}")
         logger.info(f"  Objective Value:   {self.solution['objective_value']:.4f}")
         print()
         
@@ -2559,16 +2597,18 @@ class LLMPlacementSolverWithTP:
         if self.config.max_cost_per_token < 999.0:
             competitor = self.config.max_cost_per_token
             our_cost = self.solution['cost_per_token']
+            competitor_per_million = competitor * 1_000_000
+            our_cost_per_million = our_cost * 1_000_000
             improvement = (competitor - our_cost) / competitor * 100
             
             logger.info("COST COMPARISON vs COMPETITOR:")
             logger.info("-" * 100)
-            logger.info(f"  Competitor $/token:  ${competitor:.9f}")
-            logger.info(f"  Our $/token:         ${our_cost:.9f}")
+            logger.info(f"  Competitor $/M tokens:  ${competitor_per_million:.6f}")
+            logger.info(f"  Our $/M tokens:         ${our_cost_per_million:.6f}")
             if improvement > 0:
-                logger.info(f"  Improvement:         OK {improvement:.1f}% BETTER")
+                logger.info(f"  Improvement:            OK {improvement:.1f}% BETTER")
             else:
-                logger.info(f"  Improvement:         Nah {abs(improvement):.1f}% WORSE")
+                logger.info(f"  Improvement:            Nah {abs(improvement):.1f}% WORSE")
             print()
         
         print()
