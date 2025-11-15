@@ -86,6 +86,14 @@ GPU_PERFORMANCE_TIERS = {
     'L20': 2
 }
 
+# Optimization priority mapping to cost_throughput_weight
+# Format: priority_name -> (weight, description)
+OPTIMIZATION_PRIORITY_MAP = {
+    'throughput_first': 0.1,  # 90% throughput, 10% cost
+    'balanced': 0.5,           # 50% throughput, 50% cost
+    'cost_first': 0.9          # 10% throughput, 90% cost
+}
+
 class ThroughputFunctions:
     """Throughput functions with TP support"""
 
@@ -653,6 +661,23 @@ class LLMPlacementSolverWithTP:
         df = pd.read_csv(filename)
         config_dict = dict(zip(df['parameter'], df['value']))
         
+        # Parse optimization_priority (new) or cost_throughput_weight (legacy)
+        if 'optimization_priority' in config_dict:
+            priority = config_dict['optimization_priority'].lower()
+            if priority not in OPTIMIZATION_PRIORITY_MAP:
+                raise ValueError(
+                    f"Invalid optimization_priority: '{priority}'. "
+                    f"Must be one of: {', '.join(OPTIMIZATION_PRIORITY_MAP.keys())}"
+                )
+            cost_throughput_weight = OPTIMIZATION_PRIORITY_MAP[priority]
+            logger.info(f"Optimization priority: {priority} (weight={cost_throughput_weight:.2f})")
+        elif 'cost_throughput_weight' in config_dict:
+            # Legacy support
+            cost_throughput_weight = float(config_dict['cost_throughput_weight'])
+            logger.warning(f"Using deprecated 'cost_throughput_weight'. Consider using 'optimization_priority' instead.")
+        else:
+            raise ValueError("Config must specify either 'optimization_priority' or 'cost_throughput_weight'")
+        
         return Config(
             sequence_length=int(config_dict['sequence_length']),
             min_batch_size=int(config_dict['min_batch_size']),
@@ -672,8 +697,8 @@ class LLMPlacementSolverWithTP:
             min_layers_per_stage=int(config_dict['min_layers_per_stage']),
             network_bandwidth_percentile_threshold=float(config_dict['network_bandwidth_percentile_threshold']),
             enable_segment_quantization=config_dict['enable_segment_quantization'].lower() == 'true',
-            # NEW: Cost optimization parameters
-            cost_throughput_weight=float(config_dict['cost_throughput_weight']),
+            # Cost optimization parameters
+            cost_throughput_weight=cost_throughput_weight,
             max_hourly_cost=float(config_dict['max_hourly_cost']),
             max_cost_per_token=float(config_dict['max_cost_per_token']),
             throughput_normalization=float(config_dict['throughput_normalization']),
