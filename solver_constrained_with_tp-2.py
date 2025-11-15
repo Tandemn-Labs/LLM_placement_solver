@@ -405,51 +405,50 @@ class ThroughputFunctions:
         if debug:
             logger.info(f"  Total memory: {total_bytes_per_gpu / 1e9:.2f} GB")
         
-        # === TP Efficiency Factor ===
-        # TP doesn't scale perfectly due to:
-        # 1. Memory bandwidth contention (multiple GPUs reading weights)
-        # 2. Synchronization overhead (barriers between layers)
-        # 3. Load imbalance (some GPUs finish slightly earlier)
-        # 4. Framework overhead (PyTorch/CUDA TP management)
-        # Real-world measurements show TP efficiency decreases with degree
-        tp_efficiency_compute = {
-            1: 1.00,   # No TP overhead
-            2: 0.90,   # ~10% overhead (sync, memory contention)
-            4: 0.75,   # ~25% overhead
-            8: 0.60,   # ~40% overhead
-            16: 0.45   # ~55% overhead
-        }.get(tp_degree, 0.40)  # Default for higher TP
-        
-        # === Calculate Throughput Based on Regime ===
+        # === Calculate BASE time (without TP efficiency penalty first) ===
         if regime == "COMPUTE_BOUND":
-            # Apply TP efficiency penalty to compute time
-            time_per_batch = total_flops_per_gpu / (specs['tflops'] * 1e12 * specs['efficiency'] * tp_efficiency_compute)
+            base_time_per_batch = total_flops_per_gpu / (specs['tflops'] * 1e12 * specs['efficiency'])
         else:  # MEMORY_BOUND
-            # Memory bandwidth is MORE constrained with TP (multiple GPUs competing)
-            # Each GPU needs to read its weights, causing contention
-            tp_efficiency_memory = tp_efficiency_compute * 0.8  # Even worse for memory
-            time_per_batch = total_bytes_per_gpu / (specs['mem_bw'] * 1e9 * specs['efficiency'] * tp_efficiency_memory)
+            base_time_per_batch = total_bytes_per_gpu / (specs['mem_bw'] * 1e9 * specs['efficiency'])
         
-        if debug:
-            compute_time_no_tp = total_flops_per_gpu / (specs['tflops'] * 1e12 * specs['efficiency'])
-            compute_time_with_tp = total_flops_per_gpu / (specs['tflops'] * 1e12 * specs['efficiency'] * tp_efficiency_compute)
-            memory_time = total_bytes_per_gpu / (specs['mem_bw'] * 1e9 * specs['efficiency'])
-            logger.info(f"  TP efficiency: {tp_efficiency_compute:.2%}")
-            logger.info(f"  Compute time (no TP penalty): {compute_time_no_tp:.4f} sec")
-            logger.info(f"  Compute time (with TP penalty): {compute_time_with_tp:.4f} sec")
-            logger.info(f"  Memory time: {memory_time:.4f} sec")
-            logger.info(f"  Time per batch: {time_per_batch:.4f} sec")
-        
-        # === Add Communication Overhead ===
-        # All-reduce after each layer: 2× data transfer (reduce-scatter + all-gather)
-        # Communication time per layer: 2 * (activation_size / bandwidth) * (tp_degree - 1) / tp_degree
+        # === Communication Overhead (compute before applying TP efficiency) ===
         activation_size_bytes = batch_size * seq_len * d_model * bytes_per_element
-        
-        # Communication time per layer (all-reduce = 2× data transfer)
         comm_time_per_layer = 2 * activation_size_bytes / (nvlink_bw_gbps * 1e9) * (tp_degree - 1) / tp_degree
         total_comm_time = num_layers * comm_time_per_layer
         
+        # === TP Efficiency Factor (Dynamic, based on actual communication overhead) ===
+        comm_overhead_ratio = 0.0  # Initialize
+        if tp_degree == 1:
+            tp_efficiency_compute = 1.00  # No TP, no overhead
+        else:
+            # Communication overhead as ratio of total time
+            comm_overhead_ratio = total_comm_time / (base_time_per_batch + total_comm_time)
+            
+            # Additional overheads not captured by communication time:
+            # - Memory bandwidth contention (multiple GPUs competing for memory)
+            # - Synchronization barriers between layers
+            # - Load imbalance across GPUs
+            # - Framework scheduling overhead
+            additional_overhead = {
+                1: 0.00,   # No additional overhead
+                2: 0.05,   # 5% additional overhead
+                4: 0.10,   # 10% additional overhead
+                8: 0.15,   # 15% additional overhead
+                16: 0.20   # 20% additional overhead
+            }.get(tp_degree, 0.25)
+            
+            # TP efficiency accounts for overheads beyond pure communication
+            # Communication time is already added separately, so we only penalize for additional overhead
+            tp_efficiency_compute = max(0.30, 1.0 - additional_overhead)
+        
+        # === Apply TP efficiency to compute time ===
+        time_per_batch = base_time_per_batch / tp_efficiency_compute
+        
         if debug:
+            logger.info(f"  Base time per batch: {base_time_per_batch:.4f} sec")
+            logger.info(f"  Communication overhead ratio: {comm_overhead_ratio if tp_degree > 1 else 0:.2%}")
+            logger.info(f"  TP efficiency: {tp_efficiency_compute:.2%}")
+            logger.info(f"  Time per batch (with TP penalty): {time_per_batch:.4f} sec")
             logger.info(f"  Comm time per layer: {comm_time_per_layer * 1000:.4f} ms")
             logger.info(f"  Total comm time: {total_comm_time:.4f} sec")
         
@@ -2292,19 +2291,34 @@ class LLMPlacementSolverWithTP:
         # Count number of pipeline stages in solution
         num_stages = sum(1 for key in self.z.keys() if self.z[key].x > 0.5)
         
-        # Apply pipeline bubble efficiency
+        # Get optimal batch size from solution
+        optimal_batch_size = None
+        for bs in self._get_batch_size_options():
+            if self.b[bs].x > 0.5:
+                optimal_batch_size = bs
+                break
+        
+        # Apply pipeline bubble efficiency (dynamic based on micro-batches)
         # Pipeline bubbles occur because not all stages are active simultaneously
-        # Efficiency decreases with more stages
-        pipeline_efficiency = {
-            1: 1.00,   # No pipeline, no bubbles
-            2: 0.90,   # ~10% bubble overhead
-            3: 0.80,   # ~20% bubble overhead
-            4: 0.70,   # ~30% bubble overhead
-            5: 0.65,   # ~35% bubble overhead
-            6: 0.62,   # ~38% bubble overhead
-            7: 0.60,   # ~40% bubble overhead
-            8: 0.60,   # ~40% bubble overhead (consistent with expert estimate)
-        }.get(num_stages, max(0.50, 1.0 - 0.05 * num_stages))  # Degrade further for higher PP
+        # More micro-batches = better pipeline utilization
+        # Efficiency = min(1.0, num_micro_batches / (num_stages * overhead_factor))
+        if num_stages == 1:
+            pipeline_efficiency = 1.00  # No pipeline, no bubbles
+        else:
+            # Micro-batching: split batch across pipeline stages to hide bubbles
+            # Typical: 4-8 micro-batches per batch
+            # More micro-batches = better efficiency (up to a limit)
+            num_micro_batches = max(1, optimal_batch_size // 8)  # Assume micro-batch size ~8
+            
+            # Pipeline efficiency formula from literature:
+            # efficiency ≈ num_micro_batches / (num_micro_batches + num_stages - 1)
+            # This accounts for the "bubble" at start and end of pipeline
+            ideal_efficiency = num_micro_batches / (num_micro_batches + num_stages - 1)
+            
+            # Additional overhead from pipeline scheduling, synchronization
+            scheduling_overhead = 0.10  # 10% overhead
+            
+            pipeline_efficiency = max(0.50, ideal_efficiency * (1.0 - scheduling_overhead))
         
         # Apply real-world efficiency factor
         # Accounts for factors we don't model explicitly:
@@ -2320,8 +2334,14 @@ class LLMPlacementSolverWithTP:
         throughput_per_sec = raw_throughput * pipeline_efficiency * real_world_efficiency
         
         logger.info(f"\nThroughput Corrections:")
+        logger.info(f"  Batch size: {optimal_batch_size}")
         logger.info(f"  Pipeline stages: {num_stages}")
-        logger.info(f"  Pipeline bubble efficiency: {pipeline_efficiency:.1%}")
+        if num_stages > 1:
+            num_micro_batches = max(1, optimal_batch_size // 8)
+            logger.info(f"  Micro-batches: {num_micro_batches}")
+            logger.info(f"  Pipeline bubble efficiency: {pipeline_efficiency:.1%} (dynamic: {num_micro_batches}÷{num_micro_batches + num_stages - 1})")
+        else:
+            logger.info(f"  Pipeline bubble efficiency: {pipeline_efficiency:.1%} (no pipeline)")
         logger.info(f"  Real-world efficiency: {real_world_efficiency:.1%}")
         logger.info(f"  Combined efficiency: {pipeline_efficiency * real_world_efficiency:.1%}")
         logger.info(f"  Raw throughput: {raw_throughput:.2f} tokens/sec")
