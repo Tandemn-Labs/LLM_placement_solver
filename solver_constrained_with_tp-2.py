@@ -318,7 +318,7 @@ class ThroughputFunctions:
     @staticmethod
     def gpu_throughput_with_tp(gpu_type: str, seq_len: int, batch_size: int, 
                                num_layers: int, d_model: int, bytes_per_element: int, 
-                               tp_degree: int, d_hidden: int = None) -> float:
+                               tp_degree: int, d_hidden: int = None, nvlink_bw_gbps: float = 300.0) -> float:
         """
         GPU throughput with tensor parallelism using roofline model.
         
@@ -337,6 +337,7 @@ class ThroughputFunctions:
             bytes_per_element: Bytes per element (2 for FP16)
             tp_degree: Tensor parallelism degree
             d_hidden: FFN intermediate dimension (defaults to 4*d_model)
+            nvlink_bw_gbps: NVLink bandwidth in GB/s (from network topology, NOT hardcoded)
         
         Returns:
             Throughput in tokens/second with TP (NOT multiplied by tp_degree!)
@@ -392,9 +393,6 @@ class ThroughputFunctions:
         # All-reduce after each layer: 2× data transfer (reduce-scatter + all-gather)
         # Communication time per layer: 2 * (activation_size / bandwidth) * (tp_degree - 1) / tp_degree
         activation_size_bytes = batch_size * seq_len * d_model * bytes_per_element
-        
-        # Assume intra-node NVLink bandwidth for TP (400 GB/s for A100, 300 GB/s for V100)
-        nvlink_bw_gbps = 400 if 'H100' in gpu_type or 'A100' in gpu_type else 300
         
         # Communication time per layer (all-reduce = 2× data transfer)
         comm_time_per_layer = 2 * activation_size_bytes / (nvlink_bw_gbps * 1e9) * (tp_degree - 1) / tp_degree
@@ -725,6 +723,54 @@ class LLMPlacementSolverWithTP:
             total_tokens_to_process=int(config_dict['total_tokens_to_process'])
         )
     
+    def _get_min_intra_tp_bandwidth(self, gpu_type: str, gpu_set: FrozenSet[int]) -> float:
+        """
+        Get the minimum bandwidth within a TP group (for all-reduce communication).
+        
+        Args:
+            gpu_type: GPU type name
+            gpu_set: Set of local GPU IDs in the TP group
+        
+        Returns:
+            Minimum bandwidth in GB/s within the TP group
+        """
+        if len(gpu_set) <= 1:
+            return float('inf')  # No communication needed for TP=1
+        
+        min_bw = float('inf')
+        for id1 in gpu_set:
+            global_id1 = self._get_global_gpu_id(gpu_type, id1)
+            for id2 in gpu_set:
+                if id1 != id2:
+                    global_id2 = self._get_global_gpu_id(gpu_type, id2)
+                    bw = self.network_bandwidth[global_id1, global_id2]
+                    min_bw = min(min_bw, bw)
+        
+        return min_bw
+    
+    def _get_representative_tp_bandwidth(self, gpu_type: str, tp_degree: int) -> float:
+        """
+        Get a representative bandwidth for a TP group of given size (for estimates/diagnostics).
+        Uses the first tp_degree GPUs of this type to calculate bandwidth.
+        
+        Args:
+            gpu_type: GPU type name
+            tp_degree: TP degree
+        
+        Returns:
+            Representative bandwidth in GB/s
+        """
+        if tp_degree <= 1:
+            return float('inf')
+        
+        gpu_obj = self.gpu_types[gpu_type]
+        if gpu_obj.count < tp_degree:
+            return 100.0  # Conservative default if not enough GPUs
+        
+        # Use first tp_degree GPUs
+        gpu_set = frozenset(range(tp_degree))
+        return self._get_min_intra_tp_bandwidth(gpu_type, gpu_set)
+    
     def _generate_tp_allocations(self) -> Dict[str, List[Tuple[FrozenSet[int], int, int]]]:
         """
         Generate all valid (gpu_set, tp_degree, partition_id) tuples for each GPU type.
@@ -983,10 +1029,12 @@ class LLMPlacementSolverWithTP:
                                 
                                 # Pre-compute throughput for this segment (OPTIMIZATION)
                                 # This avoids recomputing during constraint creation
+                                # Get actual network bandwidth from topology (not hardcoded!)
+                                nvlink_bw = self._get_min_intra_tp_bandwidth(gpu_type, gpu_set)
                                 throughput = ThroughputFunctions.gpu_throughput_with_tp(
                                     gpu_type, self.config.sequence_length,
                                     batch_size, segment_size, self.config.d_model,
-                                    self.config.bytes_per_element, tp_degree, self.config.d_hidden
+                                    self.config.bytes_per_element, tp_degree, self.config.d_hidden, nvlink_bw
                                 )
                                 # Store in dictionary for O(1) lookup later
                                 if not hasattr(self, 'segment_throughputs_temp'):
@@ -1014,10 +1062,11 @@ class LLMPlacementSolverWithTP:
         for seg in sample_segments:
             gpu_type, gpu_set, tp_degree, partition_id, start_layer, segment_size, batch_size = seg
             precomputed = throughput_dict.get(seg, None)
+            nvlink_bw = self._get_min_intra_tp_bandwidth(gpu_type, gpu_set)
             recalculated = ThroughputFunctions.gpu_throughput_with_tp(
                 gpu_type, self.config.sequence_length,
                 batch_size, segment_size, self.config.d_model,
-                self.config.bytes_per_element, tp_degree, self.config.d_hidden
+                self.config.bytes_per_element, tp_degree, self.config.d_hidden, nvlink_bw
             )
             if precomputed is None:
                 logger.error(f"  ✗ Missing pre-computed value for segment: {seg}")
@@ -1491,10 +1540,11 @@ class LLMPlacementSolverWithTP:
             
             if max_size > 0:
                 # Use max_batch_size for upper bound calculation
+                nvlink_bw = self._get_representative_tp_bandwidth(gpu_type, tp_degree)
                 max_throughput = ThroughputFunctions.gpu_throughput_with_tp(
                     gpu_type, self.config.sequence_length,
                     self.config.max_batch_size, max_size, self.config.d_model, 
-                    self.config.bytes_per_element, tp_degree, self.config.d_hidden
+                    self.config.bytes_per_element, tp_degree, self.config.d_hidden, nvlink_bw
                 )
                 throughput_by_type[gpu_type] = max_throughput
                 max_throughput_global = max(max_throughput_global, max_throughput)
@@ -2549,9 +2599,10 @@ class LLMPlacementSolverWithTP:
                 # Hypothetical: what if we used this GPU?
                 if max_seg >= 5:  # Can fit at least 5 layers
                     # Use max_batch_size for optimistic throughput estimate
+                    nvlink_bw = self._get_representative_tp_bandwidth(gpu_type, 4)
                     hyp_throughput = ThroughputFunctions.gpu_throughput_with_tp(
                         gpu_type, self.config.sequence_length, self.config.max_batch_size,
-                        5, self.config.d_model, self.config.bytes_per_element, 4, self.config.d_hidden
+                        5, self.config.d_model, self.config.bytes_per_element, 4, self.config.d_hidden, nvlink_bw
                     )
                     hyp_cost = gpu_obj.cost_per_hour * 4  # TP=4
                     logger.info(f"             Hypothetical (5 layers, TP=4): {hyp_throughput:.0f} tokens/s, ${hyp_cost:.2f}/h")
@@ -2592,10 +2643,11 @@ class LLMPlacementSolverWithTP:
         if max_seg_size >= self.config.num_decoder_layers:
             # Can fit entire model in one segment!
             # Use max_batch_size for optimal throughput estimate
+            nvlink_bw = self._get_representative_tp_bandwidth(best_gpu_type, max_tp)
             alt_throughput = ThroughputFunctions.gpu_throughput_with_tp(
                 best_gpu_type, self.config.sequence_length, self.config.max_batch_size,
                 self.config.num_decoder_layers, self.config.d_model, 
-                self.config.bytes_per_element, max_tp, self.config.d_hidden
+                self.config.bytes_per_element, max_tp, self.config.d_hidden, nvlink_bw
             )
             alt_cost = best_gpu.cost_per_hour * max_tp
             alt_cost_per_token = alt_cost / (alt_throughput * 3600)
@@ -2649,10 +2701,11 @@ class LLMPlacementSolverWithTP:
                 
                 if max_seg_size >= self.config.num_decoder_layers:
                     # Use max_batch_size for optimal throughput estimate
+                    nvlink_bw = self._get_representative_tp_bandwidth(best_gpu_type, max_tp)
                     t_alt = ThroughputFunctions.gpu_throughput_with_tp(
                         best_gpu_type, self.config.sequence_length, self.config.max_batch_size,
                         self.config.num_decoder_layers, self.config.d_model,
-                        self.config.bytes_per_element, max_tp, self.config.d_hidden
+                        self.config.bytes_per_element, max_tp, self.config.d_hidden, nvlink_bw
                     )
                     c_alt = best_gpu.cost_per_hour * max_tp
                     obj_alt = (t_alt / self.config.throughput_normalization) - \

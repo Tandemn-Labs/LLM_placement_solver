@@ -1,0 +1,2 @@
+batch_size,throughput_tokens_per_sec,cost_per_hour,cost_per_million_tokens,pipeline_stages,gpu_type,tp_degree,num_gpus,total_layers,status
+64,35157836.90,32.77,0.000259,1,A100,8,8,40,SUCCESS

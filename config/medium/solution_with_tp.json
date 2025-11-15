@@ -3,46 +3,56 @@
     "model_name": "llama-70b",
     "num_decoder_layers": 40,
     "sequence_length": 4096,
-    "batch_size": 32,
+    "min_batch_size": 64,
+    "max_batch_size": 64,
+    "optimal_batch_size": 64,
     "d_model": 8192,
     "d_hidden": 22016,
     "max_pipeline_stages": 8,
     "min_memory_utilization": 0.5
   },
   "solution": {
-    "objective_value": 8344.650268554688,
-    "throughput_tokens_per_sec": 8344.650268554688,
-    "cost_per_hour": 4.0,
-    "cost_per_token": 1.3315250793650794e-07,
+    "objective_value": 35157836.89555859,
+    "batch_size": 64,
+    "throughput_tokens_per_sec": 35157836.89555859,
+    "cost_per_hour": 32.77,
+    "cost_per_token": 2.589117699367822e-10,
     "meets_cost_threshold": true,
     "tp_configuration": {
       "A100": 8,
-      "L20": 8,
+      "L40": 8,
       "A10": 8,
-      "V100": 8,
-      "T4": 8
+      "V100": 8
     },
     "gpu_assignments": [
       {
         "gpu_type": "A100",
-        "partition_id": 12,
+        "partition_id": 14,
         "gpu_ids": [
           0,
           1,
           2,
-          3
+          3,
+          4,
+          5,
+          6,
+          7
         ],
         "global_gpu_ids": [
           0,
           1,
           2,
-          3
+          3,
+          4,
+          5,
+          6,
+          7
         ],
-        "tp_degree": 4,
+        "tp_degree": 8,
         "start_layer": 1,
         "end_layer": 40,
         "segment_size": 40,
-        "throughput": 8583.06884765625
+        "throughput": 35157836.89555859
       }
     ],
     "network_connections": [],
