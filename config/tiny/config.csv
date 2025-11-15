@@ -1,6 +1,7 @@
 parameter,value
 sequence_length,2048
-batch_size,16
+min_batch_size,16
+max_batch_size,16
 model_name,llama-7b
 num_decoder_layers,4
 d_model,4096
@@ -10,3 +11,15 @@ num_attention_heads,32
 layer_weight_memory_gb,0.5
 time_limit_seconds,60
 optimality_gap,0.01
+bytes_per_element,2
+enable_segment_quantization,true
+max_pipeline_stages,8
+min_layers_per_stage,1
+min_memory_utilization,0.5
+network_bandwidth_percentile_threshold,0.1
+cost_throughput_weight,0.0
+max_hourly_cost,999.0
+max_cost_per_token,0.0000001
+throughput_normalization,10000.0
+cost_normalization,1.0
+total_tokens_to_process,1000000000

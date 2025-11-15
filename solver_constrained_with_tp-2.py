@@ -44,7 +44,7 @@ class GPUType:
 
 @dataclass
 class Config:
-    """Runtime configuration"""
+    """Runtime configuration - all parameters are required"""
     sequence_length: int
     min_batch_size: int
     max_batch_size: int
@@ -57,19 +57,20 @@ class Config:
     layer_weight_memory_gb: float
     time_limit_seconds: float
     optimality_gap: float
-    bytes_per_element: int = 2
+    bytes_per_element: int
     # Practical constraints
-    max_pipeline_stages: int = 8
-    min_memory_utilization: float = 0.5
-    min_layers_per_stage: int = 1
-    network_bandwidth_percentile_threshold: float = 0.1
-    enable_segment_quantization: bool = True
-    # NEW: Cost optimization parameters
-    cost_throughput_weight: float = 0.0  # 0=pure throughput, 1=pure cost
-    max_hourly_cost: float = 999.0  # Budget constraint ($/hour)
-    max_cost_per_token: float = 999.0  # Competitor threshold ($/token)
-    throughput_normalization: float = 1000.0  # Scaling for objective
-    cost_normalization: float = 50.0  # Scaling for objective
+    max_pipeline_stages: int
+    min_memory_utilization: float
+    min_layers_per_stage: int
+    network_bandwidth_percentile_threshold: float
+    enable_segment_quantization: bool
+    # Cost optimization parameters
+    cost_throughput_weight: float
+    max_hourly_cost: float
+    max_cost_per_token: float
+    throughput_normalization: float
+    cost_normalization: float
+    total_tokens_to_process: int
 
 # GPU performance tiers for hierarchy constraints
 GPU_PERFORMANCE_TIERS = {
@@ -665,18 +666,19 @@ class LLMPlacementSolverWithTP:
             layer_weight_memory_gb=float(config_dict['layer_weight_memory_gb']),
             time_limit_seconds=float(config_dict['time_limit_seconds']),
             optimality_gap=float(config_dict['optimality_gap']),
-            bytes_per_element=int(config_dict.get('bytes_per_element', 2)),
-            max_pipeline_stages=int(config_dict.get('max_pipeline_stages', 8)),
-            min_memory_utilization=float(config_dict.get('min_memory_utilization', 0.5)),
-            min_layers_per_stage=int(config_dict.get('min_layers_per_stage', 10)),
-            network_bandwidth_percentile_threshold=float(config_dict.get('network_bandwidth_percentile_threshold', 0.1)),
-            enable_segment_quantization=config_dict.get('enable_segment_quantization', 'true').lower() == 'true',
+            bytes_per_element=int(config_dict['bytes_per_element']),
+            max_pipeline_stages=int(config_dict['max_pipeline_stages']),
+            min_memory_utilization=float(config_dict['min_memory_utilization']),
+            min_layers_per_stage=int(config_dict['min_layers_per_stage']),
+            network_bandwidth_percentile_threshold=float(config_dict['network_bandwidth_percentile_threshold']),
+            enable_segment_quantization=config_dict['enable_segment_quantization'].lower() == 'true',
             # NEW: Cost optimization parameters
-            cost_throughput_weight=float(config_dict.get('cost_throughput_weight', 0.0)),
-            max_hourly_cost=float(config_dict.get('max_hourly_cost', 999.0)),
-            max_cost_per_token=float(config_dict.get('max_cost_per_token', 999.0)),
-            throughput_normalization=float(config_dict.get('throughput_normalization', 1000.0)),
-            cost_normalization=float(config_dict.get('cost_normalization', 50.0))
+            cost_throughput_weight=float(config_dict['cost_throughput_weight']),
+            max_hourly_cost=float(config_dict['max_hourly_cost']),
+            max_cost_per_token=float(config_dict['max_cost_per_token']),
+            throughput_normalization=float(config_dict['throughput_normalization']),
+            cost_normalization=float(config_dict['cost_normalization']),
+            total_tokens_to_process=int(config_dict['total_tokens_to_process'])
         )
     
     def _generate_tp_allocations(self) -> Dict[str, List[Tuple[FrozenSet[int], int, int]]]:
@@ -2748,11 +2750,15 @@ class LLMPlacementSolverWithTP:
                     first_assignment = sol['gpu_assignments'][0]
                     gpu_type = first_assignment['gpu_type']
                     tp_degree = first_assignment['tp_degree']
-                    num_gpus = len(first_assignment['gpu_ids'])
+                    num_gpus = sum(len(a['gpu_ids']) for a in sol['gpu_assignments'])
                     total_layers = sum(a['segment_size'] for a in sol['gpu_assignments'])
                 
                 cost_per_million = result['cost_per_token'] * 1_000_000
                 is_best = (result['cost_per_token'] == min(r['cost_per_token'] for r in self.all_enumeration_results))
+                
+                # Calculate total runtime and cost based on workload
+                total_runtime_hours = self.config.total_tokens_to_process / result['throughput'] / 3600
+                total_cost = result['cost'] * total_runtime_hours
                 
                 rows.append({
                     'batch_size': sol.get('batch_size', ''),
@@ -2760,6 +2766,8 @@ class LLMPlacementSolverWithTP:
                     'throughput_tokens_per_sec': f"{result['throughput']:.2f}",
                     'cost_per_hour': f"{result['cost']:.2f}",
                     'cost_per_million_tokens': f"{cost_per_million:.6f}",
+                    'total_runtime_hours': f"{total_runtime_hours:.2f}",
+                    'total_cost': f"{total_cost:.2f}",
                     'pipeline_stages': sol['num_pipeline_stages'],
                     'gpu_type': gpu_type,
                     'tp_degree': tp_degree,
@@ -2772,8 +2780,9 @@ class LLMPlacementSolverWithTP:
             # Write CSV with all results
             with open(output_file, 'w', newline='') as f:
                 fieldnames = ['batch_size', 'budget_tested', 'throughput_tokens_per_sec', 'cost_per_hour', 
-                             'cost_per_million_tokens', 'pipeline_stages', 'gpu_type', 
-                             'tp_degree', 'num_gpus', 'total_layers', 'is_best', 'status']
+                             'cost_per_million_tokens', 'total_runtime_hours', 'total_cost',
+                             'pipeline_stages', 'gpu_type', 'tp_degree', 'num_gpus', 'total_layers', 
+                             'is_best', 'status']
                 writer = csv.DictWriter(f, fieldnames=fieldnames)
                 writer.writeheader()
                 writer.writerows(rows)
@@ -2790,16 +2799,22 @@ class LLMPlacementSolverWithTP:
                 first_assignment = self.solution['gpu_assignments'][0]
                 gpu_type = first_assignment['gpu_type']
                 tp_degree = first_assignment['tp_degree']
-                num_gpus = len(first_assignment['gpu_ids'])
+                num_gpus = sum(len(a['gpu_ids']) for a in self.solution['gpu_assignments'])
                 total_layers = sum(a['segment_size'] for a in self.solution['gpu_assignments'])
             
             cost_per_million = self.solution['cost_per_token'] * 1_000_000
+            
+            # Calculate total runtime and cost based on workload
+            total_runtime_hours = self.config.total_tokens_to_process / self.solution['throughput_tokens_per_sec'] / 3600
+            total_cost = self.solution['cost_per_hour'] * total_runtime_hours
             
             row = {
                 'batch_size': self.solution.get('batch_size', ''),
                 'throughput_tokens_per_sec': f"{self.solution['throughput_tokens_per_sec']:.2f}",
                 'cost_per_hour': f"{self.solution['cost_per_hour']:.2f}",
                 'cost_per_million_tokens': f"{cost_per_million:.6f}",
+                'total_runtime_hours': f"{total_runtime_hours:.2f}",
+                'total_cost': f"{total_cost:.2f}",
                 'pipeline_stages': self.solution['num_pipeline_stages'],
                 'gpu_type': gpu_type,
                 'tp_degree': tp_degree,
@@ -2811,8 +2826,9 @@ class LLMPlacementSolverWithTP:
             # Write CSV (with header)
             with open(output_file, 'w', newline='') as f:
                 fieldnames = ['batch_size', 'throughput_tokens_per_sec', 'cost_per_hour', 
-                             'cost_per_million_tokens', 'pipeline_stages', 'gpu_type', 
-                             'tp_degree', 'num_gpus', 'total_layers', 'status']
+                             'cost_per_million_tokens', 'total_runtime_hours', 'total_cost',
+                             'pipeline_stages', 'gpu_type', 'tp_degree', 'num_gpus', 'total_layers', 
+                             'status']
                 writer = csv.DictWriter(f, fieldnames=fieldnames)
                 writer.writeheader()
                 writer.writerow(row)
