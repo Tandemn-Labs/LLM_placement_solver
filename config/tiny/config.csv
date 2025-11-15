@@ -17,9 +17,10 @@ max_pipeline_stages,8
 min_layers_per_stage,1
 min_memory_utilization,0.5
 network_bandwidth_percentile_threshold,0.1
-cost_throughput_weight,0.0
+optimization_priority,throughput_first
 max_hourly_cost,999.0
 max_cost_per_token,0.0000001
+max_total_cost,999999.0
 throughput_normalization,10000.0
 cost_normalization,1.0
 total_tokens_to_process,1000000000

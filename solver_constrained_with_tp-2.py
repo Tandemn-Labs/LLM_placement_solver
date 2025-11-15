@@ -68,6 +68,7 @@ class Config:
     cost_throughput_weight: float
     max_hourly_cost: float
     max_cost_per_token: float
+    max_total_cost: float
     throughput_normalization: float
     cost_normalization: float
     total_tokens_to_process: int
@@ -115,14 +116,6 @@ class ThroughputFunctions:
         'T4': {'tflops': 65, 'mem_bw': 320, 'efficiency': 0.38}       # Old Turing
     }
 
-    # TP efficiency factors based on empirical observations
-    TP_EFFICIENCY = {
-        1: 1.0,   # No TP overhead
-        2: 0.90,  # 10% overhead for all-reduce
-        4: 0.80,  # 20% overhead
-        8: 0.70   # 30% overhead
-    }
-    
     @staticmethod
     def batch_efficiency_factor(batch_size: int) -> float:
         """
@@ -328,7 +321,12 @@ class ThroughputFunctions:
                                tp_degree: int, d_hidden: int = None) -> float:
         """
         GPU throughput with tensor parallelism using roofline model.
-        TP affects both memory access (weight sharding) and introduces communication overhead.
+        
+        CRITICAL: TP is NOT data parallelism!
+        - TP splits model weights across GPUs for the SAME batch
+        - Each GPU processes the SAME sequences (not different ones)
+        - Purpose: fit larger models in memory, NOT increase throughput
+        - Throughput effect: minor speedup from reduced memory pressure, offset by communication
         
         Args:
             gpu_type: GPU type name
@@ -341,7 +339,7 @@ class ThroughputFunctions:
             d_hidden: FFN intermediate dimension (defaults to 4*d_model)
         
         Returns:
-            Throughput in tokens/second with TP
+            Throughput in tokens/second with TP (NOT multiplied by tp_degree!)
         """
         # Default FFN dimension if not provided
         if d_hidden is None:
@@ -350,7 +348,6 @@ class ThroughputFunctions:
         specs = ThroughputFunctions.GPU_SPECS.get(gpu_type, ThroughputFunctions.GPU_SPECS['A100'])
         
         # === Roofline Model Analysis with TP ===
-        # TP reduces memory access (weights are sharded) but FLOPs remain the same per GPU
         arithmetic_intensity = ThroughputFunctions.calculate_arithmetic_intensity(
             num_layers, batch_size, seq_len, d_model, d_hidden, bytes_per_element, tp_degree
         )
@@ -358,43 +355,64 @@ class ThroughputFunctions:
         ridge_point = ThroughputFunctions.get_ridge_point(gpu_type)
         regime = ThroughputFunctions.determine_regime(arithmetic_intensity, ridge_point)
         
-        # === Compute FLOPs (per GPU - same across TP) ===
-        attn_proj_flops = 2 * 4 * batch_size * seq_len * d_model * d_model  # QKV + output
-        attn_score_flops = 4 * batch_size * seq_len * seq_len * d_model
+        # === Compute FLOPs PER GPU (with TP, each GPU does less compute) ===
+        # Attention projections: each GPU computes D/tp × D/tp matmuls
+        # Total FLOPs reduced by 1/tp in column dimension
+        attn_proj_flops = 2 * 4 * batch_size * seq_len * d_model * (d_model / tp_degree)  # QKV + output
+        attn_score_flops = 4 * batch_size * seq_len * seq_len * (d_model / tp_degree)  # Heads are sharded
+        
+        # FFN: each GPU computes smaller matmuls (d_hidden sharded by tp)
         ffn_flops = 2 * batch_size * seq_len * (
-            d_model * d_hidden + d_model * d_hidden + d_hidden * d_model
+            d_model * (d_hidden / tp_degree) +  # up projection
+            d_model * (d_hidden / tp_degree) +  # gate projection  
+            (d_hidden / tp_degree) * d_model    # down projection
         )
         
         flops_per_layer = attn_proj_flops + attn_score_flops + ffn_flops
-        total_flops = num_layers * flops_per_layer
+        total_flops_per_gpu = num_layers * flops_per_layer
         
-        # === Compute Memory Access with TP (weights sharded by TP) ===
+        # === Compute Memory Access PER GPU (weights sharded by TP) ===
         # Weights are sharded across TP GPUs
-        weight_bytes = num_layers * (4 * d_model * d_model + 3 * d_model * d_hidden) * bytes_per_element / tp_degree
+        weight_bytes = num_layers * (4 * d_model * (d_model / tp_degree) + 
+                                     3 * d_model * (d_hidden / tp_degree)) * bytes_per_element
         
         # KV cache is also sharded along hidden dimension
         activation_bytes = batch_size * seq_len * d_model * bytes_per_element
-        kv_cache_bytes = num_layers * 2 * batch_size * seq_len * d_model * bytes_per_element / tp_degree
+        kv_cache_bytes = num_layers * 2 * batch_size * seq_len * (d_model / tp_degree) * bytes_per_element
         
-        total_bytes = weight_bytes + activation_bytes + kv_cache_bytes
+        total_bytes_per_gpu = weight_bytes + activation_bytes + kv_cache_bytes
         
         # === Calculate Throughput Based on Regime ===
         if regime == "COMPUTE_BOUND":
-            time_per_batch = total_flops / (specs['tflops'] * 1e12 * specs['efficiency'])
+            time_per_batch = total_flops_per_gpu / (specs['tflops'] * 1e12 * specs['efficiency'])
         else:  # MEMORY_BOUND
-            time_per_batch = total_bytes / (specs['mem_bw'] * 1e9 * specs['efficiency'])
+            time_per_batch = total_bytes_per_gpu / (specs['mem_bw'] * 1e9 * specs['efficiency'])
+        
+        # === Add Communication Overhead ===
+        # All-reduce after each layer: 2× data transfer (reduce-scatter + all-gather)
+        # Communication time per layer: 2 * (activation_size / bandwidth) * (tp_degree - 1) / tp_degree
+        activation_size_bytes = batch_size * seq_len * d_model * bytes_per_element
+        
+        # Assume intra-node NVLink bandwidth for TP (400 GB/s for A100, 300 GB/s for V100)
+        nvlink_bw_gbps = 400 if 'H100' in gpu_type or 'A100' in gpu_type else 300
+        
+        # Communication time per layer (all-reduce = 2× data transfer)
+        comm_time_per_layer = 2 * activation_size_bytes / (nvlink_bw_gbps * 1e9) * (tp_degree - 1) / tp_degree
+        total_comm_time = num_layers * comm_time_per_layer
+        
+        # Total time = compute/memory time + communication time
+        total_time = time_per_batch + total_comm_time
         
         tokens_per_batch = batch_size * seq_len
-        base_throughput = tokens_per_batch / time_per_batch
+        base_throughput = tokens_per_batch / total_time
         
         # Apply batch efficiency
         base_throughput *= ThroughputFunctions.batch_efficiency_factor(batch_size)
         
-        # Apply TP efficiency (accounts for allreduce communication overhead)
-        tp_efficiency = ThroughputFunctions.TP_EFFICIENCY.get(tp_degree, 0.70)
-        tp_speedup = tp_degree * tp_efficiency
+        # NOTE: We do NOT multiply by tp_degree here!
+        # TP is not data parallelism - it processes the same batch across GPUs
         
-        return base_throughput * tp_speedup
+        return base_throughput
 
 class LLMPlacementSolverWithTP:
     """LLM placement solver with Tensor Parallelism and practical constraints"""
@@ -701,6 +719,7 @@ class LLMPlacementSolverWithTP:
             cost_throughput_weight=cost_throughput_weight,
             max_hourly_cost=float(config_dict['max_hourly_cost']),
             max_cost_per_token=float(config_dict['max_cost_per_token']),
+            max_total_cost=float(config_dict['max_total_cost']),
             throughput_normalization=float(config_dict['throughput_normalization']),
             cost_normalization=float(config_dict['cost_normalization']),
             total_tokens_to_process=int(config_dict['total_tokens_to_process'])
@@ -1375,6 +1394,17 @@ class LLMPlacementSolverWithTP:
                 name="cost_budget"
             )
             logger.info(f"Added cost budget constraint: <= ${self.config.max_hourly_cost:.2f}/hour")
+        
+        # Total cost constraint (if specified)
+        # total_cost = cost_per_hour * (total_tokens / throughput / 3600)
+        # Rearranged: cost * total_tokens <= max_total_cost * throughput * 3600
+        if self.config.max_total_cost < 999999.0:
+            self.model.addConstr(
+                self.cost * self.config.total_tokens_to_process <= 
+                self.config.max_total_cost * self.t * 3600,
+                name="total_cost_budget"
+            )
+            logger.info(f"Added total cost budget constraint: <= ${self.config.max_total_cost:.2f} for {self.config.total_tokens_to_process:,} tokens")
         
         # 5. Network connection constraints
         for (seg1, seg2) in self.valid_connections:
