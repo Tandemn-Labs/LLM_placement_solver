@@ -12,11 +12,11 @@
     "min_memory_utilization": 0.5
   },
   "solution": {
-    "objective_value": 6786.62191617614,
+    "objective_value": 6806.804912002655,
     "batch_size": 64,
-    "throughput_tokens_per_sec": 2035.9865748528418,
-    "cost_per_hour": 8.1925,
-    "cost_per_token": 1.117735486349623e-06,
+    "throughput_tokens_per_sec": 2042.0414736007965,
+    "cost_per_hour": 8.192499999999995,
+    "cost_per_token": 1.1144212661027099e-06,
     "meets_cost_threshold": false,
     "tp_configuration": {
       "A100": 8,
@@ -40,7 +40,7 @@
         "start_layer": 1,
         "end_layer": 32,
         "segment_size": 32,
-        "throughput": 6786.6219161761355
+        "throughput": 6806.804912002657
       }
     ],
     "network_connections": [],

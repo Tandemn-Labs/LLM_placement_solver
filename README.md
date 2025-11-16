@@ -9,37 +9,20 @@ pip install -r requirements.txt
 
 ## how to run the solver:
 
-### Using the existing network bandwidth configuration:
+### TLDR;
+run `./run-batch-sweep.sh`
 
-config/medium, dollar per token objective optimization method: weighted
-```bash
-python solver_constrained_with_tp-2.py --config-dir config/medium --method weighted
-```
+change the setup(config) that you want to run in the `run-batch-sweep.sh` script. e.g., `config_dir_list=("config/medium")`
+## Configurations:
 
-config/medium, dollar per token objective optimization method: enumeration
-```bash
-python solver_constrained_with_tp-2.py --config-dir config/medium --method enumeration
-```
+#### config-dir: `config/medium`, `config/large`, `config/hal`
 
-### Using the generated network bandwidth configuration:
+#### method: `weighted`, `enumeration`
+- weighted: quick approximate solution
+- enumeration: more accurate solution but slower
 
-generate-network will force the solver code to generate the network bandwidth matrix instead of reading from the existing network_bandwidth.csv file.
-
-`--generate-network [intra_bandwidth] [inter_bandwidth]`
+#### generate-network: `generate-network [intra_bandwidth] [inter_bandwidth]`
 - intra_bandwidth: bandwidth (GB/s) within same GPU type
 - inter_bandwidth: bandwidth (GB/s) between different GPU types
 
-config/medium, dollar per token objective optimization method: weighted, network bandwidth: 600 GB/s within same GPU type, 400 GB/s between different GPU types
-```bash
-python solver_constrained_with_tp-2.py --config-dir config/medium --method weighted --generate-network 600 400
-```
-
-config/medium, dollar per token objective optimization method: enumeration, network bandwidth: 600 GB/s within same GPU type, 400 GB/s between different GPU types
-```bash
-python solver_constrained_with_tp-2.py --config-dir config/medium --method enumeration --generate-network 600 400
-```
-
-for larger model, change the config_dir to config/large
-
-
-Or, check `run-solver.sh` for comprehensive runs with different configurations.
+without specifying it, it will use the network bandwidth configuration in the config-dir/network_bandwidth.csv

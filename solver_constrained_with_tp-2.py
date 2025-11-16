@@ -530,6 +530,9 @@ class LLMPlacementSolverWithTP:
             intra_bw, inter_bw = generate_network
             self.network_bandwidth = self._generate_network_bandwidth(intra_bw, inter_bw)
             logger.info(f"Generated network bandwidth matrix: intra={intra_bw} GB/s, inter={inter_bw} GB/s")
+            # Save generated matrix to file
+            self._save_network_bandwidth(network_file, self.network_bandwidth)
+            logger.info(f"Saved generated network bandwidth to {network_file}")
         else:
             self.network_bandwidth = self._load_network_bandwidth(network_file)
             logger.info(f"Loaded network bandwidth from {network_file}")
@@ -704,6 +707,15 @@ class LLMPlacementSolverWithTP:
             raise ValueError(f"Network bandwidth matrix must be square, got {matrix.shape}")
         
         return matrix
+    
+    def _save_network_bandwidth(self, filename: str, matrix: np.ndarray) -> None:
+        """Save network bandwidth matrix to CSV file"""
+        total_gpus = matrix.shape[0]
+        # Create column and row labels
+        gpu_ids = [f"gpu_{i}" for i in range(total_gpus)]
+        df = pd.DataFrame(matrix, index=gpu_ids, columns=gpu_ids)
+        df.to_csv(filename)
+        logger.debug(f"Saved {total_gpus}×{total_gpus} network bandwidth matrix to {filename}")
     
     def _generate_network_bandwidth(self, intra_bandwidth: float, inter_bandwidth: float) -> np.ndarray:
         """

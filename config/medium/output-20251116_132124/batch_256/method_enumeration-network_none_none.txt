@@ -1,0 +1,2221 @@
+Set parameter WLSAccessID
+2025-11-16 13:21:25,494 - INFO - Set parameter WLSAccessID
+Set parameter WLSSecret
+2025-11-16 13:21:25,494 - INFO - Set parameter WLSSecret
+Set parameter LicenseID to value 2415150
+2025-11-16 13:21:25,494 - INFO - Set parameter LicenseID to value 2415150
+Academic license 2415150 - for non-commercial use only - registered to ga___@illinois.edu
+2025-11-16 13:21:25,497 - INFO - Academic license 2415150 - for non-commercial use only - registered to ga___@illinois.edu
+2025-11-16 13:21:25,510 - INFO -   GPU A100: $4.10/hour (from cloud (AWS))
+2025-11-16 13:21:25,510 - INFO -   GPU L40: $3.42/hour (from cloud (AWS))
+2025-11-16 13:21:25,510 - INFO -   GPU A10: $4.10/hour (from cloud (AWS))
+2025-11-16 13:21:25,510 - INFO -   GPU V100: $3.06/hour (from cloud (AWS))
+2025-11-16 13:21:25,513 - INFO - Loaded network bandwidth from config/medium/output-20251116_132124/batch_256/network_bandwidth.csv
+2025-11-16 13:21:25,515 - INFO - Optimization priority: cost_first (weight=0.90)
+2025-11-16 13:21:25,515 - INFO - GPU A100: max_tp=8, generated 15 allocations with unique partition IDs
+2025-11-16 13:21:25,515 - INFO - GPU L40: max_tp=8, generated 22 allocations with unique partition IDs
+2025-11-16 13:21:25,515 - INFO - GPU A10: max_tp=8, generated 22 allocations with unique partition IDs
+2025-11-16 13:21:25,515 - INFO - GPU V100: max_tp=8, generated 22 allocations with unique partition IDs
+2025-11-16 13:21:25,515 - INFO - GPU A100 with TP=8: max 32 layers
+2025-11-16 13:21:25,515 - INFO - GPU L40 with TP=8: max 32 layers
+2025-11-16 13:21:25,515 - INFO - GPU A10 with TP=8: max 2 layers
+2025-11-16 13:21:25,515 - INFO - GPU V100 with TP=8: max 20 layers
+2025-11-16 13:21:25,515 - INFO - GPU A100 with TP=8: min 32 layers (for 50% utilization)
+2025-11-16 13:21:25,515 - INFO - GPU L40 with TP=8: min 3 layers (for 50% utilization)
+2025-11-16 13:21:25,515 - INFO - GPU A10 with TP=8: min 1 layers (for 50% utilization)
+2025-11-16 13:21:25,515 - INFO - GPU V100 with TP=8: min 1 layers (for 50% utilization)
+2025-11-16 13:21:25,515 - INFO - Quantized segment sizes (coarse): [1, 5, 10, 20, 30, 32]
+2025-11-16 13:21:25,515 - INFO -   Reduced from ~14 to 6 sizes for performance
+2025-11-16 13:21:25,516 - INFO - Batch size options: [256]
+2025-11-16 13:21:25,516 - INFO - Batch size options: [256]
+2025-11-16 13:21:25,558 - INFO - Generated 353 segments with variable TP and batch size
+2025-11-16 13:21:25,558 - INFO -   Batch size options: [256]
+2025-11-16 13:21:25,558 - INFO -   Segments per config increased by 1x
+2025-11-16 13:21:25,558 - INFO -   Pre-computed throughput for 353 segments
+2025-11-16 13:21:25,559 - INFO -   ✓ Verified 10 random segments - all match!
+2025-11-16 13:21:25,561 - INFO - Generated 914 connections (before bandwidth filter)
+2025-11-16 13:21:25,602 - INFO - Network bandwidth filter (bottom 10%): 914 -> 914 connections
+2025-11-16 13:21:25,644 - INFO - Problem size validation:
+2025-11-16 13:21:25,644 - INFO -   - Segments: 353
+2025-11-16 13:21:25,644 - INFO -   - Connections: 914
+2025-11-16 13:21:25,644 - INFO -   - Binary variables: ~1267
+2025-11-16 13:21:25,644 - INFO - Manageable problem size
+2025-11-16 13:21:25,644 - INFO - Initialized solver with TP and practical constraints:
+2025-11-16 13:21:25,644 - INFO -   - GPU types: 4, Total GPUs: 44
+2025-11-16 13:21:25,644 - INFO -   - TP Configuration: {'A100': 8, 'L40': 8, 'A10': 8, 'V100': 8}
+2025-11-16 13:21:25,644 - INFO -   - Max pipeline stages: 8
+2025-11-16 13:21:25,644 - INFO -   - Min memory utilization: 0.5
+2025-11-16 13:21:25,644 - INFO -   - Segment quantization: True
+2025-11-16 13:21:25,644 - INFO -   - Model: 32 layers
+2025-11-16 13:21:25,644 - INFO -   - Problem size: 353 segments, 914 connections
+2025-11-16 13:21:25,644 - INFO - Building optimization model with TP and practical constraints...
+Set parameter Presolve to value 1
+2025-11-16 13:21:25,645 - INFO - Set parameter Presolve to value 1
+Set parameter Cuts to value 2
+2025-11-16 13:21:25,645 - INFO - Set parameter Cuts to value 2
+Set parameter Heuristics to value 0.2
+2025-11-16 13:21:25,645 - INFO - Set parameter Heuristics to value 0.2
+Set parameter MIPFocus to value 0
+2025-11-16 13:21:25,645 - INFO - Set parameter MIPFocus to value 0
+Set parameter NodefileStart to value 0.5
+2025-11-16 13:21:25,645 - INFO - Set parameter NodefileStart to value 0.5
+Set parameter TimeLimit to value 300
+2025-11-16 13:21:25,645 - INFO - Set parameter TimeLimit to value 300
+Set parameter MIPGap to value 0.05
+2025-11-16 13:21:25,645 - INFO - Set parameter MIPGap to value 0.05
+Set parameter LogToConsole to value 1
+2025-11-16 13:21:25,645 - INFO - Set parameter LogToConsole to value 1
+Set parameter ConcurrentMIP to value 4
+2025-11-16 13:21:25,645 - INFO - Set parameter ConcurrentMIP to value 4
+2025-11-16 13:21:25,645 - INFO - Creating decision variables...
+2025-11-16 13:21:25,721 - INFO -   Created 353 segment variables, 914 connection variables in 0.08s
+2025-11-16 13:21:25,721 - INFO - Creating constraints (this is the slow part)...
+2025-11-16 13:21:25,735 - INFO - Batch size options: [256]
+2025-11-16 13:21:25,743 - INFO - Added global batch size consistency constraint with 1 options: [256]
+2025-11-16 13:21:25,744 - INFO - Added max pipeline depth constraint: 8 stages
+2025-11-16 13:21:25,851 - INFO - Tight Big-M computed:
+2025-11-16 13:21:25,851 - INFO -   Max throughput by GPU type: A100=22,862, L40=11,637, A10=106,857, V100=9,987
+2025-11-16 13:21:25,851 - INFO -   Global max throughput: 106,857 tokens/sec
+2025-11-16 13:21:25,851 - INFO -   M_partition (global): 320,571 (3x safety factor)
+2025-11-16 13:21:25,851 - INFO -   M_network: 29,491,200
+2025-11-16 13:21:25,898 - INFO - Adding pipeline connectivity constraints...
+2025-11-16 13:21:25,898 - INFO -   Pre-indexing 914 connections for fast lookup...
+2025-11-16 13:21:25,899 - INFO -   Indexed 265 source segments and 265 destination segments
+2025-11-16 13:21:25,899 - INFO -   Processing 31 layer transitions...
+2025-11-16 13:21:25,903 - INFO -   Progress: 10/31 layer transitions (110 constraints so far)
+2025-11-16 13:21:25,911 - INFO -   Progress: 20/31 layer transitions (342 constraints so far)
+2025-11-16 13:21:25,917 - INFO -   Progress: 30/31 layer transitions (530 constraints so far)
+2025-11-16 13:21:25,917 - INFO -   Pipeline connectivity: added 530 constraints successfully
+2025-11-16 13:21:25,917 - INFO - Adding symmetry breaking constraints...
+2025-11-16 13:21:25,917 - INFO - Added 3 symmetry breaking constraints
+2025-11-16 13:21:25,917 - INFO - Adding flow conservation constraints...
+2025-11-16 13:21:25,922 - INFO - Added 23 flow conservation constraints
+2025-11-16 13:21:25,922 - INFO -   Constraints created in 0.20s
+2025-11-16 13:21:25,922 - INFO - Setting objective function...
+2025-11-16 13:21:25,922 - INFO - Objective: Weighted cost-throughput optimization
+2025-11-16 13:21:25,922 - INFO -   - Weight (w): 0.90
+2025-11-16 13:21:25,922 - INFO -   - Trade-off (λ): 9.00
+2025-11-16 13:21:25,922 - INFO -   - Throughput emphasis: 10.00%
+2025-11-16 13:21:25,922 - INFO -   - Cost emphasis: 90.00%
+2025-11-16 13:21:25,922 - INFO -   Objective set in 0.00s
+2025-11-16 13:21:25,922 - INFO - ================================================================================
+2025-11-16 13:21:25,922 - INFO - MODEL BUILD COMPLETE - ready to solve with Gurobi
+2025-11-16 13:21:25,922 - INFO -   Total build time: 0.28s (init=0.00s, vars=0.08s, constraints=0.20s, obj=0.00s)
+2025-11-16 13:21:25,922 - INFO - ================================================================================
+2025-11-16 13:21:25,922 - INFO - Using ENUMERATION method (slow, guaranteed optimal)
+2025-11-16 13:21:25,922 - INFO - 
+================================================================================
+2025-11-16 13:21:25,922 - INFO - OPTIMAL $/M TOKENS SEARCH (Smart Hybrid)
+2025-11-16 13:21:25,922 - INFO - ================================================================================
+2025-11-16 13:21:25,922 - INFO - Target $/M tokens (from config): $0.100000
+2025-11-16 13:21:25,923 - INFO - Competitive budget range for $/M tokens <= $0.100000:
+2025-11-16 13:21:25,923 - INFO -   GPU cost range: $3.06 - $32.77/hour
+2025-11-16 13:21:25,923 - INFO -   Search budget range: $2.45 - $314.59/hour
+2025-11-16 13:21:25,923 - INFO - 
+Configuration Coverage Analysis:
+2025-11-16 13:21:25,923 - INFO -   ✓ Will explore (16 configs):
+2025-11-16 13:21:25,923 - INFO -     A100 TP=1 ($4.10/h)
+2025-11-16 13:21:25,923 - INFO -     A100 TP=2 ($8.19/h)
+2025-11-16 13:21:25,923 - INFO -     A100 TP=4 ($16.39/h)
+2025-11-16 13:21:25,923 - INFO -     A100 TP=8 ($32.77/h)
+2025-11-16 13:21:25,923 - INFO -     L40 TP=1 ($3.42/h)
+2025-11-16 13:21:25,923 - INFO -     L40 TP=2 ($6.84/h)
+2025-11-16 13:21:25,923 - INFO -     L40 TP=4 ($13.68/h)
+2025-11-16 13:21:25,923 - INFO -     L40 TP=8 ($27.36/h)
+2025-11-16 13:21:25,923 - INFO -     A10 TP=1 ($4.10/h)
+2025-11-16 13:21:25,923 - INFO -     A10 TP=2 ($8.19/h)
+2025-11-16 13:21:25,923 - INFO -     A10 TP=4 ($16.39/h)
+2025-11-16 13:21:25,923 - INFO -     A10 TP=8 ($32.77/h)
+2025-11-16 13:21:25,923 - INFO -     V100 TP=1 ($3.06/h)
+2025-11-16 13:21:25,923 - INFO -     V100 TP=2 ($6.12/h)
+2025-11-16 13:21:25,923 - INFO -     V100 TP=4 ($12.24/h)
+2025-11-16 13:21:25,923 - INFO -     V100 TP=8 ($24.48/h)
+2025-11-16 13:21:25,923 - INFO - 
+Phase 1: Iterative search to find ballpark...
+2025-11-16 13:21:25,923 - INFO - 
+================================================================================
+2025-11-16 13:21:25,923 - INFO - ITERATIVE $/M TOKENS OPTIMIZATION
+2025-11-16 13:21:25,923 - INFO - ================================================================================
+2025-11-16 13:21:25,923 - INFO - Target $/M tokens: $0.100000
+2025-11-16 13:21:25,923 - INFO - Estimated min throughput: 29944.9 tokens/sec
+2025-11-16 13:21:25,923 - INFO - Initial cost budget: $107.80/hour
+2025-11-16 13:21:25,923 - INFO - 
+Iteration 1/3:
+2025-11-16 13:21:25,924 - INFO -   Cost budget: $107.80/hour
+Set parameter Threads to value 4
+2025-11-16 13:21:25,928 - INFO - Set parameter Threads to value 4
+2025-11-16 13:21:25,928 - INFO - Using 4 threads for optimization (verified: 4)
+2025-11-16 13:21:25,928 - INFO - CPU count: 64, available: 32
+2025-11-16 13:21:25,928 - INFO - Starting optimization...
+Gurobi Optimizer version 13.0.0 build v13.0.0rc1 (linux64 - "Ubuntu 24.04.3 LTS")
+2025-11-16 13:21:25,928 - INFO - Gurobi Optimizer version 13.0.0 build v13.0.0rc1 (linux64 - "Ubuntu 24.04.3 LTS")
+
+2025-11-16 13:21:25,928 - INFO - 
+CPU model: Intel(R) Xeon(R) Gold 6142 CPU @ 2.60GHz, instruction set [SSE2|AVX|AVX2|AVX512]
+2025-11-16 13:21:25,928 - INFO - CPU model: Intel(R) Xeon(R) Gold 6142 CPU @ 2.60GHz, instruction set [SSE2|AVX|AVX2|AVX512]
+Thread count: 32 physical cores, 64 logical processors, using up to 4 threads
+2025-11-16 13:21:25,928 - INFO - Thread count: 32 physical cores, 64 logical processors, using up to 4 threads
+
+2025-11-16 13:21:25,928 - INFO - 
+Non-default parameters:
+2025-11-16 13:21:25,928 - INFO - Non-default parameters:
+TimeLimit  300
+2025-11-16 13:21:25,928 - INFO - TimeLimit  300
+MIPGap  0.05
+2025-11-16 13:21:25,928 - INFO - MIPGap  0.05
+Heuristics  0.2
+2025-11-16 13:21:25,928 - INFO - Heuristics  0.2
+NodefileStart  0.5
+2025-11-16 13:21:25,929 - INFO - NodefileStart  0.5
+Cuts  2
+2025-11-16 13:21:25,929 - INFO - Cuts  2
+ConcurrentMIP  4
+2025-11-16 13:21:25,929 - INFO - ConcurrentMIP  4
+Presolve  1
+2025-11-16 13:21:25,929 - INFO - Presolve  1
+Threads  4
+2025-11-16 13:21:25,929 - INFO - Threads  4
+
+2025-11-16 13:21:25,929 - INFO - 
+Academic license 2415150 - for non-commercial use only - registered to ga___@illinois.edu
+2025-11-16 13:21:25,929 - INFO - Academic license 2415150 - for non-commercial use only - registered to ga___@illinois.edu
+Optimize a model with 5568 rows, 2200 columns and 20637 nonzeros (Max)
+2025-11-16 13:21:25,929 - INFO - Optimize a model with 5568 rows, 2200 columns and 20637 nonzeros (Max)
+Model fingerprint: 0xc4e9d94b
+2025-11-16 13:21:25,929 - INFO - Model fingerprint: 0xc4e9d94b
+Model has 2 linear objective coefficients
+2025-11-16 13:21:25,929 - INFO - Model has 2 linear objective coefficients
+Variable types: 924 continuous, 1276 integer (1276 binary)
+2025-11-16 13:21:25,929 - INFO - Variable types: 924 continuous, 1276 integer (1276 binary)
+Coefficient statistics:
+2025-11-16 13:21:25,930 - INFO - Coefficient statistics:
+  Matrix range     [1e+00, 3e+07]
+2025-11-16 13:21:25,930 - INFO -   Matrix range     [1e+00, 3e+07]
+  Objective range  [1e-04, 9e+00]
+2025-11-16 13:21:25,930 - INFO -   Objective range  [1e-04, 9e+00]
+  Bounds range     [1e+00, 1e+00]
+2025-11-16 13:21:25,930 - INFO -   Bounds range     [1e+00, 1e+00]
+  RHS range        [1e+00, 3e+07]
+2025-11-16 13:21:25,930 - INFO -   RHS range        [1e+00, 3e+07]
+
+2025-11-16 13:21:25,930 - INFO - 
+Concurrent MIP optimizer: 4 concurrent instances (1 thread per instance)
+2025-11-16 13:21:25,930 - INFO - Concurrent MIP optimizer: 4 concurrent instances (1 thread per instance)
+
+2025-11-16 13:21:25,930 - INFO - 
+Presolve removed 5568 rows and 2200 columns
+2025-11-16 13:21:25,953 - INFO - Presolve removed 5568 rows and 2200 columns
+Presolve time: 0.02s
+2025-11-16 13:21:25,953 - INFO - Presolve time: 0.02s
+Presolve: All rows and columns removed
+2025-11-16 13:21:25,953 - INFO - Presolve: All rows and columns removed
+
+2025-11-16 13:21:25,953 - INFO - 
+Instance 3 was solved
+2025-11-16 13:21:25,953 - INFO - Instance 3 was solved
+
+2025-11-16 13:21:25,954 - INFO - 
+Explored 0 nodes (0 simplex iterations) in 0.03 seconds (0.01 work units)
+2025-11-16 13:21:25,954 - INFO - Explored 0 nodes (0 simplex iterations) in 0.03 seconds (0.01 work units)
+Thread count was 1 (of 64 available processors)
+2025-11-16 13:21:25,954 - INFO - Thread count was 1 (of 64 available processors)
+
+2025-11-16 13:21:25,954 - INFO - 
+Solution count 1: -146.207 
+2025-11-16 13:21:25,954 - INFO - Solution count 1: -146.207 
+No other solutions better than -146.207
+2025-11-16 13:21:25,954 - INFO - No other solutions better than -146.207
+
+2025-11-16 13:21:25,954 - INFO - 
+Optimal solution found (tolerance 5.00e-02)
+2025-11-16 13:21:25,954 - INFO - Optimal solution found (tolerance 5.00e-02)
+Best objective -1.462066074244e+02, best bound -1.462066074244e+02, gap 0.0000%
+2025-11-16 13:21:25,954 - INFO - Best objective -1.462066074244e+02, best bound -1.462066074244e+02, gap 0.0000%
+2025-11-16 13:21:25,955 - WARNING - WARNING: Problem solved in presolve (single-threaded)! NodeCount=0
+2025-11-16 13:21:25,955 - WARNING -   Presolve eliminated problem before multi-threaded B&B could start
+2025-11-16 13:21:25,955 - INFO - Optimal solution found in 0.03 seconds
+2025-11-16 13:21:25,955 - INFO -   Nodes explored: 0.0
+2025-11-16 13:21:25,955 - INFO -   Simplex iterations: 0.0
+2025-11-16 13:21:25,955 - INFO - Optimal throughput: 12583.93 tokens/sec
+2025-11-16 13:21:25,955 - INFO - Batch size options: [256]
+2025-11-16 13:21:25,955 - INFO - 
+Throughput Corrections:
+2025-11-16 13:21:25,955 - INFO -   Batch size: 256
+2025-11-16 13:21:25,955 - INFO -   Pipeline stages: 1
+2025-11-16 13:21:25,955 - INFO -   Pipeline bubble efficiency: 100.0% (no pipeline)
+2025-11-16 13:21:25,955 - INFO -   Real-world efficiency: 30.0%
+2025-11-16 13:21:25,955 - INFO -   Combined efficiency: 30.0%
+2025-11-16 13:21:25,955 - INFO -   Raw throughput: 12583.93 tokens/sec
+2025-11-16 13:21:25,955 - INFO -   After pipeline bubbles: 12583.93 tokens/sec
+2025-11-16 13:21:25,955 - INFO -   Final throughput: 3775.18 tokens/sec
+2025-11-16 13:21:25,955 - INFO - 
+================================================================================
+2025-11-16 13:21:25,955 - INFO - SOLUTION ANALYSIS - OBJECTIVE BREAKDOWN
+2025-11-16 13:21:25,955 - INFO - ================================================================================
+2025-11-16 13:21:25,955 - INFO - Weighted Objective Components:
+2025-11-16 13:21:25,955 - INFO -   Throughput term (t/T_norm):    0.377518
+2025-11-16 13:21:25,955 - INFO -   Cost term (λ × c/C_norm):      147.465000
+2025-11-16 13:21:25,955 - INFO -   Net objective (t_norm - cost): -147.087482
+2025-11-16 13:21:25,956 - INFO -   (Should match objective value: -146.206607)
+2025-11-16 13:21:25,956 - INFO - Batch size options: [256]
+2025-11-16 13:21:25,956 - INFO - 
+Core Metrics:
+2025-11-16 13:21:25,956 - INFO -   Batch Size: 256
+2025-11-16 13:21:25,956 - INFO -   Throughput: 3775.18 tokens/sec
+2025-11-16 13:21:25,956 - INFO -   Cost: $16.39/hour
+2025-11-16 13:21:25,956 - INFO -   $/M tokens: $1.205609
+2025-11-16 13:21:25,960 - INFO - 
+================================================================================
+2025-11-16 13:21:25,960 - INFO - BATCH SIZE ANALYSIS
+2025-11-16 13:21:25,960 - INFO - ================================================================================
+2025-11-16 13:21:25,960 - INFO - Batch size options: [256]
+2025-11-16 13:21:25,960 - INFO - 
+Batch Size Selection:
+2025-11-16 13:21:25,960 - INFO -   Optimal: 256
+2025-11-16 13:21:25,960 - INFO -   Search range: [256, 256]
+2025-11-16 13:21:25,960 - INFO -   Options considered: [256]
+2025-11-16 13:21:25,961 - INFO - 
+Batch Efficiency Factor: 100.0%
+2025-11-16 13:21:25,961 - INFO -   (Larger batches improve GPU utilization)
+2025-11-16 13:21:25,961 - INFO - Optimal utilization (batch >= 32)
+2025-11-16 13:21:25,961 - INFO - 
+================================================================================
+2025-11-16 13:21:25,961 - INFO - ROOFLINE MODEL ANALYSIS
+2025-11-16 13:21:25,961 - INFO - ================================================================================
+2025-11-16 13:21:25,961 - INFO - 
+Performance Bottleneck Analysis (Roofline Model):
+2025-11-16 13:21:25,961 - INFO -   Determines if each segment is compute-bound or memory-bound
+2025-11-16 13:21:25,961 - INFO - --------------------------------------------------------------------------------
+2025-11-16 13:21:25,961 - INFO -   GPU Type   TP   Layers  AI           Ridge        Regime          Bottleneck
+2025-11-16 13:21:25,961 - INFO - --------------------------------------------------------------------------------
+2025-11-16 13:21:25,961 - INFO -   A100       4    32      70235.52     153.02       Compute-bound   GPU Compute
+2025-11-16 13:21:25,961 - INFO - 
+--------------------------------------------------------------------------------
+2025-11-16 13:21:25,961 - INFO - Roofline analysis:
+2025-11-16 13:21:25,961 - INFO - - Arithmetic Intensity (AI) = FLOPs / Byte accessed
+2025-11-16 13:21:25,961 - INFO - - Ridge Point = Peak FLOPS / Peak Memory Bandwidth
+2025-11-16 13:21:25,961 - INFO - - Arithmetic Intensity > Ridge -> Compute-bound (limited by GPU compute)
+2025-11-16 13:21:25,961 - INFO - - Arithmetic Intensity < Ridge -> Memory-bound (limited by memory bandwidth)
+2025-11-16 13:21:25,961 - INFO - - Tensor Parallelism (TP) reduces memory per GPU -> increases AI -> may shift regime
+2025-11-16 13:21:25,961 - INFO - Regime Distribution:
+2025-11-16 13:21:25,961 - INFO - - Compute-bound segments: 1/1 (100%)
+2025-11-16 13:21:25,961 - INFO - - Memory-bound segments:  0/1 (0%)
+2025-11-16 13:21:25,961 - INFO - Most segments are compute-bound.
+2025-11-16 13:21:25,961 - INFO - - Consider GPUs with higher TFLOPS for better performance.
+2025-11-16 13:21:25,961 - INFO - - Memory bandwidth is not the bottleneck here.
+2025-11-16 13:21:25,961 - INFO - 
+================================================================================
+2025-11-16 13:21:25,961 - INFO - SOLUTION ANALYSIS - GPU EFFICIENCY & SELECTION
+2025-11-16 13:21:25,961 - INFO - ================================================================================
+2025-11-16 13:21:25,961 - INFO - 
+OK WORKLOAD IS COMPUTE-BOUND -> TFLOP/$ is the key metric!
+2025-11-16 13:21:25,961 - INFO - 
+GPU Efficiency Ranking (Compute (TFLOP/$) ratio):
+2025-11-16 13:21:25,961 - INFO - --------------------------------------------------------------------------------
+2025-11-16 13:21:25,962 - INFO -   1. A100        202.8 TFLOP × eff @ $4.10/h =   49.5 TFLOP/$
+2025-11-16 13:21:25,962 - INFO -   2. L40          99.6 TFLOP × eff @ $3.42/h =   29.1 TFLOP/$
+2025-11-16 13:21:25,962 - INFO -   3. V100         52.5 TFLOP × eff @ $3.06/h =   17.2 TFLOP/$
+2025-11-16 13:21:25,962 - INFO -   4. A10          56.2 TFLOP × eff @ $4.10/h =   13.7 TFLOP/$
+2025-11-16 13:21:25,962 - INFO - 
+Actual GPU Usage in Solution:
+2025-11-16 13:21:25,962 - INFO - --------------------------------------------------------------------------------
+2025-11-16 13:21:25,962 - INFO -   A100       1 segments, 4 GPUs, 32 layers, $16.39/h (Efficiency rank: #1)
+2025-11-16 13:21:25,962 - INFO - 
+  TOTAL COST: $16.39/hour
+2025-11-16 13:21:25,962 - INFO - 
+Unused GPUs (and why they might not be chosen):
+2025-11-16 13:21:25,962 - INFO - --------------------------------------------------------------------------------
+2025-11-16 13:21:25,962 - INFO -   A10        count=12, $4.10/h, efficiency rank #4
+2025-11-16 13:21:25,962 - INFO -              Max segment size (TP=8): 2 layers
+2025-11-16 13:21:25,962 - INFO -   L40        count=12, $3.42/h, efficiency rank #2
+2025-11-16 13:21:25,962 - INFO -              Max segment size (TP=8): 32 layers
+2025-11-16 13:21:25,962 - INFO -              Hypothetical (5 layers, TP=4): 40209 tokens/s, $13.68/h
+2025-11-16 13:21:25,962 - INFO -   V100       count=12, $3.06/h, efficiency rank #3
+2025-11-16 13:21:25,962 - INFO -              Max segment size (TP=8): 20 layers
+2025-11-16 13:21:25,962 - INFO -              Hypothetical (5 layers, TP=4): 21372 tokens/s, $12.24/h
+2025-11-16 13:21:25,962 - INFO - 
+================================================================================
+2025-11-16 13:21:25,962 - INFO - SEGMENT-LEVEL ANALYSIS
+2025-11-16 13:21:25,962 - INFO - ================================================================================
+2025-11-16 13:21:25,962 - INFO - 
+Bottleneck Throughput: 12583.93 tokens/sec
+2025-11-16 13:21:25,962 - INFO - Bottleneck Segments:
+2025-11-16 13:21:25,962 - INFO -   A100 TP=4, layers 1-32, $16.39/h, 12584 tokens/s
+2025-11-16 13:21:25,963 - INFO - 
+================================================================================
+2025-11-16 13:21:25,963 - INFO - ALTERNATIVE SCENARIO: Single segment with A100 (best efficiency)
+2025-11-16 13:21:25,963 - INFO - ================================================================================
+2025-11-16 13:21:25,963 - INFO - 
+A100 specs:
+2025-11-16 13:21:25,963 - INFO -   Available: 8 GPUs
+2025-11-16 13:21:25,963 - INFO -   Cost: $4.10/hour per GPU
+2025-11-16 13:21:25,963 - INFO -   Max segment size (TP=8): 32 layers
+2025-11-16 13:21:25,963 - INFO -   Model needs: 32 layers
+2025-11-16 13:21:25,963 - INFO - 
+CAN FIT Single segment with TP=8:
+2025-11-16 13:21:25,963 - INFO -   Throughput: 22862 tokens/sec
+2025-11-16 13:21:25,963 - INFO -   Cost: $32.77/hour
+2025-11-16 13:21:25,963 - INFO -   $/M tokens: $0.398165
+2025-11-16 13:21:25,963 - INFO - 
+Comparison with current multi-segment solution:
+2025-11-16 13:21:25,963 - INFO -   Current solution $/M tokens: $1.205609
+2025-11-16 13:21:25,963 - INFO -   Single-segment $/M tokens:   $0.398165
+2025-11-16 13:21:25,963 - WARNING -   SINGLE-SEGMENT is 202.8% BETTER in $/M tokens!
+2025-11-16 13:21:25,963 - WARNING -   The solver found a suboptimal solution!
+2025-11-16 13:21:25,963 - INFO - 
+================================================================================
+2025-11-16 13:21:25,963 - INFO - OBJECTIVE FUNCTION VERIFICATION
+2025-11-16 13:21:25,963 - INFO - ================================================================================
+2025-11-16 13:21:25,963 - INFO - Current solution objective: -147.087482
+2025-11-16 13:21:25,963 - INFO -   Throughput: 3775 tokens/s
+2025-11-16 13:21:25,963 - INFO -   Cost: $16.39/h
+2025-11-16 13:21:25,963 - INFO -   Result: $/M tokens = $1.205609
+2025-11-16 13:21:25,963 - INFO -   Tightening budget to $1.29/hour
+2025-11-16 13:21:25,964 - INFO - 
+Iteration 2/3:
+2025-11-16 13:21:25,964 - INFO -   Cost budget: $1.29/hour
+Set parameter Threads to value 4
+2025-11-16 13:21:25,964 - INFO - Set parameter Threads to value 4
+2025-11-16 13:21:25,964 - INFO - Using 4 threads for optimization (verified: 4)
+2025-11-16 13:21:25,964 - INFO - CPU count: 64, available: 32
+2025-11-16 13:21:25,964 - INFO - Starting optimization...
+Gurobi Optimizer version 13.0.0 build v13.0.0rc1 (linux64 - "Ubuntu 24.04.3 LTS")
+2025-11-16 13:21:25,964 - INFO - Gurobi Optimizer version 13.0.0 build v13.0.0rc1 (linux64 - "Ubuntu 24.04.3 LTS")
+
+2025-11-16 13:21:25,964 - INFO - 
+CPU model: Intel(R) Xeon(R) Gold 6142 CPU @ 2.60GHz, instruction set [SSE2|AVX|AVX2|AVX512]
+2025-11-16 13:21:25,964 - INFO - CPU model: Intel(R) Xeon(R) Gold 6142 CPU @ 2.60GHz, instruction set [SSE2|AVX|AVX2|AVX512]
+Thread count: 32 physical cores, 64 logical processors, using up to 4 threads
+2025-11-16 13:21:25,964 - INFO - Thread count: 32 physical cores, 64 logical processors, using up to 4 threads
+
+2025-11-16 13:21:25,964 - INFO - 
+Non-default parameters:
+2025-11-16 13:21:25,964 - INFO - Non-default parameters:
+TimeLimit  300
+2025-11-16 13:21:25,964 - INFO - TimeLimit  300
+MIPGap  0.05
+2025-11-16 13:21:25,964 - INFO - MIPGap  0.05
+Heuristics  0.2
+2025-11-16 13:21:25,964 - INFO - Heuristics  0.2
+NodefileStart  0.5
+2025-11-16 13:21:25,964 - INFO - NodefileStart  0.5
+Cuts  2
+2025-11-16 13:21:25,964 - INFO - Cuts  2
+ConcurrentMIP  4
+2025-11-16 13:21:25,964 - INFO - ConcurrentMIP  4
+Presolve  1
+2025-11-16 13:21:25,964 - INFO - Presolve  1
+Threads  4
+2025-11-16 13:21:25,964 - INFO - Threads  4
+
+2025-11-16 13:21:25,964 - INFO - 
+Academic license 2415150 - for non-commercial use only - registered to ga___@illinois.edu
+2025-11-16 13:21:25,965 - INFO - Academic license 2415150 - for non-commercial use only - registered to ga___@illinois.edu
+Optimize a model with 5568 rows, 2200 columns and 20637 nonzeros (Max)
+2025-11-16 13:21:25,965 - INFO - Optimize a model with 5568 rows, 2200 columns and 20637 nonzeros (Max)
+Model fingerprint: 0x4674a838
+2025-11-16 13:21:25,965 - INFO - Model fingerprint: 0x4674a838
+Model has 2 linear objective coefficients
+2025-11-16 13:21:25,965 - INFO - Model has 2 linear objective coefficients
+Variable types: 924 continuous, 1276 integer (1276 binary)
+2025-11-16 13:21:25,965 - INFO - Variable types: 924 continuous, 1276 integer (1276 binary)
+Coefficient statistics:
+2025-11-16 13:21:25,965 - INFO - Coefficient statistics:
+  Matrix range     [1e+00, 3e+07]
+2025-11-16 13:21:25,965 - INFO -   Matrix range     [1e+00, 3e+07]
+  Objective range  [1e-04, 9e+00]
+2025-11-16 13:21:25,965 - INFO -   Objective range  [1e-04, 9e+00]
+  Bounds range     [1e+00, 1e+00]
+2025-11-16 13:21:25,965 - INFO -   Bounds range     [1e+00, 1e+00]
+  RHS range        [1e+00, 3e+07]
+2025-11-16 13:21:25,965 - INFO -   RHS range        [1e+00, 3e+07]
+
+2025-11-16 13:21:25,965 - INFO - 
+Concurrent MIP optimizer: 4 concurrent instances (1 thread per instance)
+2025-11-16 13:21:25,965 - INFO - Concurrent MIP optimizer: 4 concurrent instances (1 thread per instance)
+
+2025-11-16 13:21:25,965 - INFO - 
+
+2025-11-16 13:21:25,969 - INFO - 
+User MIP start did not produce a new incumbent solution
+2025-11-16 13:21:25,969 - INFO - User MIP start did not produce a new incumbent solution
+User MIP start violates constraint cost_budget by 15.093889217
+2025-11-16 13:21:25,970 - INFO - User MIP start violates constraint cost_budget by 15.093889217
+
+2025-11-16 13:21:25,970 - INFO - 
+Presolve removed 370 rows and 12 columns
+2025-11-16 13:21:25,977 - INFO - Presolve removed 370 rows and 12 columns
+Presolve time: 0.01s
+2025-11-16 13:21:25,977 - INFO - Presolve time: 0.01s
+
+2025-11-16 13:21:25,978 - INFO - 
+Instance 2 was solved
+2025-11-16 13:21:25,978 - INFO - Instance 2 was solved
+
+2025-11-16 13:21:25,979 - INFO - 
+Explored 0 nodes (0 simplex iterations) in 0.01 seconds (0.01 work units)
+2025-11-16 13:21:25,979 - INFO - Explored 0 nodes (0 simplex iterations) in 0.01 seconds (0.01 work units)
+Thread count was 1 (of 64 available processors)
+2025-11-16 13:21:25,979 - INFO - Thread count was 1 (of 64 available processors)
+
+2025-11-16 13:21:25,979 - INFO - 
+Solution count 0
+2025-11-16 13:21:25,979 - INFO - Solution count 0
+
+2025-11-16 13:21:25,979 - INFO - 
+Model is infeasible or unbounded
+2025-11-16 13:21:25,979 - INFO - Model is infeasible or unbounded
+Best objective -, best bound -, gap -
+2025-11-16 13:21:25,979 - INFO - Best objective -, best bound -, gap -
+2025-11-16 13:21:25,979 - ERROR - No solution found. Status: 4
+2025-11-16 13:21:25,980 - INFO -   Infeasible, relaxing budget
+2025-11-16 13:21:25,980 - INFO - 
+Iteration 3/3:
+2025-11-16 13:21:25,980 - INFO -   Cost budget: $1.94/hour
+Set parameter Threads to value 4
+2025-11-16 13:21:25,980 - INFO - Set parameter Threads to value 4
+2025-11-16 13:21:25,980 - INFO - Using 4 threads for optimization (verified: 4)
+2025-11-16 13:21:25,980 - INFO - CPU count: 64, available: 32
+2025-11-16 13:21:25,980 - INFO - Starting optimization...
+Gurobi Optimizer version 13.0.0 build v13.0.0rc1 (linux64 - "Ubuntu 24.04.3 LTS")
+2025-11-16 13:21:25,980 - INFO - Gurobi Optimizer version 13.0.0 build v13.0.0rc1 (linux64 - "Ubuntu 24.04.3 LTS")
+
+2025-11-16 13:21:25,980 - INFO - 
+CPU model: Intel(R) Xeon(R) Gold 6142 CPU @ 2.60GHz, instruction set [SSE2|AVX|AVX2|AVX512]
+2025-11-16 13:21:25,980 - INFO - CPU model: Intel(R) Xeon(R) Gold 6142 CPU @ 2.60GHz, instruction set [SSE2|AVX|AVX2|AVX512]
+Thread count: 32 physical cores, 64 logical processors, using up to 4 threads
+2025-11-16 13:21:25,980 - INFO - Thread count: 32 physical cores, 64 logical processors, using up to 4 threads
+
+2025-11-16 13:21:25,980 - INFO - 
+Non-default parameters:
+2025-11-16 13:21:25,980 - INFO - Non-default parameters:
+TimeLimit  300
+2025-11-16 13:21:25,980 - INFO - TimeLimit  300
+MIPGap  0.05
+2025-11-16 13:21:25,980 - INFO - MIPGap  0.05
+Heuristics  0.2
+2025-11-16 13:21:25,980 - INFO - Heuristics  0.2
+NodefileStart  0.5
+2025-11-16 13:21:25,980 - INFO - NodefileStart  0.5
+Cuts  2
+2025-11-16 13:21:25,980 - INFO - Cuts  2
+ConcurrentMIP  4
+2025-11-16 13:21:25,980 - INFO - ConcurrentMIP  4
+Presolve  1
+2025-11-16 13:21:25,980 - INFO - Presolve  1
+Threads  4
+2025-11-16 13:21:25,980 - INFO - Threads  4
+
+2025-11-16 13:21:25,981 - INFO - 
+Academic license 2415150 - for non-commercial use only - registered to ga___@illinois.edu
+2025-11-16 13:21:25,981 - INFO - Academic license 2415150 - for non-commercial use only - registered to ga___@illinois.edu
+Optimize a model with 5568 rows, 2200 columns and 20637 nonzeros (Max)
+2025-11-16 13:21:25,981 - INFO - Optimize a model with 5568 rows, 2200 columns and 20637 nonzeros (Max)
+Model fingerprint: 0x6e39f4cb
+2025-11-16 13:21:25,981 - INFO - Model fingerprint: 0x6e39f4cb
+Model has 2 linear objective coefficients
+2025-11-16 13:21:25,981 - INFO - Model has 2 linear objective coefficients
+Variable types: 924 continuous, 1276 integer (1276 binary)
+2025-11-16 13:21:25,981 - INFO - Variable types: 924 continuous, 1276 integer (1276 binary)
+Coefficient statistics:
+2025-11-16 13:21:25,981 - INFO - Coefficient statistics:
+  Matrix range     [1e+00, 3e+07]
+2025-11-16 13:21:25,981 - INFO -   Matrix range     [1e+00, 3e+07]
+  Objective range  [1e-04, 9e+00]
+2025-11-16 13:21:25,981 - INFO -   Objective range  [1e-04, 9e+00]
+  Bounds range     [1e+00, 1e+00]
+2025-11-16 13:21:25,981 - INFO -   Bounds range     [1e+00, 1e+00]
+  RHS range        [1e+00, 3e+07]
+2025-11-16 13:21:25,981 - INFO -   RHS range        [1e+00, 3e+07]
+
+2025-11-16 13:21:25,981 - INFO - 
+Concurrent MIP optimizer: 4 concurrent instances (1 thread per instance)
+2025-11-16 13:21:25,981 - INFO - Concurrent MIP optimizer: 4 concurrent instances (1 thread per instance)
+
+2025-11-16 13:21:25,981 - INFO - 
+
+2025-11-16 13:21:25,985 - INFO - 
+User MIP start did not produce a new incumbent solution
+2025-11-16 13:21:25,985 - INFO - User MIP start did not produce a new incumbent solution
+User MIP start violates constraint cost_budget by 14.448333826
+2025-11-16 13:21:25,985 - INFO - User MIP start violates constraint cost_budget by 14.448333826
+
+2025-11-16 13:21:25,985 - INFO - 
+Presolve removed 370 rows and 12 columns
+2025-11-16 13:21:25,993 - INFO - Presolve removed 370 rows and 12 columns
+Presolve time: 0.01s
+2025-11-16 13:21:25,993 - INFO - Presolve time: 0.01s
+
+2025-11-16 13:21:25,993 - INFO - 
+Instance 3 was solved
+2025-11-16 13:21:25,993 - INFO - Instance 3 was solved
+
+2025-11-16 13:21:25,994 - INFO - 
+Explored 0 nodes (0 simplex iterations) in 0.01 seconds (0.01 work units)
+2025-11-16 13:21:25,994 - INFO - Explored 0 nodes (0 simplex iterations) in 0.01 seconds (0.01 work units)
+Thread count was 1 (of 64 available processors)
+2025-11-16 13:21:25,994 - INFO - Thread count was 1 (of 64 available processors)
+
+2025-11-16 13:21:25,994 - INFO - 
+Solution count 0
+2025-11-16 13:21:25,994 - INFO - Solution count 0
+
+2025-11-16 13:21:25,994 - INFO - 
+Model is infeasible or unbounded
+2025-11-16 13:21:25,994 - INFO - Model is infeasible or unbounded
+Best objective -, best bound -, gap -
+2025-11-16 13:21:25,994 - INFO - Best objective -, best bound -, gap -
+2025-11-16 13:21:25,994 - ERROR - No solution found. Status: 4
+2025-11-16 13:21:25,994 - INFO -   Infeasible, relaxing budget
+2025-11-16 13:21:25,994 - INFO - 
+Best $/M tokens found: $1.205609
+2025-11-16 13:21:25,994 - INFO - Ballpark found: $16.39/h, $1.205609/M tokens (Phase 1 time: 0.1s)
+2025-11-16 13:21:25,995 - WARNING - Ballpark exceeds target ($1.205609 > $0.100000)
+2025-11-16 13:21:25,995 - INFO - 
+Phase 2: Coarse enumeration around ballpark...
+2025-11-16 13:21:25,995 - INFO -   Using 9 coarse budget points focused on competitive range
+2025-11-16 13:21:25,995 - INFO -   Budget range: $2.45 - $314.59/hour
+2025-11-16 13:21:25,995 - INFO - Testing 9 cost budgets...
+2025-11-16 13:21:25,995 - INFO - Building model once (this may take a few minutes)...
+2025-11-16 13:21:25,995 - INFO - Building optimization model with TP and practical constraints...
+Set parameter Presolve to value 1
+2025-11-16 13:21:26,000 - INFO - Set parameter Presolve to value 1
+Set parameter Cuts to value 2
+2025-11-16 13:21:26,000 - INFO - Set parameter Cuts to value 2
+Set parameter Heuristics to value 0.2
+2025-11-16 13:21:26,000 - INFO - Set parameter Heuristics to value 0.2
+Set parameter MIPFocus to value 0
+2025-11-16 13:21:26,000 - INFO - Set parameter MIPFocus to value 0
+Set parameter NodefileStart to value 0.5
+2025-11-16 13:21:26,000 - INFO - Set parameter NodefileStart to value 0.5
+Set parameter TimeLimit to value 300
+2025-11-16 13:21:26,000 - INFO - Set parameter TimeLimit to value 300
+Set parameter MIPGap to value 0.05
+2025-11-16 13:21:26,000 - INFO - Set parameter MIPGap to value 0.05
+Set parameter LogToConsole to value 1
+2025-11-16 13:21:26,000 - INFO - Set parameter LogToConsole to value 1
+Set parameter ConcurrentMIP to value 4
+2025-11-16 13:21:26,000 - INFO - Set parameter ConcurrentMIP to value 4
+2025-11-16 13:21:26,000 - INFO - Creating decision variables...
+2025-11-16 13:21:26,075 - INFO -   Created 353 segment variables, 914 connection variables in 0.08s
+2025-11-16 13:21:26,075 - INFO - Creating constraints (this is the slow part)...
+2025-11-16 13:21:26,089 - INFO - Batch size options: [256]
+2025-11-16 13:21:26,098 - INFO - Added global batch size consistency constraint with 1 options: [256]
+2025-11-16 13:21:26,098 - INFO - Added max pipeline depth constraint: 8 stages
+2025-11-16 13:21:26,098 - INFO - Added cost budget constraint: <= $314.59/hour
+2025-11-16 13:21:26,203 - INFO - Tight Big-M computed:
+2025-11-16 13:21:26,203 - INFO -   Max throughput by GPU type: A100=22,862, L40=11,637, A10=106,857, V100=9,987
+2025-11-16 13:21:26,203 - INFO -   Global max throughput: 106,857 tokens/sec
+2025-11-16 13:21:26,203 - INFO -   M_partition (global): 320,571 (3x safety factor)
+2025-11-16 13:21:26,204 - INFO -   M_network: 29,491,200
+2025-11-16 13:21:26,252 - INFO - Adding pipeline connectivity constraints...
+2025-11-16 13:21:26,252 - INFO -   Pre-indexing 914 connections for fast lookup...
+2025-11-16 13:21:26,252 - INFO -   Indexed 265 source segments and 265 destination segments
+2025-11-16 13:21:26,253 - INFO -   Processing 31 layer transitions...
+2025-11-16 13:21:26,256 - INFO -   Progress: 10/31 layer transitions (110 constraints so far)
+2025-11-16 13:21:26,264 - INFO -   Progress: 20/31 layer transitions (342 constraints so far)
+2025-11-16 13:21:26,270 - INFO -   Progress: 30/31 layer transitions (530 constraints so far)
+2025-11-16 13:21:26,270 - INFO -   Pipeline connectivity: added 530 constraints successfully
+2025-11-16 13:21:26,270 - INFO - Adding symmetry breaking constraints...
+2025-11-16 13:21:26,270 - INFO - Added 3 symmetry breaking constraints
+2025-11-16 13:21:26,270 - INFO - Adding flow conservation constraints...
+2025-11-16 13:21:26,275 - INFO - Added 23 flow conservation constraints
+2025-11-16 13:21:26,275 - INFO -   Constraints created in 0.20s
+2025-11-16 13:21:26,275 - INFO - Setting objective function...
+2025-11-16 13:21:26,275 - INFO - Objective: Maximize throughput (cost ignored)
+2025-11-16 13:21:26,275 - INFO -   Objective set in 0.00s
+2025-11-16 13:21:26,275 - INFO - ================================================================================
+2025-11-16 13:21:26,275 - INFO - MODEL BUILD COMPLETE - ready to solve with Gurobi
+2025-11-16 13:21:26,275 - INFO -   Total build time: 0.28s (init=0.01s, vars=0.08s, constraints=0.20s, obj=0.00s)
+2025-11-16 13:21:26,275 - INFO - ================================================================================
+2025-11-16 13:21:26,275 - INFO - Model built in 0.3s! Now testing budgets by updating constraint RHS only...
+2025-11-16 13:21:26,275 - INFO - 
+[1/9] Budget: $2.45/hour
+2025-11-16 13:21:26,279 - INFO -   Constraint update: 0.004s
+Set parameter Threads to value 4
+2025-11-16 13:21:26,279 - INFO - Set parameter Threads to value 4
+2025-11-16 13:21:26,279 - INFO - Using 4 threads for optimization (verified: 4)
+2025-11-16 13:21:26,279 - INFO - CPU count: 64, available: 32
+2025-11-16 13:21:26,279 - INFO - Starting optimization...
+Gurobi Optimizer version 13.0.0 build v13.0.0rc1 (linux64 - "Ubuntu 24.04.3 LTS")
+2025-11-16 13:21:26,279 - INFO - Gurobi Optimizer version 13.0.0 build v13.0.0rc1 (linux64 - "Ubuntu 24.04.3 LTS")
+
+2025-11-16 13:21:26,280 - INFO - 
+CPU model: Intel(R) Xeon(R) Gold 6142 CPU @ 2.60GHz, instruction set [SSE2|AVX|AVX2|AVX512]
+2025-11-16 13:21:26,280 - INFO - CPU model: Intel(R) Xeon(R) Gold 6142 CPU @ 2.60GHz, instruction set [SSE2|AVX|AVX2|AVX512]
+Thread count: 32 physical cores, 64 logical processors, using up to 4 threads
+2025-11-16 13:21:26,280 - INFO - Thread count: 32 physical cores, 64 logical processors, using up to 4 threads
+
+2025-11-16 13:21:26,280 - INFO - 
+Non-default parameters:
+2025-11-16 13:21:26,280 - INFO - Non-default parameters:
+TimeLimit  300
+2025-11-16 13:21:26,280 - INFO - TimeLimit  300
+MIPGap  0.05
+2025-11-16 13:21:26,280 - INFO - MIPGap  0.05
+Heuristics  0.2
+2025-11-16 13:21:26,280 - INFO - Heuristics  0.2
+NodefileStart  0.5
+2025-11-16 13:21:26,280 - INFO - NodefileStart  0.5
+Cuts  2
+2025-11-16 13:21:26,280 - INFO - Cuts  2
+ConcurrentMIP  4
+2025-11-16 13:21:26,280 - INFO - ConcurrentMIP  4
+Presolve  1
+2025-11-16 13:21:26,280 - INFO - Presolve  1
+Threads  4
+2025-11-16 13:21:26,280 - INFO - Threads  4
+
+2025-11-16 13:21:26,280 - INFO - 
+Academic license 2415150 - for non-commercial use only - registered to ga___@illinois.edu
+2025-11-16 13:21:26,280 - INFO - Academic license 2415150 - for non-commercial use only - registered to ga___@illinois.edu
+Optimize a model with 5568 rows, 2200 columns and 20637 nonzeros (Max)
+2025-11-16 13:21:26,280 - INFO - Optimize a model with 5568 rows, 2200 columns and 20637 nonzeros (Max)
+Model fingerprint: 0x9b4a24df
+2025-11-16 13:21:26,281 - INFO - Model fingerprint: 0x9b4a24df
+Model has 1 linear objective coefficients
+2025-11-16 13:21:26,281 - INFO - Model has 1 linear objective coefficients
+Variable types: 924 continuous, 1276 integer (1276 binary)
+2025-11-16 13:21:26,281 - INFO - Variable types: 924 continuous, 1276 integer (1276 binary)
+Coefficient statistics:
+2025-11-16 13:21:26,281 - INFO - Coefficient statistics:
+  Matrix range     [1e+00, 3e+07]
+2025-11-16 13:21:26,281 - INFO -   Matrix range     [1e+00, 3e+07]
+  Objective range  [1e+00, 1e+00]
+2025-11-16 13:21:26,281 - INFO -   Objective range  [1e+00, 1e+00]
+  Bounds range     [1e+00, 1e+00]
+2025-11-16 13:21:26,281 - INFO -   Bounds range     [1e+00, 1e+00]
+  RHS range        [1e+00, 3e+07]
+2025-11-16 13:21:26,281 - INFO -   RHS range        [1e+00, 3e+07]
+
+2025-11-16 13:21:26,281 - INFO - 
+Concurrent MIP optimizer: 4 concurrent instances (1 thread per instance)
+2025-11-16 13:21:26,281 - INFO - Concurrent MIP optimizer: 4 concurrent instances (1 thread per instance)
+
+2025-11-16 13:21:26,281 - INFO - 
+Presolve removed 370 rows and 12 columns
+2025-11-16 13:21:26,292 - INFO - Presolve removed 370 rows and 12 columns
+Presolve time: 0.01s
+2025-11-16 13:21:26,292 - INFO - Presolve time: 0.01s
+
+2025-11-16 13:21:26,293 - INFO - 
+Instance 3 was solved
+2025-11-16 13:21:26,293 - INFO - Instance 3 was solved
+
+2025-11-16 13:21:26,293 - INFO - 
+Explored 0 nodes (0 simplex iterations) in 0.01 seconds (0.01 work units)
+2025-11-16 13:21:26,293 - INFO - Explored 0 nodes (0 simplex iterations) in 0.01 seconds (0.01 work units)
+Thread count was 1 (of 64 available processors)
+2025-11-16 13:21:26,293 - INFO - Thread count was 1 (of 64 available processors)
+
+2025-11-16 13:21:26,293 - INFO - 
+Solution count 0
+2025-11-16 13:21:26,293 - INFO - Solution count 0
+
+2025-11-16 13:21:26,293 - INFO - 
+Model is infeasible or unbounded
+2025-11-16 13:21:26,293 - INFO - Model is infeasible or unbounded
+Best objective -, best bound -, gap -
+2025-11-16 13:21:26,293 - INFO - Best objective -, best bound -, gap -
+2025-11-16 13:21:26,294 - ERROR - No solution found. Status: 4
+2025-11-16 13:21:26,294 - INFO -   Infeasible
+2025-11-16 13:21:26,294 - INFO -   Timing: solve=0.0s, total iteration=0.0s
+2025-11-16 13:21:26,294 - INFO - 
+[2/9] Budget: $6.55/hour
+2025-11-16 13:21:26,294 - INFO -   Feasible configs: A100×1, L40×1, A10×1, V100×1, V100×2
+2025-11-16 13:21:26,294 - INFO -   Constraint update: 0.000s
+Set parameter Threads to value 4
+2025-11-16 13:21:26,294 - INFO - Set parameter Threads to value 4
+2025-11-16 13:21:26,294 - INFO - Using 4 threads for optimization (verified: 4)
+2025-11-16 13:21:26,294 - INFO - CPU count: 64, available: 32
+2025-11-16 13:21:26,294 - INFO - Starting optimization...
+Gurobi Optimizer version 13.0.0 build v13.0.0rc1 (linux64 - "Ubuntu 24.04.3 LTS")
+2025-11-16 13:21:26,294 - INFO - Gurobi Optimizer version 13.0.0 build v13.0.0rc1 (linux64 - "Ubuntu 24.04.3 LTS")
+
+2025-11-16 13:21:26,294 - INFO - 
+CPU model: Intel(R) Xeon(R) Gold 6142 CPU @ 2.60GHz, instruction set [SSE2|AVX|AVX2|AVX512]
+2025-11-16 13:21:26,294 - INFO - CPU model: Intel(R) Xeon(R) Gold 6142 CPU @ 2.60GHz, instruction set [SSE2|AVX|AVX2|AVX512]
+Thread count: 32 physical cores, 64 logical processors, using up to 4 threads
+2025-11-16 13:21:26,294 - INFO - Thread count: 32 physical cores, 64 logical processors, using up to 4 threads
+
+2025-11-16 13:21:26,294 - INFO - 
+Non-default parameters:
+2025-11-16 13:21:26,294 - INFO - Non-default parameters:
+TimeLimit  300
+2025-11-16 13:21:26,294 - INFO - TimeLimit  300
+MIPGap  0.05
+2025-11-16 13:21:26,294 - INFO - MIPGap  0.05
+Heuristics  0.2
+2025-11-16 13:21:26,294 - INFO - Heuristics  0.2
+NodefileStart  0.5
+2025-11-16 13:21:26,294 - INFO - NodefileStart  0.5
+Cuts  2
+2025-11-16 13:21:26,295 - INFO - Cuts  2
+ConcurrentMIP  4
+2025-11-16 13:21:26,295 - INFO - ConcurrentMIP  4
+Presolve  1
+2025-11-16 13:21:26,295 - INFO - Presolve  1
+Threads  4
+2025-11-16 13:21:26,295 - INFO - Threads  4
+
+2025-11-16 13:21:26,295 - INFO - 
+Academic license 2415150 - for non-commercial use only - registered to ga___@illinois.edu
+2025-11-16 13:21:26,295 - INFO - Academic license 2415150 - for non-commercial use only - registered to ga___@illinois.edu
+Optimize a model with 5568 rows, 2200 columns and 20637 nonzeros (Max)
+2025-11-16 13:21:26,295 - INFO - Optimize a model with 5568 rows, 2200 columns and 20637 nonzeros (Max)
+Model fingerprint: 0xb4506186
+2025-11-16 13:21:26,295 - INFO - Model fingerprint: 0xb4506186
+Model has 1 linear objective coefficients
+2025-11-16 13:21:26,295 - INFO - Model has 1 linear objective coefficients
+Variable types: 924 continuous, 1276 integer (1276 binary)
+2025-11-16 13:21:26,295 - INFO - Variable types: 924 continuous, 1276 integer (1276 binary)
+Coefficient statistics:
+2025-11-16 13:21:26,295 - INFO - Coefficient statistics:
+  Matrix range     [1e+00, 3e+07]
+2025-11-16 13:21:26,295 - INFO -   Matrix range     [1e+00, 3e+07]
+  Objective range  [1e+00, 1e+00]
+2025-11-16 13:21:26,296 - INFO -   Objective range  [1e+00, 1e+00]
+  Bounds range     [1e+00, 1e+00]
+2025-11-16 13:21:26,296 - INFO -   Bounds range     [1e+00, 1e+00]
+  RHS range        [1e+00, 3e+07]
+2025-11-16 13:21:26,296 - INFO -   RHS range        [1e+00, 3e+07]
+
+2025-11-16 13:21:26,296 - INFO - 
+Concurrent MIP optimizer: 4 concurrent instances (1 thread per instance)
+2025-11-16 13:21:26,296 - INFO - Concurrent MIP optimizer: 4 concurrent instances (1 thread per instance)
+
+2025-11-16 13:21:26,296 - INFO - 
+Presolve removed 370 rows and 12 columns
+2025-11-16 13:21:26,307 - INFO - Presolve removed 370 rows and 12 columns
+Presolve time: 0.01s
+2025-11-16 13:21:26,307 - INFO - Presolve time: 0.01s
+
+2025-11-16 13:21:26,307 - INFO - 
+Instance 3 was solved
+2025-11-16 13:21:26,307 - INFO - Instance 3 was solved
+
+2025-11-16 13:21:26,307 - INFO - 
+Explored 0 nodes (0 simplex iterations) in 0.01 seconds (0.01 work units)
+2025-11-16 13:21:26,307 - INFO - Explored 0 nodes (0 simplex iterations) in 0.01 seconds (0.01 work units)
+Thread count was 1 (of 64 available processors)
+2025-11-16 13:21:26,307 - INFO - Thread count was 1 (of 64 available processors)
+
+2025-11-16 13:21:26,307 - INFO - 
+Solution count 0
+2025-11-16 13:21:26,307 - INFO - Solution count 0
+
+2025-11-16 13:21:26,307 - INFO - 
+Model is infeasible or unbounded
+2025-11-16 13:21:26,307 - INFO - Model is infeasible or unbounded
+Best objective -, best bound -, gap -
+2025-11-16 13:21:26,307 - INFO - Best objective -, best bound -, gap -
+2025-11-16 13:21:26,308 - ERROR - No solution found. Status: 4
+2025-11-16 13:21:26,308 - INFO -   Infeasible
+2025-11-16 13:21:26,308 - INFO -   Timing: solve=0.0s, total iteration=0.0s
+2025-11-16 13:21:26,308 - INFO - 
+[3/9] Budget: $11.47/hour
+2025-11-16 13:21:26,308 - INFO -   Feasible configs: A100×1, A100×2, L40×1, L40×2, A10×1, A10×2, V100×1, V100×2
+2025-11-16 13:21:26,308 - INFO -   Constraint update: 0.000s
+Set parameter Threads to value 4
+2025-11-16 13:21:26,308 - INFO - Set parameter Threads to value 4
+2025-11-16 13:21:26,308 - INFO - Using 4 threads for optimization (verified: 4)
+2025-11-16 13:21:26,308 - INFO - CPU count: 64, available: 32
+2025-11-16 13:21:26,308 - INFO - Starting optimization...
+Gurobi Optimizer version 13.0.0 build v13.0.0rc1 (linux64 - "Ubuntu 24.04.3 LTS")
+2025-11-16 13:21:26,308 - INFO - Gurobi Optimizer version 13.0.0 build v13.0.0rc1 (linux64 - "Ubuntu 24.04.3 LTS")
+
+2025-11-16 13:21:26,308 - INFO - 
+CPU model: Intel(R) Xeon(R) Gold 6142 CPU @ 2.60GHz, instruction set [SSE2|AVX|AVX2|AVX512]
+2025-11-16 13:21:26,308 - INFO - CPU model: Intel(R) Xeon(R) Gold 6142 CPU @ 2.60GHz, instruction set [SSE2|AVX|AVX2|AVX512]
+Thread count: 32 physical cores, 64 logical processors, using up to 4 threads
+2025-11-16 13:21:26,309 - INFO - Thread count: 32 physical cores, 64 logical processors, using up to 4 threads
+
+2025-11-16 13:21:26,309 - INFO - 
+Non-default parameters:
+2025-11-16 13:21:26,309 - INFO - Non-default parameters:
+TimeLimit  300
+2025-11-16 13:21:26,309 - INFO - TimeLimit  300
+MIPGap  0.05
+2025-11-16 13:21:26,309 - INFO - MIPGap  0.05
+Heuristics  0.2
+2025-11-16 13:21:26,309 - INFO - Heuristics  0.2
+NodefileStart  0.5
+2025-11-16 13:21:26,309 - INFO - NodefileStart  0.5
+Cuts  2
+2025-11-16 13:21:26,309 - INFO - Cuts  2
+ConcurrentMIP  4
+2025-11-16 13:21:26,309 - INFO - ConcurrentMIP  4
+Presolve  1
+2025-11-16 13:21:26,309 - INFO - Presolve  1
+Threads  4
+2025-11-16 13:21:26,309 - INFO - Threads  4
+
+2025-11-16 13:21:26,309 - INFO - 
+Academic license 2415150 - for non-commercial use only - registered to ga___@illinois.edu
+2025-11-16 13:21:26,309 - INFO - Academic license 2415150 - for non-commercial use only - registered to ga___@illinois.edu
+Optimize a model with 5568 rows, 2200 columns and 20637 nonzeros (Max)
+2025-11-16 13:21:26,309 - INFO - Optimize a model with 5568 rows, 2200 columns and 20637 nonzeros (Max)
+Model fingerprint: 0x89c60677
+2025-11-16 13:21:26,310 - INFO - Model fingerprint: 0x89c60677
+Model has 1 linear objective coefficients
+2025-11-16 13:21:26,310 - INFO - Model has 1 linear objective coefficients
+Variable types: 924 continuous, 1276 integer (1276 binary)
+2025-11-16 13:21:26,310 - INFO - Variable types: 924 continuous, 1276 integer (1276 binary)
+Coefficient statistics:
+2025-11-16 13:21:26,310 - INFO - Coefficient statistics:
+  Matrix range     [1e+00, 3e+07]
+2025-11-16 13:21:26,310 - INFO -   Matrix range     [1e+00, 3e+07]
+  Objective range  [1e+00, 1e+00]
+2025-11-16 13:21:26,310 - INFO -   Objective range  [1e+00, 1e+00]
+  Bounds range     [1e+00, 1e+00]
+2025-11-16 13:21:26,310 - INFO -   Bounds range     [1e+00, 1e+00]
+  RHS range        [1e+00, 3e+07]
+2025-11-16 13:21:26,310 - INFO -   RHS range        [1e+00, 3e+07]
+
+2025-11-16 13:21:26,310 - INFO - 
+Concurrent MIP optimizer: 4 concurrent instances (1 thread per instance)
+2025-11-16 13:21:26,310 - INFO - Concurrent MIP optimizer: 4 concurrent instances (1 thread per instance)
+
+2025-11-16 13:21:26,310 - INFO - 
+Presolve removed 370 rows and 12 columns
+2025-11-16 13:21:26,321 - INFO - Presolve removed 370 rows and 12 columns
+Presolve time: 0.01s
+2025-11-16 13:21:26,321 - INFO - Presolve time: 0.01s
+
+2025-11-16 13:21:26,321 - INFO - 
+Instance 2 was solved
+2025-11-16 13:21:26,321 - INFO - Instance 2 was solved
+
+2025-11-16 13:21:26,322 - INFO - 
+Explored 0 nodes (0 simplex iterations) in 0.01 seconds (0.01 work units)
+2025-11-16 13:21:26,322 - INFO - Explored 0 nodes (0 simplex iterations) in 0.01 seconds (0.01 work units)
+Thread count was 1 (of 64 available processors)
+2025-11-16 13:21:26,322 - INFO - Thread count was 1 (of 64 available processors)
+
+2025-11-16 13:21:26,322 - INFO - 
+Solution count 0
+2025-11-16 13:21:26,322 - INFO - Solution count 0
+
+2025-11-16 13:21:26,322 - INFO - 
+Model is infeasible or unbounded
+2025-11-16 13:21:26,322 - INFO - Model is infeasible or unbounded
+Best objective -, best bound -, gap -
+2025-11-16 13:21:26,322 - INFO - Best objective -, best bound -, gap -
+2025-11-16 13:21:26,322 - ERROR - No solution found. Status: 4
+2025-11-16 13:21:26,322 - INFO -   Infeasible
+2025-11-16 13:21:26,322 - INFO -   Timing: solve=0.0s, total iteration=0.0s
+2025-11-16 13:21:26,322 - INFO - 
+[4/9] Budget: $14.75/hour
+2025-11-16 13:21:26,323 - INFO -   Feasible configs: A100×1, A100×2, L40×1, L40×2, L40×4, A10×1, A10×2, V100×1, V100×2, V100×4
+2025-11-16 13:21:26,323 - INFO -   Constraint update: 0.000s
+Set parameter Threads to value 4
+2025-11-16 13:21:26,323 - INFO - Set parameter Threads to value 4
+2025-11-16 13:21:26,323 - INFO - Using 4 threads for optimization (verified: 4)
+2025-11-16 13:21:26,323 - INFO - CPU count: 64, available: 32
+2025-11-16 13:21:26,323 - INFO - Starting optimization...
+Gurobi Optimizer version 13.0.0 build v13.0.0rc1 (linux64 - "Ubuntu 24.04.3 LTS")
+2025-11-16 13:21:26,323 - INFO - Gurobi Optimizer version 13.0.0 build v13.0.0rc1 (linux64 - "Ubuntu 24.04.3 LTS")
+
+2025-11-16 13:21:26,323 - INFO - 
+CPU model: Intel(R) Xeon(R) Gold 6142 CPU @ 2.60GHz, instruction set [SSE2|AVX|AVX2|AVX512]
+2025-11-16 13:21:26,323 - INFO - CPU model: Intel(R) Xeon(R) Gold 6142 CPU @ 2.60GHz, instruction set [SSE2|AVX|AVX2|AVX512]
+Thread count: 32 physical cores, 64 logical processors, using up to 4 threads
+2025-11-16 13:21:26,323 - INFO - Thread count: 32 physical cores, 64 logical processors, using up to 4 threads
+
+2025-11-16 13:21:26,323 - INFO - 
+Non-default parameters:
+2025-11-16 13:21:26,323 - INFO - Non-default parameters:
+TimeLimit  300
+2025-11-16 13:21:26,323 - INFO - TimeLimit  300
+MIPGap  0.05
+2025-11-16 13:21:26,323 - INFO - MIPGap  0.05
+Heuristics  0.2
+2025-11-16 13:21:26,323 - INFO - Heuristics  0.2
+NodefileStart  0.5
+2025-11-16 13:21:26,323 - INFO - NodefileStart  0.5
+Cuts  2
+2025-11-16 13:21:26,323 - INFO - Cuts  2
+ConcurrentMIP  4
+2025-11-16 13:21:26,323 - INFO - ConcurrentMIP  4
+Presolve  1
+2025-11-16 13:21:26,323 - INFO - Presolve  1
+Threads  4
+2025-11-16 13:21:26,323 - INFO - Threads  4
+
+2025-11-16 13:21:26,323 - INFO - 
+Academic license 2415150 - for non-commercial use only - registered to ga___@illinois.edu
+2025-11-16 13:21:26,324 - INFO - Academic license 2415150 - for non-commercial use only - registered to ga___@illinois.edu
+Optimize a model with 5568 rows, 2200 columns and 20637 nonzeros (Max)
+2025-11-16 13:21:26,324 - INFO - Optimize a model with 5568 rows, 2200 columns and 20637 nonzeros (Max)
+Model fingerprint: 0x77ac43fc
+2025-11-16 13:21:26,324 - INFO - Model fingerprint: 0x77ac43fc
+Model has 1 linear objective coefficients
+2025-11-16 13:21:26,324 - INFO - Model has 1 linear objective coefficients
+Variable types: 924 continuous, 1276 integer (1276 binary)
+2025-11-16 13:21:26,324 - INFO - Variable types: 924 continuous, 1276 integer (1276 binary)
+Coefficient statistics:
+2025-11-16 13:21:26,324 - INFO - Coefficient statistics:
+  Matrix range     [1e+00, 3e+07]
+2025-11-16 13:21:26,324 - INFO -   Matrix range     [1e+00, 3e+07]
+  Objective range  [1e+00, 1e+00]
+2025-11-16 13:21:26,324 - INFO -   Objective range  [1e+00, 1e+00]
+  Bounds range     [1e+00, 1e+00]
+2025-11-16 13:21:26,324 - INFO -   Bounds range     [1e+00, 1e+00]
+  RHS range        [1e+00, 3e+07]
+2025-11-16 13:21:26,324 - INFO -   RHS range        [1e+00, 3e+07]
+
+2025-11-16 13:21:26,324 - INFO - 
+Concurrent MIP optimizer: 4 concurrent instances (1 thread per instance)
+2025-11-16 13:21:26,324 - INFO - Concurrent MIP optimizer: 4 concurrent instances (1 thread per instance)
+
+2025-11-16 13:21:26,324 - INFO - 
+Presolve removed 4811 rows and 2148 columns
+2025-11-16 13:21:26,338 - INFO - Presolve removed 4811 rows and 2148 columns
+Presolve time: 0.01s
+2025-11-16 13:21:26,338 - INFO - Presolve time: 0.01s
+
+2025-11-16 13:21:26,340 - INFO - 
+Instance 0 was solved
+2025-11-16 13:21:26,340 - INFO - Instance 0 was solved
+
+2025-11-16 13:21:26,340 - INFO - 
+Explored 0 nodes (0 simplex iterations) in 0.02 seconds (0.01 work units)
+2025-11-16 13:21:26,340 - INFO - Explored 0 nodes (0 simplex iterations) in 0.02 seconds (0.01 work units)
+Thread count was 1 (of 64 available processors)
+2025-11-16 13:21:26,340 - INFO - Thread count was 1 (of 64 available processors)
+
+2025-11-16 13:21:26,340 - INFO - 
+Solution count 0
+2025-11-16 13:21:26,340 - INFO - Solution count 0
+
+2025-11-16 13:21:26,340 - INFO - 
+Model is infeasible or unbounded
+2025-11-16 13:21:26,340 - INFO - Model is infeasible or unbounded
+Best objective -, best bound -, gap -
+2025-11-16 13:21:26,340 - INFO - Best objective -, best bound -, gap -
+2025-11-16 13:21:26,340 - ERROR - No solution found. Status: 4
+2025-11-16 13:21:26,340 - INFO -   Infeasible
+2025-11-16 13:21:26,341 - INFO -   Timing: solve=0.0s, total iteration=0.0s
+2025-11-16 13:21:26,341 - INFO - 
+[5/9] Budget: $16.39/hour
+2025-11-16 13:21:26,341 - INFO -   Feasible configs: A100×1, A100×2, A100×4, L40×1, L40×2, L40×4, A10×1, A10×2, A10×4, V100×1, V100×2, V100×4
+2025-11-16 13:21:26,341 - INFO -   Constraint update: 0.000s
+Set parameter Threads to value 4
+2025-11-16 13:21:26,341 - INFO - Set parameter Threads to value 4
+2025-11-16 13:21:26,341 - INFO - Using 4 threads for optimization (verified: 4)
+2025-11-16 13:21:26,341 - INFO - CPU count: 64, available: 32
+2025-11-16 13:21:26,341 - INFO - Starting optimization...
+Gurobi Optimizer version 13.0.0 build v13.0.0rc1 (linux64 - "Ubuntu 24.04.3 LTS")
+2025-11-16 13:21:26,341 - INFO - Gurobi Optimizer version 13.0.0 build v13.0.0rc1 (linux64 - "Ubuntu 24.04.3 LTS")
+
+2025-11-16 13:21:26,341 - INFO - 
+CPU model: Intel(R) Xeon(R) Gold 6142 CPU @ 2.60GHz, instruction set [SSE2|AVX|AVX2|AVX512]
+2025-11-16 13:21:26,341 - INFO - CPU model: Intel(R) Xeon(R) Gold 6142 CPU @ 2.60GHz, instruction set [SSE2|AVX|AVX2|AVX512]
+Thread count: 32 physical cores, 64 logical processors, using up to 4 threads
+2025-11-16 13:21:26,341 - INFO - Thread count: 32 physical cores, 64 logical processors, using up to 4 threads
+
+2025-11-16 13:21:26,341 - INFO - 
+Non-default parameters:
+2025-11-16 13:21:26,341 - INFO - Non-default parameters:
+TimeLimit  300
+2025-11-16 13:21:26,341 - INFO - TimeLimit  300
+MIPGap  0.05
+2025-11-16 13:21:26,341 - INFO - MIPGap  0.05
+Heuristics  0.2
+2025-11-16 13:21:26,341 - INFO - Heuristics  0.2
+NodefileStart  0.5
+2025-11-16 13:21:26,341 - INFO - NodefileStart  0.5
+Cuts  2
+2025-11-16 13:21:26,341 - INFO - Cuts  2
+ConcurrentMIP  4
+2025-11-16 13:21:26,341 - INFO - ConcurrentMIP  4
+Presolve  1
+2025-11-16 13:21:26,341 - INFO - Presolve  1
+Threads  4
+2025-11-16 13:21:26,341 - INFO - Threads  4
+
+2025-11-16 13:21:26,342 - INFO - 
+Academic license 2415150 - for non-commercial use only - registered to ga___@illinois.edu
+2025-11-16 13:21:26,342 - INFO - Academic license 2415150 - for non-commercial use only - registered to ga___@illinois.edu
+Optimize a model with 5568 rows, 2200 columns and 20637 nonzeros (Max)
+2025-11-16 13:21:26,342 - INFO - Optimize a model with 5568 rows, 2200 columns and 20637 nonzeros (Max)
+Model fingerprint: 0xe2c7f338
+2025-11-16 13:21:26,342 - INFO - Model fingerprint: 0xe2c7f338
+Model has 1 linear objective coefficients
+2025-11-16 13:21:26,342 - INFO - Model has 1 linear objective coefficients
+Variable types: 924 continuous, 1276 integer (1276 binary)
+2025-11-16 13:21:26,342 - INFO - Variable types: 924 continuous, 1276 integer (1276 binary)
+Coefficient statistics:
+2025-11-16 13:21:26,342 - INFO - Coefficient statistics:
+  Matrix range     [1e+00, 3e+07]
+2025-11-16 13:21:26,342 - INFO -   Matrix range     [1e+00, 3e+07]
+  Objective range  [1e+00, 1e+00]
+2025-11-16 13:21:26,342 - INFO -   Objective range  [1e+00, 1e+00]
+  Bounds range     [1e+00, 1e+00]
+2025-11-16 13:21:26,342 - INFO -   Bounds range     [1e+00, 1e+00]
+  RHS range        [1e+00, 3e+07]
+2025-11-16 13:21:26,342 - INFO -   RHS range        [1e+00, 3e+07]
+
+2025-11-16 13:21:26,342 - INFO - 
+Concurrent MIP optimizer: 4 concurrent instances (1 thread per instance)
+2025-11-16 13:21:26,342 - INFO - Concurrent MIP optimizer: 4 concurrent instances (1 thread per instance)
+
+2025-11-16 13:21:26,343 - INFO - 
+Presolve removed 5568 rows and 2200 columns
+2025-11-16 13:21:26,361 - INFO - Presolve removed 5568 rows and 2200 columns
+Presolve time: 0.01s
+2025-11-16 13:21:26,361 - INFO - Presolve time: 0.01s
+Presolve: All rows and columns removed
+2025-11-16 13:21:26,361 - INFO - Presolve: All rows and columns removed
+
+2025-11-16 13:21:26,362 - INFO - 
+Instance 3 was solved
+2025-11-16 13:21:26,362 - INFO - Instance 3 was solved
+
+2025-11-16 13:21:26,362 - INFO - 
+Explored 0 nodes (0 simplex iterations) in 0.02 seconds (0.01 work units)
+2025-11-16 13:21:26,363 - INFO - Explored 0 nodes (0 simplex iterations) in 0.02 seconds (0.01 work units)
+Thread count was 1 (of 64 available processors)
+2025-11-16 13:21:26,363 - INFO - Thread count was 1 (of 64 available processors)
+
+2025-11-16 13:21:26,363 - INFO - 
+Solution count 1: 12583.9 
+2025-11-16 13:21:26,363 - INFO - Solution count 1: 12583.9 
+No other solutions better than 0
+2025-11-16 13:21:26,363 - INFO - No other solutions better than 0
+
+2025-11-16 13:21:26,363 - INFO - 
+Optimal solution found (tolerance 5.00e-02)
+2025-11-16 13:21:26,363 - INFO - Optimal solution found (tolerance 5.00e-02)
+Best objective 1.258392575569e+04, best bound 1.258392575569e+04, gap 0.0000%
+2025-11-16 13:21:26,363 - INFO - Best objective 1.258392575569e+04, best bound 1.258392575569e+04, gap 0.0000%
+2025-11-16 13:21:26,364 - WARNING - WARNING: Problem solved in presolve (single-threaded)! NodeCount=0
+2025-11-16 13:21:26,364 - WARNING -   Presolve eliminated problem before multi-threaded B&B could start
+2025-11-16 13:21:26,364 - INFO - Optimal solution found in 0.02 seconds
+2025-11-16 13:21:26,364 - INFO -   Nodes explored: 0.0
+2025-11-16 13:21:26,364 - INFO -   Simplex iterations: 0.0
+2025-11-16 13:21:26,364 - INFO - Optimal throughput: 12583.93 tokens/sec
+2025-11-16 13:21:26,364 - INFO - Batch size options: [256]
+2025-11-16 13:21:26,364 - INFO - 
+Throughput Corrections:
+2025-11-16 13:21:26,364 - INFO -   Batch size: 256
+2025-11-16 13:21:26,364 - INFO -   Pipeline stages: 1
+2025-11-16 13:21:26,364 - INFO -   Pipeline bubble efficiency: 100.0% (no pipeline)
+2025-11-16 13:21:26,364 - INFO -   Real-world efficiency: 30.0%
+2025-11-16 13:21:26,364 - INFO -   Combined efficiency: 30.0%
+2025-11-16 13:21:26,364 - INFO -   Raw throughput: 12583.93 tokens/sec
+2025-11-16 13:21:26,364 - INFO -   After pipeline bubbles: 12583.93 tokens/sec
+2025-11-16 13:21:26,364 - INFO -   Final throughput: 3775.18 tokens/sec
+2025-11-16 13:21:26,364 - INFO - 
+================================================================================
+2025-11-16 13:21:26,364 - INFO - SOLUTION ANALYSIS - OBJECTIVE BREAKDOWN
+2025-11-16 13:21:26,364 - INFO - ================================================================================
+2025-11-16 13:21:26,364 - INFO - Batch size options: [256]
+2025-11-16 13:21:26,364 - INFO - 
+Core Metrics:
+2025-11-16 13:21:26,364 - INFO -   Batch Size: 256
+2025-11-16 13:21:26,364 - INFO -   Throughput: 3775.18 tokens/sec
+2025-11-16 13:21:26,364 - INFO -   Cost: $16.39/hour
+2025-11-16 13:21:26,364 - INFO -   $/M tokens: $1.205609
+2025-11-16 13:21:26,369 - INFO - 
+================================================================================
+2025-11-16 13:21:26,369 - INFO - BATCH SIZE ANALYSIS
+2025-11-16 13:21:26,369 - INFO - ================================================================================
+2025-11-16 13:21:26,369 - INFO - Batch size options: [256]
+2025-11-16 13:21:26,369 - INFO - 
+Batch Size Selection:
+2025-11-16 13:21:26,369 - INFO -   Optimal: 256
+2025-11-16 13:21:26,369 - INFO -   Search range: [256, 256]
+2025-11-16 13:21:26,369 - INFO -   Options considered: [256]
+2025-11-16 13:21:26,369 - INFO - 
+Batch Efficiency Factor: 100.0%
+2025-11-16 13:21:26,369 - INFO -   (Larger batches improve GPU utilization)
+2025-11-16 13:21:26,369 - INFO - Optimal utilization (batch >= 32)
+2025-11-16 13:21:26,369 - INFO - 
+================================================================================
+2025-11-16 13:21:26,369 - INFO - ROOFLINE MODEL ANALYSIS
+2025-11-16 13:21:26,369 - INFO - ================================================================================
+2025-11-16 13:21:26,369 - INFO - 
+Performance Bottleneck Analysis (Roofline Model):
+2025-11-16 13:21:26,369 - INFO -   Determines if each segment is compute-bound or memory-bound
+2025-11-16 13:21:26,369 - INFO - --------------------------------------------------------------------------------
+2025-11-16 13:21:26,369 - INFO -   GPU Type   TP   Layers  AI           Ridge        Regime          Bottleneck
+2025-11-16 13:21:26,370 - INFO - --------------------------------------------------------------------------------
+2025-11-16 13:21:26,370 - INFO -   A100       4    32      70235.52     153.02       Compute-bound   GPU Compute
+2025-11-16 13:21:26,370 - INFO - 
+--------------------------------------------------------------------------------
+2025-11-16 13:21:26,370 - INFO - Roofline analysis:
+2025-11-16 13:21:26,370 - INFO - - Arithmetic Intensity (AI) = FLOPs / Byte accessed
+2025-11-16 13:21:26,370 - INFO - - Ridge Point = Peak FLOPS / Peak Memory Bandwidth
+2025-11-16 13:21:26,370 - INFO - - Arithmetic Intensity > Ridge -> Compute-bound (limited by GPU compute)
+2025-11-16 13:21:26,370 - INFO - - Arithmetic Intensity < Ridge -> Memory-bound (limited by memory bandwidth)
+2025-11-16 13:21:26,370 - INFO - - Tensor Parallelism (TP) reduces memory per GPU -> increases AI -> may shift regime
+2025-11-16 13:21:26,370 - INFO - Regime Distribution:
+2025-11-16 13:21:26,370 - INFO - - Compute-bound segments: 1/1 (100%)
+2025-11-16 13:21:26,370 - INFO - - Memory-bound segments:  0/1 (0%)
+2025-11-16 13:21:26,370 - INFO - Most segments are compute-bound.
+2025-11-16 13:21:26,370 - INFO - - Consider GPUs with higher TFLOPS for better performance.
+2025-11-16 13:21:26,370 - INFO - - Memory bandwidth is not the bottleneck here.
+2025-11-16 13:21:26,370 - INFO - 
+================================================================================
+2025-11-16 13:21:26,370 - INFO - SOLUTION ANALYSIS - GPU EFFICIENCY & SELECTION
+2025-11-16 13:21:26,370 - INFO - ================================================================================
+2025-11-16 13:21:26,370 - INFO - 
+OK WORKLOAD IS COMPUTE-BOUND -> TFLOP/$ is the key metric!
+2025-11-16 13:21:26,370 - INFO - 
+GPU Efficiency Ranking (Compute (TFLOP/$) ratio):
+2025-11-16 13:21:26,370 - INFO - --------------------------------------------------------------------------------
+2025-11-16 13:21:26,370 - INFO -   1. A100        202.8 TFLOP × eff @ $4.10/h =   49.5 TFLOP/$
+2025-11-16 13:21:26,370 - INFO -   2. L40          99.6 TFLOP × eff @ $3.42/h =   29.1 TFLOP/$
+2025-11-16 13:21:26,370 - INFO -   3. V100         52.5 TFLOP × eff @ $3.06/h =   17.2 TFLOP/$
+2025-11-16 13:21:26,370 - INFO -   4. A10          56.2 TFLOP × eff @ $4.10/h =   13.7 TFLOP/$
+2025-11-16 13:21:26,370 - INFO - 
+Actual GPU Usage in Solution:
+2025-11-16 13:21:26,370 - INFO - --------------------------------------------------------------------------------
+2025-11-16 13:21:26,370 - INFO -   A100       1 segments, 4 GPUs, 32 layers, $16.39/h (Efficiency rank: #1)
+2025-11-16 13:21:26,371 - INFO - 
+  TOTAL COST: $16.39/hour
+2025-11-16 13:21:26,371 - INFO - 
+Unused GPUs (and why they might not be chosen):
+2025-11-16 13:21:26,371 - INFO - --------------------------------------------------------------------------------
+2025-11-16 13:21:26,371 - INFO -   A10        count=12, $4.10/h, efficiency rank #4
+2025-11-16 13:21:26,371 - INFO -              Max segment size (TP=8): 2 layers
+2025-11-16 13:21:26,371 - INFO -   L40        count=12, $3.42/h, efficiency rank #2
+2025-11-16 13:21:26,371 - INFO -              Max segment size (TP=8): 32 layers
+2025-11-16 13:21:26,371 - INFO -              Hypothetical (5 layers, TP=4): 40209 tokens/s, $13.68/h
+2025-11-16 13:21:26,371 - INFO -   V100       count=12, $3.06/h, efficiency rank #3
+2025-11-16 13:21:26,371 - INFO -              Max segment size (TP=8): 20 layers
+2025-11-16 13:21:26,371 - INFO -              Hypothetical (5 layers, TP=4): 21372 tokens/s, $12.24/h
+2025-11-16 13:21:26,371 - INFO - 
+================================================================================
+2025-11-16 13:21:26,371 - INFO - SEGMENT-LEVEL ANALYSIS
+2025-11-16 13:21:26,371 - INFO - ================================================================================
+2025-11-16 13:21:26,371 - INFO - 
+Bottleneck Throughput: 12583.93 tokens/sec
+2025-11-16 13:21:26,371 - INFO - Bottleneck Segments:
+2025-11-16 13:21:26,371 - INFO -   A100 TP=4, layers 1-32, $16.39/h, 12584 tokens/s
+2025-11-16 13:21:26,371 - INFO - 
+================================================================================
+2025-11-16 13:21:26,371 - INFO - ALTERNATIVE SCENARIO: Single segment with A100 (best efficiency)
+2025-11-16 13:21:26,371 - INFO - ================================================================================
+2025-11-16 13:21:26,371 - INFO - 
+A100 specs:
+2025-11-16 13:21:26,371 - INFO -   Available: 8 GPUs
+2025-11-16 13:21:26,371 - INFO -   Cost: $4.10/hour per GPU
+2025-11-16 13:21:26,371 - INFO -   Max segment size (TP=8): 32 layers
+2025-11-16 13:21:26,371 - INFO -   Model needs: 32 layers
+2025-11-16 13:21:26,372 - INFO - 
+CAN FIT Single segment with TP=8:
+2025-11-16 13:21:26,372 - INFO -   Throughput: 22862 tokens/sec
+2025-11-16 13:21:26,372 - INFO -   Cost: $32.77/hour
+2025-11-16 13:21:26,372 - INFO -   $/M tokens: $0.398165
+2025-11-16 13:21:26,372 - INFO - 
+Comparison with current multi-segment solution:
+2025-11-16 13:21:26,372 - INFO -   Current solution $/M tokens: $1.205609
+2025-11-16 13:21:26,372 - INFO -   Single-segment $/M tokens:   $0.398165
+2025-11-16 13:21:26,372 - WARNING -   SINGLE-SEGMENT is 202.8% BETTER in $/M tokens!
+2025-11-16 13:21:26,372 - WARNING -   The solver found a suboptimal solution!
+2025-11-16 13:21:26,372 - INFO - 
+================================================================================
+2025-11-16 13:21:26,372 - INFO - OBJECTIVE FUNCTION VERIFICATION
+2025-11-16 13:21:26,372 - INFO - ================================================================================
+2025-11-16 13:21:26,372 - INFO -   Result: 3775 tokens/s, $16.39/h, $1.205609/M tokens
+2025-11-16 13:21:26,372 - INFO -   Timing: solve=0.0s, total iteration=0.0s
+2025-11-16 13:21:26,372 - INFO -   OK New best $/M tokens!
+2025-11-16 13:21:26,372 - INFO - 
+[6/9] Budget: $19.66/hour
+2025-11-16 13:21:26,372 - INFO -   Feasible configs: A100×1, A100×2, A100×4, L40×1, L40×2, L40×4, A10×1, A10×2, A10×4, V100×1, V100×2, V100×4
+2025-11-16 13:21:26,372 - INFO -   Constraint update: 0.000s
+Set parameter Threads to value 4
+2025-11-16 13:21:26,373 - INFO - Set parameter Threads to value 4
+2025-11-16 13:21:26,373 - INFO - Using 4 threads for optimization (verified: 4)
+2025-11-16 13:21:26,373 - INFO - CPU count: 64, available: 32
+2025-11-16 13:21:26,373 - INFO - Starting optimization...
+Gurobi Optimizer version 13.0.0 build v13.0.0rc1 (linux64 - "Ubuntu 24.04.3 LTS")
+2025-11-16 13:21:26,373 - INFO - Gurobi Optimizer version 13.0.0 build v13.0.0rc1 (linux64 - "Ubuntu 24.04.3 LTS")
+
+2025-11-16 13:21:26,373 - INFO - 
+CPU model: Intel(R) Xeon(R) Gold 6142 CPU @ 2.60GHz, instruction set [SSE2|AVX|AVX2|AVX512]
+2025-11-16 13:21:26,373 - INFO - CPU model: Intel(R) Xeon(R) Gold 6142 CPU @ 2.60GHz, instruction set [SSE2|AVX|AVX2|AVX512]
+Thread count: 32 physical cores, 64 logical processors, using up to 4 threads
+2025-11-16 13:21:26,373 - INFO - Thread count: 32 physical cores, 64 logical processors, using up to 4 threads
+
+2025-11-16 13:21:26,373 - INFO - 
+Non-default parameters:
+2025-11-16 13:21:26,373 - INFO - Non-default parameters:
+TimeLimit  300
+2025-11-16 13:21:26,373 - INFO - TimeLimit  300
+MIPGap  0.05
+2025-11-16 13:21:26,373 - INFO - MIPGap  0.05
+Heuristics  0.2
+2025-11-16 13:21:26,373 - INFO - Heuristics  0.2
+NodefileStart  0.5
+2025-11-16 13:21:26,373 - INFO - NodefileStart  0.5
+Cuts  2
+2025-11-16 13:21:26,373 - INFO - Cuts  2
+ConcurrentMIP  4
+2025-11-16 13:21:26,373 - INFO - ConcurrentMIP  4
+Presolve  1
+2025-11-16 13:21:26,373 - INFO - Presolve  1
+Threads  4
+2025-11-16 13:21:26,373 - INFO - Threads  4
+
+2025-11-16 13:21:26,373 - INFO - 
+Academic license 2415150 - for non-commercial use only - registered to ga___@illinois.edu
+2025-11-16 13:21:26,374 - INFO - Academic license 2415150 - for non-commercial use only - registered to ga___@illinois.edu
+Optimize a model with 5568 rows, 2200 columns and 20637 nonzeros (Max)
+2025-11-16 13:21:26,374 - INFO - Optimize a model with 5568 rows, 2200 columns and 20637 nonzeros (Max)
+Model fingerprint: 0xdea748af
+2025-11-16 13:21:26,374 - INFO - Model fingerprint: 0xdea748af
+Model has 1 linear objective coefficients
+2025-11-16 13:21:26,374 - INFO - Model has 1 linear objective coefficients
+Variable types: 924 continuous, 1276 integer (1276 binary)
+2025-11-16 13:21:26,374 - INFO - Variable types: 924 continuous, 1276 integer (1276 binary)
+Coefficient statistics:
+2025-11-16 13:21:26,374 - INFO - Coefficient statistics:
+  Matrix range     [1e+00, 3e+07]
+2025-11-16 13:21:26,374 - INFO -   Matrix range     [1e+00, 3e+07]
+  Objective range  [1e+00, 1e+00]
+2025-11-16 13:21:26,374 - INFO -   Objective range  [1e+00, 1e+00]
+  Bounds range     [1e+00, 1e+00]
+2025-11-16 13:21:26,374 - INFO -   Bounds range     [1e+00, 1e+00]
+  RHS range        [1e+00, 3e+07]
+2025-11-16 13:21:26,374 - INFO -   RHS range        [1e+00, 3e+07]
+
+2025-11-16 13:21:26,374 - INFO - 
+Concurrent MIP optimizer: 4 concurrent instances (1 thread per instance)
+2025-11-16 13:21:26,374 - INFO - Concurrent MIP optimizer: 4 concurrent instances (1 thread per instance)
+
+2025-11-16 13:21:26,374 - INFO - 
+
+2025-11-16 13:21:26,378 - INFO - 
+Loaded user MIP start with objective 12583.9
+2025-11-16 13:21:26,378 - INFO - Loaded user MIP start with objective 12583.9
+
+2025-11-16 13:21:26,378 - INFO - 
+Presolve removed 5568 rows and 2200 columns
+2025-11-16 13:21:26,392 - INFO - Presolve removed 5568 rows and 2200 columns
+Presolve time: 0.01s
+2025-11-16 13:21:26,392 - INFO - Presolve time: 0.01s
+Presolve: All rows and columns removed
+2025-11-16 13:21:26,392 - INFO - Presolve: All rows and columns removed
+
+2025-11-16 13:21:26,393 - INFO - 
+Instance 0 was solved
+2025-11-16 13:21:26,393 - INFO - Instance 0 was solved
+
+2025-11-16 13:21:26,394 - INFO - 
+Explored 0 nodes (0 simplex iterations) in 0.02 seconds (0.01 work units)
+2025-11-16 13:21:26,394 - INFO - Explored 0 nodes (0 simplex iterations) in 0.02 seconds (0.01 work units)
+Thread count was 1 (of 64 available processors)
+2025-11-16 13:21:26,394 - INFO - Thread count was 1 (of 64 available processors)
+
+2025-11-16 13:21:26,394 - INFO - 
+Solution count 1: 12583.9 
+2025-11-16 13:21:26,394 - INFO - Solution count 1: 12583.9 
+
+2025-11-16 13:21:26,394 - INFO - 
+Optimal solution found (tolerance 5.00e-02)
+2025-11-16 13:21:26,394 - INFO - Optimal solution found (tolerance 5.00e-02)
+Best objective 1.258392575569e+04, best bound 1.258392575569e+04, gap 0.0000%
+2025-11-16 13:21:26,394 - INFO - Best objective 1.258392575569e+04, best bound 1.258392575569e+04, gap 0.0000%
+2025-11-16 13:21:26,394 - WARNING - WARNING: Problem solved in presolve (single-threaded)! NodeCount=0
+2025-11-16 13:21:26,394 - WARNING -   Presolve eliminated problem before multi-threaded B&B could start
+2025-11-16 13:21:26,394 - INFO - Optimal solution found in 0.02 seconds
+2025-11-16 13:21:26,394 - INFO -   Nodes explored: 0.0
+2025-11-16 13:21:26,394 - INFO -   Simplex iterations: 0.0
+2025-11-16 13:21:26,395 - INFO - Optimal throughput: 12583.93 tokens/sec
+2025-11-16 13:21:26,395 - INFO - Batch size options: [256]
+2025-11-16 13:21:26,395 - INFO - 
+Throughput Corrections:
+2025-11-16 13:21:26,395 - INFO -   Batch size: 256
+2025-11-16 13:21:26,395 - INFO -   Pipeline stages: 1
+2025-11-16 13:21:26,395 - INFO -   Pipeline bubble efficiency: 100.0% (no pipeline)
+2025-11-16 13:21:26,395 - INFO -   Real-world efficiency: 30.0%
+2025-11-16 13:21:26,395 - INFO -   Combined efficiency: 30.0%
+2025-11-16 13:21:26,395 - INFO -   Raw throughput: 12583.93 tokens/sec
+2025-11-16 13:21:26,395 - INFO -   After pipeline bubbles: 12583.93 tokens/sec
+2025-11-16 13:21:26,395 - INFO -   Final throughput: 3775.18 tokens/sec
+2025-11-16 13:21:26,395 - INFO - 
+================================================================================
+2025-11-16 13:21:26,395 - INFO - SOLUTION ANALYSIS - OBJECTIVE BREAKDOWN
+2025-11-16 13:21:26,395 - INFO - ================================================================================
+2025-11-16 13:21:26,395 - INFO - Batch size options: [256]
+2025-11-16 13:21:26,395 - INFO - 
+Core Metrics:
+2025-11-16 13:21:26,395 - INFO -   Batch Size: 256
+2025-11-16 13:21:26,395 - INFO -   Throughput: 3775.18 tokens/sec
+2025-11-16 13:21:26,395 - INFO -   Cost: $16.39/hour
+2025-11-16 13:21:26,395 - INFO -   $/M tokens: $1.205609
+2025-11-16 13:21:26,400 - INFO - 
+================================================================================
+2025-11-16 13:21:26,400 - INFO - BATCH SIZE ANALYSIS
+2025-11-16 13:21:26,400 - INFO - ================================================================================
+2025-11-16 13:21:26,400 - INFO - Batch size options: [256]
+2025-11-16 13:21:26,400 - INFO - 
+Batch Size Selection:
+2025-11-16 13:21:26,400 - INFO -   Optimal: 256
+2025-11-16 13:21:26,400 - INFO -   Search range: [256, 256]
+2025-11-16 13:21:26,400 - INFO -   Options considered: [256]
+2025-11-16 13:21:26,400 - INFO - 
+Batch Efficiency Factor: 100.0%
+2025-11-16 13:21:26,400 - INFO -   (Larger batches improve GPU utilization)
+2025-11-16 13:21:26,400 - INFO - Optimal utilization (batch >= 32)
+2025-11-16 13:21:26,400 - INFO - 
+================================================================================
+2025-11-16 13:21:26,400 - INFO - ROOFLINE MODEL ANALYSIS
+2025-11-16 13:21:26,400 - INFO - ================================================================================
+2025-11-16 13:21:26,400 - INFO - 
+Performance Bottleneck Analysis (Roofline Model):
+2025-11-16 13:21:26,400 - INFO -   Determines if each segment is compute-bound or memory-bound
+2025-11-16 13:21:26,400 - INFO - --------------------------------------------------------------------------------
+2025-11-16 13:21:26,400 - INFO -   GPU Type   TP   Layers  AI           Ridge        Regime          Bottleneck
+2025-11-16 13:21:26,400 - INFO - --------------------------------------------------------------------------------
+2025-11-16 13:21:26,400 - INFO -   A100       4    32      70235.52     153.02       Compute-bound   GPU Compute
+2025-11-16 13:21:26,400 - INFO - 
+--------------------------------------------------------------------------------
+2025-11-16 13:21:26,400 - INFO - Roofline analysis:
+2025-11-16 13:21:26,400 - INFO - - Arithmetic Intensity (AI) = FLOPs / Byte accessed
+2025-11-16 13:21:26,400 - INFO - - Ridge Point = Peak FLOPS / Peak Memory Bandwidth
+2025-11-16 13:21:26,401 - INFO - - Arithmetic Intensity > Ridge -> Compute-bound (limited by GPU compute)
+2025-11-16 13:21:26,401 - INFO - - Arithmetic Intensity < Ridge -> Memory-bound (limited by memory bandwidth)
+2025-11-16 13:21:26,401 - INFO - - Tensor Parallelism (TP) reduces memory per GPU -> increases AI -> may shift regime
+2025-11-16 13:21:26,401 - INFO - Regime Distribution:
+2025-11-16 13:21:26,401 - INFO - - Compute-bound segments: 1/1 (100%)
+2025-11-16 13:21:26,401 - INFO - - Memory-bound segments:  0/1 (0%)
+2025-11-16 13:21:26,401 - INFO - Most segments are compute-bound.
+2025-11-16 13:21:26,401 - INFO - - Consider GPUs with higher TFLOPS for better performance.
+2025-11-16 13:21:26,401 - INFO - - Memory bandwidth is not the bottleneck here.
+2025-11-16 13:21:26,401 - INFO - 
+================================================================================
+2025-11-16 13:21:26,401 - INFO - SOLUTION ANALYSIS - GPU EFFICIENCY & SELECTION
+2025-11-16 13:21:26,401 - INFO - ================================================================================
+2025-11-16 13:21:26,401 - INFO - 
+OK WORKLOAD IS COMPUTE-BOUND -> TFLOP/$ is the key metric!
+2025-11-16 13:21:26,401 - INFO - 
+GPU Efficiency Ranking (Compute (TFLOP/$) ratio):
+2025-11-16 13:21:26,401 - INFO - --------------------------------------------------------------------------------
+2025-11-16 13:21:26,401 - INFO -   1. A100        202.8 TFLOP × eff @ $4.10/h =   49.5 TFLOP/$
+2025-11-16 13:21:26,401 - INFO -   2. L40          99.6 TFLOP × eff @ $3.42/h =   29.1 TFLOP/$
+2025-11-16 13:21:26,401 - INFO -   3. V100         52.5 TFLOP × eff @ $3.06/h =   17.2 TFLOP/$
+2025-11-16 13:21:26,401 - INFO -   4. A10          56.2 TFLOP × eff @ $4.10/h =   13.7 TFLOP/$
+2025-11-16 13:21:26,401 - INFO - 
+Actual GPU Usage in Solution:
+2025-11-16 13:21:26,401 - INFO - --------------------------------------------------------------------------------
+2025-11-16 13:21:26,401 - INFO -   A100       1 segments, 4 GPUs, 32 layers, $16.39/h (Efficiency rank: #1)
+2025-11-16 13:21:26,401 - INFO - 
+  TOTAL COST: $16.39/hour
+2025-11-16 13:21:26,401 - INFO - 
+Unused GPUs (and why they might not be chosen):
+2025-11-16 13:21:26,401 - INFO - --------------------------------------------------------------------------------
+2025-11-16 13:21:26,401 - INFO -   A10        count=12, $4.10/h, efficiency rank #4
+2025-11-16 13:21:26,401 - INFO -              Max segment size (TP=8): 2 layers
+2025-11-16 13:21:26,401 - INFO -   L40        count=12, $3.42/h, efficiency rank #2
+2025-11-16 13:21:26,402 - INFO -              Max segment size (TP=8): 32 layers
+2025-11-16 13:21:26,402 - INFO -              Hypothetical (5 layers, TP=4): 40209 tokens/s, $13.68/h
+2025-11-16 13:21:26,402 - INFO -   V100       count=12, $3.06/h, efficiency rank #3
+2025-11-16 13:21:26,402 - INFO -              Max segment size (TP=8): 20 layers
+2025-11-16 13:21:26,402 - INFO -              Hypothetical (5 layers, TP=4): 21372 tokens/s, $12.24/h
+2025-11-16 13:21:26,402 - INFO - 
+================================================================================
+2025-11-16 13:21:26,402 - INFO - SEGMENT-LEVEL ANALYSIS
+2025-11-16 13:21:26,402 - INFO - ================================================================================
+2025-11-16 13:21:26,402 - INFO - 
+Bottleneck Throughput: 12583.93 tokens/sec
+2025-11-16 13:21:26,402 - INFO - Bottleneck Segments:
+2025-11-16 13:21:26,402 - INFO -   A100 TP=4, layers 1-32, $16.39/h, 12584 tokens/s
+2025-11-16 13:21:26,402 - INFO - 
+================================================================================
+2025-11-16 13:21:26,402 - INFO - ALTERNATIVE SCENARIO: Single segment with A100 (best efficiency)
+2025-11-16 13:21:26,402 - INFO - ================================================================================
+2025-11-16 13:21:26,402 - INFO - 
+A100 specs:
+2025-11-16 13:21:26,402 - INFO -   Available: 8 GPUs
+2025-11-16 13:21:26,402 - INFO -   Cost: $4.10/hour per GPU
+2025-11-16 13:21:26,402 - INFO -   Max segment size (TP=8): 32 layers
+2025-11-16 13:21:26,402 - INFO -   Model needs: 32 layers
+2025-11-16 13:21:26,402 - INFO - 
+CAN FIT Single segment with TP=8:
+2025-11-16 13:21:26,402 - INFO -   Throughput: 22862 tokens/sec
+2025-11-16 13:21:26,402 - INFO -   Cost: $32.77/hour
+2025-11-16 13:21:26,402 - INFO -   $/M tokens: $0.398165
+2025-11-16 13:21:26,403 - INFO - 
+Comparison with current multi-segment solution:
+2025-11-16 13:21:26,403 - INFO -   Current solution $/M tokens: $1.205609
+2025-11-16 13:21:26,403 - INFO -   Single-segment $/M tokens:   $0.398165
+2025-11-16 13:21:26,403 - WARNING -   SINGLE-SEGMENT is 202.8% BETTER in $/M tokens!
+2025-11-16 13:21:26,403 - WARNING -   The solver found a suboptimal solution!
+2025-11-16 13:21:26,403 - INFO - 
+================================================================================
+2025-11-16 13:21:26,403 - INFO - OBJECTIVE FUNCTION VERIFICATION
+2025-11-16 13:21:26,403 - INFO - ================================================================================
+2025-11-16 13:21:26,403 - INFO -   Result: 3775 tokens/s, $16.39/h, $1.205609/M tokens
+2025-11-16 13:21:26,403 - INFO -   Timing: solve=0.0s, total iteration=0.0s
+2025-11-16 13:21:26,403 - INFO - 
+[7/9] Budget: $24.58/hour
+2025-11-16 13:21:26,403 - INFO -   Feasible configs: A100×1, A100×2, A100×4, L40×1, L40×2, L40×4, A10×1, A10×2, A10×4, V100×1, V100×2, V100×4, V100×8
+2025-11-16 13:21:26,403 - INFO -   Constraint update: 0.000s
+Set parameter Threads to value 4
+2025-11-16 13:21:26,403 - INFO - Set parameter Threads to value 4
+2025-11-16 13:21:26,403 - INFO - Using 4 threads for optimization (verified: 4)
+2025-11-16 13:21:26,403 - INFO - CPU count: 64, available: 32
+2025-11-16 13:21:26,403 - INFO - Starting optimization...
+Gurobi Optimizer version 13.0.0 build v13.0.0rc1 (linux64 - "Ubuntu 24.04.3 LTS")
+2025-11-16 13:21:26,403 - INFO - Gurobi Optimizer version 13.0.0 build v13.0.0rc1 (linux64 - "Ubuntu 24.04.3 LTS")
+
+2025-11-16 13:21:26,403 - INFO - 
+CPU model: Intel(R) Xeon(R) Gold 6142 CPU @ 2.60GHz, instruction set [SSE2|AVX|AVX2|AVX512]
+2025-11-16 13:21:26,403 - INFO - CPU model: Intel(R) Xeon(R) Gold 6142 CPU @ 2.60GHz, instruction set [SSE2|AVX|AVX2|AVX512]
+Thread count: 32 physical cores, 64 logical processors, using up to 4 threads
+2025-11-16 13:21:26,404 - INFO - Thread count: 32 physical cores, 64 logical processors, using up to 4 threads
+
+2025-11-16 13:21:26,404 - INFO - 
+Non-default parameters:
+2025-11-16 13:21:26,404 - INFO - Non-default parameters:
+TimeLimit  300
+2025-11-16 13:21:26,404 - INFO - TimeLimit  300
+MIPGap  0.05
+2025-11-16 13:21:26,404 - INFO - MIPGap  0.05
+Heuristics  0.2
+2025-11-16 13:21:26,404 - INFO - Heuristics  0.2
+NodefileStart  0.5
+2025-11-16 13:21:26,404 - INFO - NodefileStart  0.5
+Cuts  2
+2025-11-16 13:21:26,404 - INFO - Cuts  2
+ConcurrentMIP  4
+2025-11-16 13:21:26,404 - INFO - ConcurrentMIP  4
+Presolve  1
+2025-11-16 13:21:26,404 - INFO - Presolve  1
+Threads  4
+2025-11-16 13:21:26,404 - INFO - Threads  4
+
+2025-11-16 13:21:26,404 - INFO - 
+Academic license 2415150 - for non-commercial use only - registered to ga___@illinois.edu
+2025-11-16 13:21:26,404 - INFO - Academic license 2415150 - for non-commercial use only - registered to ga___@illinois.edu
+Optimize a model with 5568 rows, 2200 columns and 20637 nonzeros (Max)
+2025-11-16 13:21:26,404 - INFO - Optimize a model with 5568 rows, 2200 columns and 20637 nonzeros (Max)
+Model fingerprint: 0x68cc4ba3
+2025-11-16 13:21:26,405 - INFO - Model fingerprint: 0x68cc4ba3
+Model has 1 linear objective coefficients
+2025-11-16 13:21:26,405 - INFO - Model has 1 linear objective coefficients
+Variable types: 924 continuous, 1276 integer (1276 binary)
+2025-11-16 13:21:26,405 - INFO - Variable types: 924 continuous, 1276 integer (1276 binary)
+Coefficient statistics:
+2025-11-16 13:21:26,405 - INFO - Coefficient statistics:
+  Matrix range     [1e+00, 3e+07]
+2025-11-16 13:21:26,405 - INFO -   Matrix range     [1e+00, 3e+07]
+  Objective range  [1e+00, 1e+00]
+2025-11-16 13:21:26,405 - INFO -   Objective range  [1e+00, 1e+00]
+  Bounds range     [1e+00, 1e+00]
+2025-11-16 13:21:26,405 - INFO -   Bounds range     [1e+00, 1e+00]
+  RHS range        [1e+00, 3e+07]
+2025-11-16 13:21:26,405 - INFO -   RHS range        [1e+00, 3e+07]
+
+2025-11-16 13:21:26,405 - INFO - 
+Concurrent MIP optimizer: 4 concurrent instances (1 thread per instance)
+2025-11-16 13:21:26,405 - INFO - Concurrent MIP optimizer: 4 concurrent instances (1 thread per instance)
+
+2025-11-16 13:21:26,405 - INFO - 
+
+2025-11-16 13:21:26,409 - INFO - 
+Loaded user MIP start with objective 12583.9
+2025-11-16 13:21:26,409 - INFO - Loaded user MIP start with objective 12583.9
+
+2025-11-16 13:21:26,409 - INFO - 
+Presolve removed 5568 rows and 2200 columns
+2025-11-16 13:21:26,424 - INFO - Presolve removed 5568 rows and 2200 columns
+Presolve time: 0.01s
+2025-11-16 13:21:26,424 - INFO - Presolve time: 0.01s
+Presolve: All rows and columns removed
+2025-11-16 13:21:26,424 - INFO - Presolve: All rows and columns removed
+
+2025-11-16 13:21:26,424 - INFO - 
+Instance 0 was solved
+2025-11-16 13:21:26,424 - INFO - Instance 0 was solved
+
+2025-11-16 13:21:26,425 - INFO - 
+Explored 0 nodes (0 simplex iterations) in 0.02 seconds (0.01 work units)
+2025-11-16 13:21:26,425 - INFO - Explored 0 nodes (0 simplex iterations) in 0.02 seconds (0.01 work units)
+Thread count was 1 (of 64 available processors)
+2025-11-16 13:21:26,425 - INFO - Thread count was 1 (of 64 available processors)
+
+2025-11-16 13:21:26,425 - INFO - 
+Solution count 1: 12583.9 
+2025-11-16 13:21:26,425 - INFO - Solution count 1: 12583.9 
+
+2025-11-16 13:21:26,425 - INFO - 
+Optimal solution found (tolerance 5.00e-02)
+2025-11-16 13:21:26,425 - INFO - Optimal solution found (tolerance 5.00e-02)
+Best objective 1.258392575569e+04, best bound 1.258392575569e+04, gap 0.0000%
+2025-11-16 13:21:26,425 - INFO - Best objective 1.258392575569e+04, best bound 1.258392575569e+04, gap 0.0000%
+2025-11-16 13:21:26,425 - WARNING - WARNING: Problem solved in presolve (single-threaded)! NodeCount=0
+2025-11-16 13:21:26,425 - WARNING -   Presolve eliminated problem before multi-threaded B&B could start
+2025-11-16 13:21:26,426 - INFO - Optimal solution found in 0.02 seconds
+2025-11-16 13:21:26,426 - INFO -   Nodes explored: 0.0
+2025-11-16 13:21:26,426 - INFO -   Simplex iterations: 0.0
+2025-11-16 13:21:26,426 - INFO - Optimal throughput: 12583.93 tokens/sec
+2025-11-16 13:21:26,426 - INFO - Batch size options: [256]
+2025-11-16 13:21:26,426 - INFO - 
+Throughput Corrections:
+2025-11-16 13:21:26,426 - INFO -   Batch size: 256
+2025-11-16 13:21:26,426 - INFO -   Pipeline stages: 1
+2025-11-16 13:21:26,426 - INFO -   Pipeline bubble efficiency: 100.0% (no pipeline)
+2025-11-16 13:21:26,426 - INFO -   Real-world efficiency: 30.0%
+2025-11-16 13:21:26,426 - INFO -   Combined efficiency: 30.0%
+2025-11-16 13:21:26,426 - INFO -   Raw throughput: 12583.93 tokens/sec
+2025-11-16 13:21:26,426 - INFO -   After pipeline bubbles: 12583.93 tokens/sec
+2025-11-16 13:21:26,426 - INFO -   Final throughput: 3775.18 tokens/sec
+2025-11-16 13:21:26,426 - INFO - 
+================================================================================
+2025-11-16 13:21:26,426 - INFO - SOLUTION ANALYSIS - OBJECTIVE BREAKDOWN
+2025-11-16 13:21:26,426 - INFO - ================================================================================
+2025-11-16 13:21:26,426 - INFO - Batch size options: [256]
+2025-11-16 13:21:26,426 - INFO - 
+Core Metrics:
+2025-11-16 13:21:26,426 - INFO -   Batch Size: 256
+2025-11-16 13:21:26,426 - INFO -   Throughput: 3775.18 tokens/sec
+2025-11-16 13:21:26,426 - INFO -   Cost: $16.39/hour
+2025-11-16 13:21:26,426 - INFO -   $/M tokens: $1.205609
+2025-11-16 13:21:26,431 - INFO - 
+================================================================================
+2025-11-16 13:21:26,431 - INFO - BATCH SIZE ANALYSIS
+2025-11-16 13:21:26,431 - INFO - ================================================================================
+2025-11-16 13:21:26,431 - INFO - Batch size options: [256]
+2025-11-16 13:21:26,431 - INFO - 
+Batch Size Selection:
+2025-11-16 13:21:26,431 - INFO -   Optimal: 256
+2025-11-16 13:21:26,431 - INFO -   Search range: [256, 256]
+2025-11-16 13:21:26,431 - INFO -   Options considered: [256]
+2025-11-16 13:21:26,431 - INFO - 
+Batch Efficiency Factor: 100.0%
+2025-11-16 13:21:26,431 - INFO -   (Larger batches improve GPU utilization)
+2025-11-16 13:21:26,431 - INFO - Optimal utilization (batch >= 32)
+2025-11-16 13:21:26,431 - INFO - 
+================================================================================
+2025-11-16 13:21:26,431 - INFO - ROOFLINE MODEL ANALYSIS
+2025-11-16 13:21:26,431 - INFO - ================================================================================
+2025-11-16 13:21:26,431 - INFO - 
+Performance Bottleneck Analysis (Roofline Model):
+2025-11-16 13:21:26,431 - INFO -   Determines if each segment is compute-bound or memory-bound
+2025-11-16 13:21:26,431 - INFO - --------------------------------------------------------------------------------
+2025-11-16 13:21:26,431 - INFO -   GPU Type   TP   Layers  AI           Ridge        Regime          Bottleneck
+2025-11-16 13:21:26,431 - INFO - --------------------------------------------------------------------------------
+2025-11-16 13:21:26,432 - INFO -   A100       4    32      70235.52     153.02       Compute-bound   GPU Compute
+2025-11-16 13:21:26,432 - INFO - 
+--------------------------------------------------------------------------------
+2025-11-16 13:21:26,432 - INFO - Roofline analysis:
+2025-11-16 13:21:26,432 - INFO - - Arithmetic Intensity (AI) = FLOPs / Byte accessed
+2025-11-16 13:21:26,432 - INFO - - Ridge Point = Peak FLOPS / Peak Memory Bandwidth
+2025-11-16 13:21:26,432 - INFO - - Arithmetic Intensity > Ridge -> Compute-bound (limited by GPU compute)
+2025-11-16 13:21:26,432 - INFO - - Arithmetic Intensity < Ridge -> Memory-bound (limited by memory bandwidth)
+2025-11-16 13:21:26,432 - INFO - - Tensor Parallelism (TP) reduces memory per GPU -> increases AI -> may shift regime
+2025-11-16 13:21:26,432 - INFO - Regime Distribution:
+2025-11-16 13:21:26,432 - INFO - - Compute-bound segments: 1/1 (100%)
+2025-11-16 13:21:26,432 - INFO - - Memory-bound segments:  0/1 (0%)
+2025-11-16 13:21:26,432 - INFO - Most segments are compute-bound.
+2025-11-16 13:21:26,432 - INFO - - Consider GPUs with higher TFLOPS for better performance.
+2025-11-16 13:21:26,432 - INFO - - Memory bandwidth is not the bottleneck here.
+2025-11-16 13:21:26,432 - INFO - 
+================================================================================
+2025-11-16 13:21:26,432 - INFO - SOLUTION ANALYSIS - GPU EFFICIENCY & SELECTION
+2025-11-16 13:21:26,432 - INFO - ================================================================================
+2025-11-16 13:21:26,432 - INFO - 
+OK WORKLOAD IS COMPUTE-BOUND -> TFLOP/$ is the key metric!
+2025-11-16 13:21:26,432 - INFO - 
+GPU Efficiency Ranking (Compute (TFLOP/$) ratio):
+2025-11-16 13:21:26,432 - INFO - --------------------------------------------------------------------------------
+2025-11-16 13:21:26,432 - INFO -   1. A100        202.8 TFLOP × eff @ $4.10/h =   49.5 TFLOP/$
+2025-11-16 13:21:26,432 - INFO -   2. L40          99.6 TFLOP × eff @ $3.42/h =   29.1 TFLOP/$
+2025-11-16 13:21:26,432 - INFO -   3. V100         52.5 TFLOP × eff @ $3.06/h =   17.2 TFLOP/$
+2025-11-16 13:21:26,432 - INFO -   4. A10          56.2 TFLOP × eff @ $4.10/h =   13.7 TFLOP/$
+2025-11-16 13:21:26,432 - INFO - 
+Actual GPU Usage in Solution:
+2025-11-16 13:21:26,432 - INFO - --------------------------------------------------------------------------------
+2025-11-16 13:21:26,432 - INFO -   A100       1 segments, 4 GPUs, 32 layers, $16.39/h (Efficiency rank: #1)
+2025-11-16 13:21:26,432 - INFO - 
+  TOTAL COST: $16.39/hour
+2025-11-16 13:21:26,432 - INFO - 
+Unused GPUs (and why they might not be chosen):
+2025-11-16 13:21:26,432 - INFO - --------------------------------------------------------------------------------
+2025-11-16 13:21:26,433 - INFO -   A10        count=12, $4.10/h, efficiency rank #4
+2025-11-16 13:21:26,433 - INFO -              Max segment size (TP=8): 2 layers
+2025-11-16 13:21:26,433 - INFO -   L40        count=12, $3.42/h, efficiency rank #2
+2025-11-16 13:21:26,433 - INFO -              Max segment size (TP=8): 32 layers
+2025-11-16 13:21:26,433 - INFO -              Hypothetical (5 layers, TP=4): 40209 tokens/s, $13.68/h
+2025-11-16 13:21:26,433 - INFO -   V100       count=12, $3.06/h, efficiency rank #3
+2025-11-16 13:21:26,433 - INFO -              Max segment size (TP=8): 20 layers
+2025-11-16 13:21:26,433 - INFO -              Hypothetical (5 layers, TP=4): 21372 tokens/s, $12.24/h
+2025-11-16 13:21:26,433 - INFO - 
+================================================================================
+2025-11-16 13:21:26,433 - INFO - SEGMENT-LEVEL ANALYSIS
+2025-11-16 13:21:26,433 - INFO - ================================================================================
+2025-11-16 13:21:26,433 - INFO - 
+Bottleneck Throughput: 12583.93 tokens/sec
+2025-11-16 13:21:26,433 - INFO - Bottleneck Segments:
+2025-11-16 13:21:26,433 - INFO -   A100 TP=4, layers 1-32, $16.39/h, 12584 tokens/s
+2025-11-16 13:21:26,433 - INFO - 
+================================================================================
+2025-11-16 13:21:26,433 - INFO - ALTERNATIVE SCENARIO: Single segment with A100 (best efficiency)
+2025-11-16 13:21:26,433 - INFO - ================================================================================
+2025-11-16 13:21:26,433 - INFO - 
+A100 specs:
+2025-11-16 13:21:26,433 - INFO -   Available: 8 GPUs
+2025-11-16 13:21:26,433 - INFO -   Cost: $4.10/hour per GPU
+2025-11-16 13:21:26,433 - INFO -   Max segment size (TP=8): 32 layers
+2025-11-16 13:21:26,433 - INFO -   Model needs: 32 layers
+2025-11-16 13:21:26,433 - INFO - 
+CAN FIT Single segment with TP=8:
+2025-11-16 13:21:26,434 - INFO -   Throughput: 22862 tokens/sec
+2025-11-16 13:21:26,434 - INFO -   Cost: $32.77/hour
+2025-11-16 13:21:26,434 - INFO -   $/M tokens: $0.398165
+2025-11-16 13:21:26,434 - INFO - 
+Comparison with current multi-segment solution:
+2025-11-16 13:21:26,434 - INFO -   Current solution $/M tokens: $1.205609
+2025-11-16 13:21:26,434 - INFO -   Single-segment $/M tokens:   $0.398165
+2025-11-16 13:21:26,434 - WARNING -   SINGLE-SEGMENT is 202.8% BETTER in $/M tokens!
+2025-11-16 13:21:26,434 - WARNING -   The solver found a suboptimal solution!
+2025-11-16 13:21:26,434 - INFO - 
+================================================================================
+2025-11-16 13:21:26,434 - INFO - OBJECTIVE FUNCTION VERIFICATION
+2025-11-16 13:21:26,434 - INFO - ================================================================================
+2025-11-16 13:21:26,434 - INFO -   Result: 3775 tokens/s, $16.39/h, $1.205609/M tokens
+2025-11-16 13:21:26,434 - INFO -   Timing: solve=0.0s, total iteration=0.0s
+2025-11-16 13:21:26,434 - INFO - 
+[8/9] Budget: $157.30/hour
+2025-11-16 13:21:26,434 - INFO -   Feasible configs: A100×1, A100×2, A100×4, A100×8, L40×1, L40×2, L40×4, L40×8, A10×1, A10×2, A10×4, A10×8, V100×1, V100×2, V100×4, V100×8
+2025-11-16 13:21:26,434 - INFO -   Constraint update: 0.000s
+Set parameter Threads to value 4
+2025-11-16 13:21:26,434 - INFO - Set parameter Threads to value 4
+2025-11-16 13:21:26,434 - INFO - Using 4 threads for optimization (verified: 4)
+2025-11-16 13:21:26,434 - INFO - CPU count: 64, available: 32
+2025-11-16 13:21:26,434 - INFO - Starting optimization...
+Gurobi Optimizer version 13.0.0 build v13.0.0rc1 (linux64 - "Ubuntu 24.04.3 LTS")
+2025-11-16 13:21:26,435 - INFO - Gurobi Optimizer version 13.0.0 build v13.0.0rc1 (linux64 - "Ubuntu 24.04.3 LTS")
+
+2025-11-16 13:21:26,435 - INFO - 
+CPU model: Intel(R) Xeon(R) Gold 6142 CPU @ 2.60GHz, instruction set [SSE2|AVX|AVX2|AVX512]
+2025-11-16 13:21:26,435 - INFO - CPU model: Intel(R) Xeon(R) Gold 6142 CPU @ 2.60GHz, instruction set [SSE2|AVX|AVX2|AVX512]
+Thread count: 32 physical cores, 64 logical processors, using up to 4 threads
+2025-11-16 13:21:26,435 - INFO - Thread count: 32 physical cores, 64 logical processors, using up to 4 threads
+
+2025-11-16 13:21:26,435 - INFO - 
+Non-default parameters:
+2025-11-16 13:21:26,435 - INFO - Non-default parameters:
+TimeLimit  300
+2025-11-16 13:21:26,435 - INFO - TimeLimit  300
+MIPGap  0.05
+2025-11-16 13:21:26,435 - INFO - MIPGap  0.05
+Heuristics  0.2
+2025-11-16 13:21:26,435 - INFO - Heuristics  0.2
+NodefileStart  0.5
+2025-11-16 13:21:26,435 - INFO - NodefileStart  0.5
+Cuts  2
+2025-11-16 13:21:26,435 - INFO - Cuts  2
+ConcurrentMIP  4
+2025-11-16 13:21:26,435 - INFO - ConcurrentMIP  4
+Presolve  1
+2025-11-16 13:21:26,435 - INFO - Presolve  1
+Threads  4
+2025-11-16 13:21:26,435 - INFO - Threads  4
+
+2025-11-16 13:21:26,435 - INFO - 
+Academic license 2415150 - for non-commercial use only - registered to ga___@illinois.edu
+2025-11-16 13:21:26,435 - INFO - Academic license 2415150 - for non-commercial use only - registered to ga___@illinois.edu
+Optimize a model with 5568 rows, 2200 columns and 20637 nonzeros (Max)
+2025-11-16 13:21:26,435 - INFO - Optimize a model with 5568 rows, 2200 columns and 20637 nonzeros (Max)
+Model fingerprint: 0x422e13a5
+2025-11-16 13:21:26,436 - INFO - Model fingerprint: 0x422e13a5
+Model has 1 linear objective coefficients
+2025-11-16 13:21:26,436 - INFO - Model has 1 linear objective coefficients
+Variable types: 924 continuous, 1276 integer (1276 binary)
+2025-11-16 13:21:26,436 - INFO - Variable types: 924 continuous, 1276 integer (1276 binary)
+Coefficient statistics:
+2025-11-16 13:21:26,436 - INFO - Coefficient statistics:
+  Matrix range     [1e+00, 3e+07]
+2025-11-16 13:21:26,436 - INFO -   Matrix range     [1e+00, 3e+07]
+  Objective range  [1e+00, 1e+00]
+2025-11-16 13:21:26,436 - INFO -   Objective range  [1e+00, 1e+00]
+  Bounds range     [1e+00, 1e+00]
+2025-11-16 13:21:26,436 - INFO -   Bounds range     [1e+00, 1e+00]
+  RHS range        [1e+00, 3e+07]
+2025-11-16 13:21:26,436 - INFO -   RHS range        [1e+00, 3e+07]
+
+2025-11-16 13:21:26,436 - INFO - 
+Concurrent MIP optimizer: 4 concurrent instances (1 thread per instance)
+2025-11-16 13:21:26,436 - INFO - Concurrent MIP optimizer: 4 concurrent instances (1 thread per instance)
+
+2025-11-16 13:21:26,436 - INFO - 
+
+2025-11-16 13:21:26,440 - INFO - 
+Loaded user MIP start with objective 12583.9
+2025-11-16 13:21:26,440 - INFO - Loaded user MIP start with objective 12583.9
+
+2025-11-16 13:21:26,440 - INFO - 
+Presolve removed 5568 rows and 2200 columns
+2025-11-16 13:21:26,455 - INFO - Presolve removed 5568 rows and 2200 columns
+Presolve time: 0.02s
+2025-11-16 13:21:26,455 - INFO - Presolve time: 0.02s
+Presolve: All rows and columns removed
+2025-11-16 13:21:26,456 - INFO - Presolve: All rows and columns removed
+
+2025-11-16 13:21:26,456 - INFO - 
+Instance 0 was solved
+2025-11-16 13:21:26,457 - INFO - Instance 0 was solved
+
+2025-11-16 13:21:26,457 - INFO - 
+Explored 0 nodes (0 simplex iterations) in 0.02 seconds (0.01 work units)
+2025-11-16 13:21:26,457 - INFO - Explored 0 nodes (0 simplex iterations) in 0.02 seconds (0.01 work units)
+Thread count was 1 (of 64 available processors)
+2025-11-16 13:21:26,457 - INFO - Thread count was 1 (of 64 available processors)
+
+2025-11-16 13:21:26,457 - INFO - 
+Solution count 2: 22861.8 12583.9 
+2025-11-16 13:21:26,457 - INFO - Solution count 2: 22861.8 12583.9 
+No other solutions better than 0
+2025-11-16 13:21:26,457 - INFO - No other solutions better than 0
+
+2025-11-16 13:21:26,457 - INFO - 
+Optimal solution found (tolerance 5.00e-02)
+2025-11-16 13:21:26,457 - INFO - Optimal solution found (tolerance 5.00e-02)
+Best objective 2.286184433001e+04, best bound 2.286184433001e+04, gap 0.0000%
+2025-11-16 13:21:26,457 - INFO - Best objective 2.286184433001e+04, best bound 2.286184433001e+04, gap 0.0000%
+2025-11-16 13:21:26,458 - WARNING - WARNING: Problem solved in presolve (single-threaded)! NodeCount=0
+2025-11-16 13:21:26,458 - WARNING -   Presolve eliminated problem before multi-threaded B&B could start
+2025-11-16 13:21:26,458 - INFO - Optimal solution found in 0.02 seconds
+2025-11-16 13:21:26,458 - INFO -   Nodes explored: 0.0
+2025-11-16 13:21:26,458 - INFO -   Simplex iterations: 0.0
+2025-11-16 13:21:26,458 - INFO - Optimal throughput: 22861.84 tokens/sec
+2025-11-16 13:21:26,458 - INFO - Batch size options: [256]
+2025-11-16 13:21:26,458 - INFO - 
+Throughput Corrections:
+2025-11-16 13:21:26,458 - INFO -   Batch size: 256
+2025-11-16 13:21:26,458 - INFO -   Pipeline stages: 1
+2025-11-16 13:21:26,458 - INFO -   Pipeline bubble efficiency: 100.0% (no pipeline)
+2025-11-16 13:21:26,458 - INFO -   Real-world efficiency: 30.0%
+2025-11-16 13:21:26,458 - INFO -   Combined efficiency: 30.0%
+2025-11-16 13:21:26,458 - INFO -   Raw throughput: 22861.84 tokens/sec
+2025-11-16 13:21:26,458 - INFO -   After pipeline bubbles: 22861.84 tokens/sec
+2025-11-16 13:21:26,458 - INFO -   Final throughput: 6858.55 tokens/sec
+2025-11-16 13:21:26,458 - INFO - 
+================================================================================
+2025-11-16 13:21:26,458 - INFO - SOLUTION ANALYSIS - OBJECTIVE BREAKDOWN
+2025-11-16 13:21:26,458 - INFO - ================================================================================
+2025-11-16 13:21:26,458 - INFO - Batch size options: [256]
+2025-11-16 13:21:26,458 - INFO - 
+Core Metrics:
+2025-11-16 13:21:26,458 - INFO -   Batch Size: 256
+2025-11-16 13:21:26,458 - INFO -   Throughput: 6858.55 tokens/sec
+2025-11-16 13:21:26,458 - INFO -   Cost: $32.77/hour
+2025-11-16 13:21:26,458 - INFO -   $/M tokens: $1.327215
+2025-11-16 13:21:26,463 - INFO - 
+================================================================================
+2025-11-16 13:21:26,463 - INFO - BATCH SIZE ANALYSIS
+2025-11-16 13:21:26,463 - INFO - ================================================================================
+2025-11-16 13:21:26,463 - INFO - Batch size options: [256]
+2025-11-16 13:21:26,463 - INFO - 
+Batch Size Selection:
+2025-11-16 13:21:26,463 - INFO -   Optimal: 256
+2025-11-16 13:21:26,463 - INFO -   Search range: [256, 256]
+2025-11-16 13:21:26,463 - INFO -   Options considered: [256]
+2025-11-16 13:21:26,463 - INFO - 
+Batch Efficiency Factor: 100.0%
+2025-11-16 13:21:26,463 - INFO -   (Larger batches improve GPU utilization)
+2025-11-16 13:21:26,463 - INFO - Optimal utilization (batch >= 32)
+2025-11-16 13:21:26,463 - INFO - 
+================================================================================
+2025-11-16 13:21:26,463 - INFO - ROOFLINE MODEL ANALYSIS
+2025-11-16 13:21:26,463 - INFO - ================================================================================
+2025-11-16 13:21:26,463 - INFO - 
+Performance Bottleneck Analysis (Roofline Model):
+2025-11-16 13:21:26,463 - INFO -   Determines if each segment is compute-bound or memory-bound
+2025-11-16 13:21:26,463 - INFO - --------------------------------------------------------------------------------
+2025-11-16 13:21:26,463 - INFO -   GPU Type   TP   Layers  AI           Ridge        Regime          Bottleneck
+2025-11-16 13:21:26,464 - INFO - --------------------------------------------------------------------------------
+2025-11-16 13:21:26,464 - INFO -   A100       8    32      84807.19     153.02       Compute-bound   GPU Compute
+2025-11-16 13:21:26,464 - INFO - 
+--------------------------------------------------------------------------------
+2025-11-16 13:21:26,464 - INFO - Roofline analysis:
+2025-11-16 13:21:26,464 - INFO - - Arithmetic Intensity (AI) = FLOPs / Byte accessed
+2025-11-16 13:21:26,464 - INFO - - Ridge Point = Peak FLOPS / Peak Memory Bandwidth
+2025-11-16 13:21:26,464 - INFO - - Arithmetic Intensity > Ridge -> Compute-bound (limited by GPU compute)
+2025-11-16 13:21:26,464 - INFO - - Arithmetic Intensity < Ridge -> Memory-bound (limited by memory bandwidth)
+2025-11-16 13:21:26,464 - INFO - - Tensor Parallelism (TP) reduces memory per GPU -> increases AI -> may shift regime
+2025-11-16 13:21:26,464 - INFO - Regime Distribution:
+2025-11-16 13:21:26,464 - INFO - - Compute-bound segments: 1/1 (100%)
+2025-11-16 13:21:26,464 - INFO - - Memory-bound segments:  0/1 (0%)
+2025-11-16 13:21:26,464 - INFO - Most segments are compute-bound.
+2025-11-16 13:21:26,464 - INFO - - Consider GPUs with higher TFLOPS for better performance.
+2025-11-16 13:21:26,464 - INFO - - Memory bandwidth is not the bottleneck here.
+2025-11-16 13:21:26,464 - INFO - 
+================================================================================
+2025-11-16 13:21:26,464 - INFO - SOLUTION ANALYSIS - GPU EFFICIENCY & SELECTION
+2025-11-16 13:21:26,464 - INFO - ================================================================================
+2025-11-16 13:21:26,464 - INFO - 
+OK WORKLOAD IS COMPUTE-BOUND -> TFLOP/$ is the key metric!
+2025-11-16 13:21:26,464 - INFO - 
+GPU Efficiency Ranking (Compute (TFLOP/$) ratio):
+2025-11-16 13:21:26,464 - INFO - --------------------------------------------------------------------------------
+2025-11-16 13:21:26,464 - INFO -   1. A100        202.8 TFLOP × eff @ $4.10/h =   49.5 TFLOP/$
+2025-11-16 13:21:26,464 - INFO -   2. L40          99.6 TFLOP × eff @ $3.42/h =   29.1 TFLOP/$
+2025-11-16 13:21:26,464 - INFO -   3. V100         52.5 TFLOP × eff @ $3.06/h =   17.2 TFLOP/$
+2025-11-16 13:21:26,464 - INFO -   4. A10          56.2 TFLOP × eff @ $4.10/h =   13.7 TFLOP/$
+2025-11-16 13:21:26,464 - INFO - 
+Actual GPU Usage in Solution:
+2025-11-16 13:21:26,464 - INFO - --------------------------------------------------------------------------------
+2025-11-16 13:21:26,464 - INFO -   A100       1 segments, 8 GPUs, 32 layers, $32.77/h (Efficiency rank: #1)
+2025-11-16 13:21:26,464 - INFO - 
+  TOTAL COST: $32.77/hour
+2025-11-16 13:21:26,465 - INFO - 
+Unused GPUs (and why they might not be chosen):
+2025-11-16 13:21:26,465 - INFO - --------------------------------------------------------------------------------
+2025-11-16 13:21:26,465 - INFO -   A10        count=12, $4.10/h, efficiency rank #4
+2025-11-16 13:21:26,465 - INFO -              Max segment size (TP=8): 2 layers
+2025-11-16 13:21:26,465 - INFO -   L40        count=12, $3.42/h, efficiency rank #2
+2025-11-16 13:21:26,465 - INFO -              Max segment size (TP=8): 32 layers
+2025-11-16 13:21:26,465 - INFO -              Hypothetical (5 layers, TP=4): 40209 tokens/s, $13.68/h
+2025-11-16 13:21:26,465 - INFO -   V100       count=12, $3.06/h, efficiency rank #3
+2025-11-16 13:21:26,465 - INFO -              Max segment size (TP=8): 20 layers
+2025-11-16 13:21:26,465 - INFO -              Hypothetical (5 layers, TP=4): 21372 tokens/s, $12.24/h
+2025-11-16 13:21:26,465 - INFO - 
+================================================================================
+2025-11-16 13:21:26,465 - INFO - SEGMENT-LEVEL ANALYSIS
+2025-11-16 13:21:26,465 - INFO - ================================================================================
+2025-11-16 13:21:26,465 - INFO - 
+Bottleneck Throughput: 22861.84 tokens/sec
+2025-11-16 13:21:26,465 - INFO - Bottleneck Segments:
+2025-11-16 13:21:26,465 - INFO -   A100 TP=8, layers 1-32, $32.77/h, 22862 tokens/s
+2025-11-16 13:21:26,465 - INFO - 
+================================================================================
+2025-11-16 13:21:26,465 - INFO - ALTERNATIVE SCENARIO: Single segment with A100 (best efficiency)
+2025-11-16 13:21:26,465 - INFO - ================================================================================
+2025-11-16 13:21:26,465 - INFO - 
+A100 specs:
+2025-11-16 13:21:26,465 - INFO -   Available: 8 GPUs
+2025-11-16 13:21:26,465 - INFO -   Cost: $4.10/hour per GPU
+2025-11-16 13:21:26,465 - INFO -   Max segment size (TP=8): 32 layers
+2025-11-16 13:21:26,465 - INFO -   Model needs: 32 layers
+2025-11-16 13:21:26,466 - INFO - 
+CAN FIT Single segment with TP=8:
+2025-11-16 13:21:26,466 - INFO -   Throughput: 22862 tokens/sec
+2025-11-16 13:21:26,466 - INFO -   Cost: $32.77/hour
+2025-11-16 13:21:26,466 - INFO -   $/M tokens: $0.398165
+2025-11-16 13:21:26,466 - INFO - 
+Comparison with current multi-segment solution:
+2025-11-16 13:21:26,466 - INFO -   Current solution $/M tokens: $1.327215
+2025-11-16 13:21:26,466 - INFO -   Single-segment $/M tokens:   $0.398165
+2025-11-16 13:21:26,466 - WARNING -   SINGLE-SEGMENT is 233.3% BETTER in $/M tokens!
+2025-11-16 13:21:26,466 - WARNING -   The solver found a suboptimal solution!
+2025-11-16 13:21:26,466 - INFO - 
+================================================================================
+2025-11-16 13:21:26,466 - INFO - OBJECTIVE FUNCTION VERIFICATION
+2025-11-16 13:21:26,466 - INFO - ================================================================================
+2025-11-16 13:21:26,466 - INFO -   Result: 6859 tokens/s, $32.77/h, $1.327215/M tokens
+2025-11-16 13:21:26,466 - INFO -   Timing: solve=0.0s, total iteration=0.0s
+2025-11-16 13:21:26,466 - INFO - 
+[9/9] Budget: $314.59/hour
+2025-11-16 13:21:26,466 - INFO -   Feasible configs: A100×1, A100×2, A100×4, A100×8, L40×1, L40×2, L40×4, L40×8, A10×1, A10×2, A10×4, A10×8, V100×1, V100×2, V100×4, V100×8
+2025-11-16 13:21:26,466 - INFO -   Constraint update: 0.000s
+Set parameter Threads to value 4
+2025-11-16 13:21:26,466 - INFO - Set parameter Threads to value 4
+2025-11-16 13:21:26,467 - INFO - Using 4 threads for optimization (verified: 4)
+2025-11-16 13:21:26,467 - INFO - CPU count: 64, available: 32
+2025-11-16 13:21:26,467 - INFO - Starting optimization...
+Gurobi Optimizer version 13.0.0 build v13.0.0rc1 (linux64 - "Ubuntu 24.04.3 LTS")
+2025-11-16 13:21:26,467 - INFO - Gurobi Optimizer version 13.0.0 build v13.0.0rc1 (linux64 - "Ubuntu 24.04.3 LTS")
+
+2025-11-16 13:21:26,467 - INFO - 
+CPU model: Intel(R) Xeon(R) Gold 6142 CPU @ 2.60GHz, instruction set [SSE2|AVX|AVX2|AVX512]
+2025-11-16 13:21:26,467 - INFO - CPU model: Intel(R) Xeon(R) Gold 6142 CPU @ 2.60GHz, instruction set [SSE2|AVX|AVX2|AVX512]
+Thread count: 32 physical cores, 64 logical processors, using up to 4 threads
+2025-11-16 13:21:26,467 - INFO - Thread count: 32 physical cores, 64 logical processors, using up to 4 threads
+
+2025-11-16 13:21:26,467 - INFO - 
+Non-default parameters:
+2025-11-16 13:21:26,467 - INFO - Non-default parameters:
+TimeLimit  300
+2025-11-16 13:21:26,467 - INFO - TimeLimit  300
+MIPGap  0.05
+2025-11-16 13:21:26,467 - INFO - MIPGap  0.05
+Heuristics  0.2
+2025-11-16 13:21:26,467 - INFO - Heuristics  0.2
+NodefileStart  0.5
+2025-11-16 13:21:26,467 - INFO - NodefileStart  0.5
+Cuts  2
+2025-11-16 13:21:26,467 - INFO - Cuts  2
+ConcurrentMIP  4
+2025-11-16 13:21:26,467 - INFO - ConcurrentMIP  4
+Presolve  1
+2025-11-16 13:21:26,467 - INFO - Presolve  1
+Threads  4
+2025-11-16 13:21:26,467 - INFO - Threads  4
+
+2025-11-16 13:21:26,467 - INFO - 
+Academic license 2415150 - for non-commercial use only - registered to ga___@illinois.edu
+2025-11-16 13:21:26,467 - INFO - Academic license 2415150 - for non-commercial use only - registered to ga___@illinois.edu
+Optimize a model with 5568 rows, 2200 columns and 20637 nonzeros (Max)
+2025-11-16 13:21:26,468 - INFO - Optimize a model with 5568 rows, 2200 columns and 20637 nonzeros (Max)
+Model fingerprint: 0xa03354ee
+2025-11-16 13:21:26,468 - INFO - Model fingerprint: 0xa03354ee
+Model has 1 linear objective coefficients
+2025-11-16 13:21:26,468 - INFO - Model has 1 linear objective coefficients
+Variable types: 924 continuous, 1276 integer (1276 binary)
+2025-11-16 13:21:26,468 - INFO - Variable types: 924 continuous, 1276 integer (1276 binary)
+Coefficient statistics:
+2025-11-16 13:21:26,468 - INFO - Coefficient statistics:
+  Matrix range     [1e+00, 3e+07]
+2025-11-16 13:21:26,468 - INFO -   Matrix range     [1e+00, 3e+07]
+  Objective range  [1e+00, 1e+00]
+2025-11-16 13:21:26,468 - INFO -   Objective range  [1e+00, 1e+00]
+  Bounds range     [1e+00, 1e+00]
+2025-11-16 13:21:26,468 - INFO -   Bounds range     [1e+00, 1e+00]
+  RHS range        [1e+00, 3e+07]
+2025-11-16 13:21:26,468 - INFO -   RHS range        [1e+00, 3e+07]
+
+2025-11-16 13:21:26,468 - INFO - 
+Concurrent MIP optimizer: 4 concurrent instances (1 thread per instance)
+2025-11-16 13:21:26,468 - INFO - Concurrent MIP optimizer: 4 concurrent instances (1 thread per instance)
+
+2025-11-16 13:21:26,468 - INFO - 
+
+2025-11-16 13:21:26,472 - INFO - 
+Loaded user MIP start with objective 22861.8
+2025-11-16 13:21:26,472 - INFO - Loaded user MIP start with objective 22861.8
+
+2025-11-16 13:21:26,472 - INFO - 
+Presolve removed 5565 rows and 2199 columns
+2025-11-16 13:21:26,487 - INFO - Presolve removed 5565 rows and 2199 columns
+Presolve time: 0.01s
+2025-11-16 13:21:26,487 - INFO - Presolve time: 0.01s
+
+2025-11-16 13:21:26,488 - INFO - 
+Instance 1 was solved
+2025-11-16 13:21:26,488 - INFO - Instance 1 was solved
+
+2025-11-16 13:21:26,488 - INFO - 
+Explored 0 nodes (0 simplex iterations) in 0.02 seconds (0.01 work units)
+2025-11-16 13:21:26,488 - INFO - Explored 0 nodes (0 simplex iterations) in 0.02 seconds (0.01 work units)
+Thread count was 1 (of 64 available processors)
+2025-11-16 13:21:26,488 - INFO - Thread count was 1 (of 64 available processors)
+
+2025-11-16 13:21:26,488 - INFO - 
+Solution count 1: 22861.8 
+2025-11-16 13:21:26,488 - INFO - Solution count 1: 22861.8 
+No other solutions better than 0
+2025-11-16 13:21:26,488 - INFO - No other solutions better than 0
+
+2025-11-16 13:21:26,488 - INFO - 
+Optimal solution found (tolerance 5.00e-02)
+2025-11-16 13:21:26,488 - INFO - Optimal solution found (tolerance 5.00e-02)
+Best objective 2.286184433001e+04, best bound 2.286184433001e+04, gap 0.0000%
+2025-11-16 13:21:26,488 - INFO - Best objective 2.286184433001e+04, best bound 2.286184433001e+04, gap 0.0000%
+2025-11-16 13:21:26,489 - WARNING - WARNING: Problem solved in presolve (single-threaded)! NodeCount=0
+2025-11-16 13:21:26,489 - WARNING -   Presolve eliminated problem before multi-threaded B&B could start
+2025-11-16 13:21:26,489 - INFO - Optimal solution found in 0.02 seconds
+2025-11-16 13:21:26,489 - INFO -   Nodes explored: 0.0
+2025-11-16 13:21:26,489 - INFO -   Simplex iterations: 0.0
+2025-11-16 13:21:26,489 - INFO - Optimal throughput: 22861.84 tokens/sec
+2025-11-16 13:21:26,489 - INFO - Batch size options: [256]
+2025-11-16 13:21:26,489 - INFO - 
+Throughput Corrections:
+2025-11-16 13:21:26,489 - INFO -   Batch size: 256
+2025-11-16 13:21:26,489 - INFO -   Pipeline stages: 1
+2025-11-16 13:21:26,489 - INFO -   Pipeline bubble efficiency: 100.0% (no pipeline)
+2025-11-16 13:21:26,489 - INFO -   Real-world efficiency: 30.0%
+2025-11-16 13:21:26,489 - INFO -   Combined efficiency: 30.0%
+2025-11-16 13:21:26,489 - INFO -   Raw throughput: 22861.84 tokens/sec
+2025-11-16 13:21:26,489 - INFO -   After pipeline bubbles: 22861.84 tokens/sec
+2025-11-16 13:21:26,489 - INFO -   Final throughput: 6858.55 tokens/sec
+2025-11-16 13:21:26,489 - INFO - 
+================================================================================
+2025-11-16 13:21:26,489 - INFO - SOLUTION ANALYSIS - OBJECTIVE BREAKDOWN
+2025-11-16 13:21:26,489 - INFO - ================================================================================
+2025-11-16 13:21:26,489 - INFO - Batch size options: [256]
+2025-11-16 13:21:26,489 - INFO - 
+Core Metrics:
+2025-11-16 13:21:26,490 - INFO -   Batch Size: 256
+2025-11-16 13:21:26,490 - INFO -   Throughput: 6858.55 tokens/sec
+2025-11-16 13:21:26,490 - INFO -   Cost: $32.77/hour
+2025-11-16 13:21:26,490 - INFO -   $/M tokens: $1.327215
+2025-11-16 13:21:26,494 - INFO - 
+================================================================================
+2025-11-16 13:21:26,494 - INFO - BATCH SIZE ANALYSIS
+2025-11-16 13:21:26,494 - INFO - ================================================================================
+2025-11-16 13:21:26,494 - INFO - Batch size options: [256]
+2025-11-16 13:21:26,494 - INFO - 
+Batch Size Selection:
+2025-11-16 13:21:26,494 - INFO -   Optimal: 256
+2025-11-16 13:21:26,494 - INFO -   Search range: [256, 256]
+2025-11-16 13:21:26,494 - INFO -   Options considered: [256]
+2025-11-16 13:21:26,494 - INFO - 
+Batch Efficiency Factor: 100.0%
+2025-11-16 13:21:26,494 - INFO -   (Larger batches improve GPU utilization)
+2025-11-16 13:21:26,494 - INFO - Optimal utilization (batch >= 32)
+2025-11-16 13:21:26,494 - INFO - 
+================================================================================
+2025-11-16 13:21:26,495 - INFO - ROOFLINE MODEL ANALYSIS
+2025-11-16 13:21:26,495 - INFO - ================================================================================
+2025-11-16 13:21:26,495 - INFO - 
+Performance Bottleneck Analysis (Roofline Model):
+2025-11-16 13:21:26,495 - INFO -   Determines if each segment is compute-bound or memory-bound
+2025-11-16 13:21:26,495 - INFO - --------------------------------------------------------------------------------
+2025-11-16 13:21:26,495 - INFO -   GPU Type   TP   Layers  AI           Ridge        Regime          Bottleneck
+2025-11-16 13:21:26,495 - INFO - --------------------------------------------------------------------------------
+2025-11-16 13:21:26,495 - INFO -   A100       8    32      84807.19     153.02       Compute-bound   GPU Compute
+2025-11-16 13:21:26,495 - INFO - 
+--------------------------------------------------------------------------------
+2025-11-16 13:21:26,495 - INFO - Roofline analysis:
+2025-11-16 13:21:26,495 - INFO - - Arithmetic Intensity (AI) = FLOPs / Byte accessed
+2025-11-16 13:21:26,495 - INFO - - Ridge Point = Peak FLOPS / Peak Memory Bandwidth
+2025-11-16 13:21:26,495 - INFO - - Arithmetic Intensity > Ridge -> Compute-bound (limited by GPU compute)
+2025-11-16 13:21:26,495 - INFO - - Arithmetic Intensity < Ridge -> Memory-bound (limited by memory bandwidth)
+2025-11-16 13:21:26,495 - INFO - - Tensor Parallelism (TP) reduces memory per GPU -> increases AI -> may shift regime
+2025-11-16 13:21:26,495 - INFO - Regime Distribution:
+2025-11-16 13:21:26,495 - INFO - - Compute-bound segments: 1/1 (100%)
+2025-11-16 13:21:26,495 - INFO - - Memory-bound segments:  0/1 (0%)
+2025-11-16 13:21:26,495 - INFO - Most segments are compute-bound.
+2025-11-16 13:21:26,495 - INFO - - Consider GPUs with higher TFLOPS for better performance.
+2025-11-16 13:21:26,495 - INFO - - Memory bandwidth is not the bottleneck here.
+2025-11-16 13:21:26,495 - INFO - 
+================================================================================
+2025-11-16 13:21:26,495 - INFO - SOLUTION ANALYSIS - GPU EFFICIENCY & SELECTION
+2025-11-16 13:21:26,495 - INFO - ================================================================================
+2025-11-16 13:21:26,495 - INFO - 
+OK WORKLOAD IS COMPUTE-BOUND -> TFLOP/$ is the key metric!
+2025-11-16 13:21:26,495 - INFO - 
+GPU Efficiency Ranking (Compute (TFLOP/$) ratio):
+2025-11-16 13:21:26,495 - INFO - --------------------------------------------------------------------------------
+2025-11-16 13:21:26,495 - INFO -   1. A100        202.8 TFLOP × eff @ $4.10/h =   49.5 TFLOP/$
+2025-11-16 13:21:26,495 - INFO -   2. L40          99.6 TFLOP × eff @ $3.42/h =   29.1 TFLOP/$
+2025-11-16 13:21:26,495 - INFO -   3. V100         52.5 TFLOP × eff @ $3.06/h =   17.2 TFLOP/$
+2025-11-16 13:21:26,496 - INFO -   4. A10          56.2 TFLOP × eff @ $4.10/h =   13.7 TFLOP/$
+2025-11-16 13:21:26,496 - INFO - 
+Actual GPU Usage in Solution:
+2025-11-16 13:21:26,496 - INFO - --------------------------------------------------------------------------------
+2025-11-16 13:21:26,496 - INFO -   A100       1 segments, 8 GPUs, 32 layers, $32.77/h (Efficiency rank: #1)
+2025-11-16 13:21:26,496 - INFO - 
+  TOTAL COST: $32.77/hour
+2025-11-16 13:21:26,496 - INFO - 
+Unused GPUs (and why they might not be chosen):
+2025-11-16 13:21:26,496 - INFO - --------------------------------------------------------------------------------
+2025-11-16 13:21:26,496 - INFO -   A10        count=12, $4.10/h, efficiency rank #4
+2025-11-16 13:21:26,496 - INFO -              Max segment size (TP=8): 2 layers
+2025-11-16 13:21:26,496 - INFO -   L40        count=12, $3.42/h, efficiency rank #2
+2025-11-16 13:21:26,496 - INFO -              Max segment size (TP=8): 32 layers
+2025-11-16 13:21:26,496 - INFO -              Hypothetical (5 layers, TP=4): 40209 tokens/s, $13.68/h
+2025-11-16 13:21:26,496 - INFO -   V100       count=12, $3.06/h, efficiency rank #3
+2025-11-16 13:21:26,496 - INFO -              Max segment size (TP=8): 20 layers
+2025-11-16 13:21:26,496 - INFO -              Hypothetical (5 layers, TP=4): 21372 tokens/s, $12.24/h
+2025-11-16 13:21:26,496 - INFO - 
+================================================================================
+2025-11-16 13:21:26,496 - INFO - SEGMENT-LEVEL ANALYSIS
+2025-11-16 13:21:26,496 - INFO - ================================================================================
+2025-11-16 13:21:26,496 - INFO - 
+Bottleneck Throughput: 22861.84 tokens/sec
+2025-11-16 13:21:26,496 - INFO - Bottleneck Segments:
+2025-11-16 13:21:26,496 - INFO -   A100 TP=8, layers 1-32, $32.77/h, 22862 tokens/s
+2025-11-16 13:21:26,496 - INFO - 
+================================================================================
+2025-11-16 13:21:26,496 - INFO - ALTERNATIVE SCENARIO: Single segment with A100 (best efficiency)
+2025-11-16 13:21:26,496 - INFO - ================================================================================
+2025-11-16 13:21:26,496 - INFO - 
+A100 specs:
+2025-11-16 13:21:26,497 - INFO -   Available: 8 GPUs
+2025-11-16 13:21:26,497 - INFO -   Cost: $4.10/hour per GPU
+2025-11-16 13:21:26,497 - INFO -   Max segment size (TP=8): 32 layers
+2025-11-16 13:21:26,497 - INFO -   Model needs: 32 layers
+2025-11-16 13:21:26,497 - INFO - 
+CAN FIT Single segment with TP=8:
+2025-11-16 13:21:26,497 - INFO -   Throughput: 22862 tokens/sec
+2025-11-16 13:21:26,497 - INFO -   Cost: $32.77/hour
+2025-11-16 13:21:26,497 - INFO -   $/M tokens: $0.398165
+2025-11-16 13:21:26,497 - INFO - 
+Comparison with current multi-segment solution:
+2025-11-16 13:21:26,497 - INFO -   Current solution $/M tokens: $1.327215
+2025-11-16 13:21:26,497 - INFO -   Single-segment $/M tokens:   $0.398165
+2025-11-16 13:21:26,497 - WARNING -   SINGLE-SEGMENT is 233.3% BETTER in $/M tokens!
+2025-11-16 13:21:26,497 - WARNING -   The solver found a suboptimal solution!
+2025-11-16 13:21:26,497 - INFO - 
+================================================================================
+2025-11-16 13:21:26,497 - INFO - OBJECTIVE FUNCTION VERIFICATION
+2025-11-16 13:21:26,497 - INFO - ================================================================================
+2025-11-16 13:21:26,497 - INFO -   Result: 6859 tokens/s, $32.77/h, $1.327215/M tokens
+2025-11-16 13:21:26,497 - INFO -   Timing: solve=0.0s, total iteration=0.0s
+2025-11-16 13:21:26,497 - INFO - 
+Total enumeration time: 0.5s (model build: 0.3s, solving: 0.2s)
+2025-11-16 13:21:26,497 - INFO - 
+================================================================================
+2025-11-16 13:21:26,497 - INFO - ENUMERATION COVERAGE SUMMARY
+2025-11-16 13:21:26,497 - INFO - ================================================================================
+2025-11-16 13:21:26,497 - INFO - Budget points tested: 9
+2025-11-16 13:21:26,497 - INFO - Budget range: $2.45 - $314.59/hour
+2025-11-16 13:21:26,498 - INFO - 
+✓ Explored: 16/16 configurations
+2025-11-16 13:21:26,498 - INFO -   A100 TP=1            $4.10/h
+2025-11-16 13:21:26,498 - INFO -   A100 TP=2            $8.19/h
+2025-11-16 13:21:26,498 - INFO -   A100 TP=4            $16.39/h
+2025-11-16 13:21:26,498 - INFO -   A100 TP=8            $32.77/h
+2025-11-16 13:21:26,498 - INFO -   L40 TP=1             $3.42/h
+2025-11-16 13:21:26,498 - INFO -   L40 TP=2             $6.84/h
+2025-11-16 13:21:26,498 - INFO -   L40 TP=4             $13.68/h
+2025-11-16 13:21:26,498 - INFO -   L40 TP=8             $27.36/h
+2025-11-16 13:21:26,498 - INFO -   A10 TP=1             $4.10/h
+2025-11-16 13:21:26,498 - INFO -   A10 TP=2             $8.19/h
+2025-11-16 13:21:26,498 - INFO -   A10 TP=4             $16.39/h
+2025-11-16 13:21:26,498 - INFO -   A10 TP=8             $32.77/h
+2025-11-16 13:21:26,498 - INFO -   V100 TP=1            $3.06/h
+2025-11-16 13:21:26,498 - INFO -   V100 TP=2            $6.12/h
+2025-11-16 13:21:26,498 - INFO -   V100 TP=4            $12.24/h
+2025-11-16 13:21:26,498 - INFO -   V100 TP=8            $24.48/h
+2025-11-16 13:21:26,498 - INFO - 
+================================================================================
+2025-11-16 13:21:26,498 - INFO - OPTIMAL $/M TOKENS FOUND
+2025-11-16 13:21:26,498 - INFO - ================================================================================
+2025-11-16 13:21:26,498 - INFO - Best $/M tokens: $1.205609
+2025-11-16 13:21:26,498 - INFO -   Throughput: 3775 tokens/sec
+2025-11-16 13:21:26,498 - INFO -   Cost: $16.39/hour
+2025-11-16 13:21:26,498 - INFO -   Pipeline stages: 1
+2025-11-16 13:21:26,498 - INFO - 
+MISSES TARGET: $1.205609 > $0.100000
+2025-11-16 13:21:26,498 - INFO -    1105.6% worse than target (infeasible to meet)
+2025-11-16 13:21:26,498 - INFO - 
+Pareto Frontier (all solutions):
+2025-11-16 13:21:26,498 - INFO -     $1.205609/M tokens: 3775 tokens/s, $16.39/h
+2025-11-16 13:21:26,499 - INFO -     $1.205609/M tokens: 3775 tokens/s, $16.39/h
+2025-11-16 13:21:26,499 - INFO -     $1.205609/M tokens: 3775 tokens/s, $16.39/h
+2025-11-16 13:21:26,499 - INFO -     $1.327215/M tokens: 6859 tokens/s, $32.77/h
+2025-11-16 13:21:26,499 - INFO -     $1.327215/M tokens: 6859 tokens/s, $32.77/h
+2025-11-16 13:21:26,499 - INFO - 
+====================================================================================================
+2025-11-16 13:21:26,499 - INFO - LLM PLACEMENT OPTIMIZATION RESULTS (COST-AWARE)
+2025-11-16 13:21:26,499 - INFO - ====================================================================================================
+2025-11-16 13:21:26,499 - INFO - Model: llama-8b (32 layers)
+2025-11-16 13:21:26,499 - INFO - Batch Size: 256 (optimal), Sequence Length: 4096
+2025-11-16 13:21:26,499 - INFO -   Available batch sizes: [256...256]
+2025-11-16 13:21:26,499 - INFO - TP Configuration: {'A100': 8, 'L40': 8, 'A10': 8, 'V100': 8}
+2025-11-16 13:21:26,499 - INFO - Pipeline Stages: 1 (max: 8)
+2025-11-16 13:21:26,499 - INFO - PERFORMANCE & COST METRICS:
+2025-11-16 13:21:26,499 - INFO - ----------------------------------------------------------------------------------------------------
+2025-11-16 13:21:26,499 - INFO -   Throughput:        3775.18 tokens/sec
+2025-11-16 13:21:26,499 - INFO -   Cost:              $16.39/hour
+2025-11-16 13:21:26,499 - INFO -   $/M tokens:        $1.205609
+2025-11-16 13:21:26,499 - INFO -   Objective Value:   12583.9258
+2025-11-16 13:21:26,499 - INFO - COST COMPARISON vs COMPETITOR:
+2025-11-16 13:21:26,499 - INFO - ----------------------------------------------------------------------------------------------------
+2025-11-16 13:21:26,499 - INFO -   Competitor $/M tokens:  $0.100000
+2025-11-16 13:21:26,499 - INFO -   Our $/M tokens:         $1.205609
+2025-11-16 13:21:26,499 - INFO -   Improvement:            Nah 1105.6% WORSE
+2025-11-16 13:21:26,499 - INFO - GPU ASSIGNMENTS (WITH TP):
+2025-11-16 13:21:26,499 - INFO - ----------------------------------------------------------------------------------------------------
+2025-11-16 13:21:26,499 - INFO - GPU Type     TP   GPU IDs              Layers          Size   Throughput   Cost/h    
+2025-11-16 13:21:26,499 - INFO - ----------------------------------------------------------------------------------------------------
+2025-11-16 13:21:26,499 - INFO - A100         4    [0, 1, 2, 3]         1-32            32     12583.93     $16.39    
+2025-11-16 13:21:26,499 - INFO - 
+====================================================================================================
+2025-11-16 13:21:26,500 - INFO - Solution saved to config/medium/output-20251116_132124/batch_256/solution_with_tp.json
+2025-11-16 13:21:26,500 - INFO - Solution CSV saved with 5 enumeration results to config/medium/output-20251116_132124/batch_256/solution_summary.csv
+2025-11-16 13:21:26,500 - INFO - Total time: 1 seconds
+2025-11-16 13:21:26,514 - INFO - Total solver runtime: 1 seconds
+
+
+
+

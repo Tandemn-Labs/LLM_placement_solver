@@ -12,11 +12,12 @@ function cleanup() {
 }
 
 # Configuration
-# config_dir_list=("config/medium")
-config_dir_list=("config/hal")
+config_dir_list=("config/medium")
+# config_dir_list=("config/hal")
 batch_size_list=(32 64 128 256)
 cost_optimization_method_list=("enumeration")
-network_config_list=("400 200")
+# network_config_list=("400 200")
+network_config_list=("none")
 cloud_provider="AWS"
 solver="solver_constrained_with_tp-2.py"
 
@@ -50,6 +51,7 @@ for config_dir in "${config_dir_list[@]}"; do
                 
                 # Copy all config files to output directory
                 cp ${config_dir}/gpu_pool.csv ${output_log_dir}/ 2>/dev/null || true
+                cp ${config_dir}/network_bandwidth.csv ${output_log_dir}/ 2>/dev/null || true
                 
                 # Modify config.csv to set the specific batch size
                 original_config="${config_dir}/config.csv"
