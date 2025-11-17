@@ -24,7 +24,7 @@ import argparse
 import json
 import logging
 import math
-from typing import Dict, List, Tuple, Optional, FrozenSet
+from typing import Dict, List, Tuple, Optional, FrozenSet, Union
 from dataclasses import dataclass
 import time
 from itertools import product, combinations
@@ -494,11 +494,31 @@ class LLMPlacementSolverWithTP:
                  enable_flow_conservation: bool = True, threads: Optional[int] = None,
                  max_threads: int = 32, generate_network: Optional[Tuple[float, float]] = None,
                  cloud_provider: Optional[str] = None):
-        self.options = {
-            "WLSACCESSID": "790b9c11-45d0-4785-8d99-a5e6414f9321",
-            "WLSSECRET": "adef4738-7bf6-41b8-8dfd-d04e23d53e51",
-            "LICENSEID": 2415150,
-        }
+        
+        def _read_gurobi_wls_file(wls_path: str) -> Dict[str, Union[str, int]]:
+            if not os.path.exists(wls_path):
+                raise FileNotFoundError(f"Missing Gurobi WLS file: {wls_path}")
+
+            options: Dict[str, Union[str, int]] = {}
+            with open(wls_path, "r", encoding="utf-8") as file:
+                for line in file:
+                    line = line.strip()
+                    if not line or line.startswith("#") or "=" not in line:
+                        continue
+
+                    key, value = line.split("=", 1)
+                    key = key.strip().upper()
+                    value = value.strip().strip('"')
+
+                    options[key] = int(value) if key == "LICENSEID" else value
+
+            for required in ("WLSACCESSID", "WLSSECRET", "LICENSEID"):
+                if required not in options:
+                    raise ValueError(f"{required} missing from {wls_path}")
+
+            return options
+        
+        self.options = _read_gurobi_wls_file("gurobi.wls")
         self.env = gp.Env(params=self.options)
         self.config_dir = config_dir
         self.cloud_provider = cloud_provider
@@ -2879,7 +2899,6 @@ class LLMPlacementSolverWithTP:
         logger.info(f"TP Configuration: {self.solution['tp_configuration']}")
         logger.info(f"Pipeline Stages: {self.solution['num_pipeline_stages']} (max: {self.config.max_pipeline_stages})")
         print()
-        # NEW: Performance & Cost Metrics
         logger.info("PERFORMANCE & COST METRICS:")
         logger.info("-" * 100)
         logger.info(f"  Throughput:        {self.solution['throughput_tokens_per_sec']:.2f} tokens/sec")
