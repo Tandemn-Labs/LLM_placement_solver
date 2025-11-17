@@ -1,8 +1,68 @@
 # LLM Placement Solver
 
-**Optimize LLM inference deployment across GPU clusters with Tensor + Pipeline parallelism**
+**Mathematical optimization for LLM inference deployment across heterogeneous GPU clusters**
 
-Find the **optimal balance between throughput and cost** when deploying large language models. This solver automatically determines the best way to distribute model layers across heterogeneous GPU clusters, considering memory constraints, network bandwidth, and cloud pricing.
+Automatically find **optimal layer-to-GPU mappings** with Tensor + Pipeline parallelism. Supports any LLM size (32-80+ layers), heterogeneous GPU clusters, real cloud pricing, and advanced performance modeling with roofline analysis, memory consumption tracking, and network topology awareness.
+
+## Quick Start
+
+### Prerequisites
+```bash
+pip install -r requirements.txt
+```
+**⚠️ Note**: Requires Gurobi license. [Get academic license here](https://www.gurobi.com/academia/academic-program-and-licenses/)
+
+### Basic Usage
+
+Change the setup(config) that you want to run in the `run-batch-sweep.sh` script. e.g., `config_dir_list=("config/medium")`
+
+Run `./run-batch-sweep.sh`
+
+The results will be saved in the `config_dir/output-${timestamp}` directory.
+
+For summary of the results, check the `config_dir/output-${timestamp}/batch_sweep_results.csv` file.
+
+Example output log:
+```text
+RESULTS SUMMARY:
+--------------------------------------------------------------------------------------------
+Batch Size   Throughput      Cost ($/h)      $/M tokens           Status                   
+--------------------------------------------------------------------------------------------
+32           2035.99         8.19            1.117735             ✓ SUCCESS (5 tested)   
+64           2035.99         8.19            1.117735             ✓ SUCCESS (5 tested)   
+128          3775.18         16.39           1.205609             ✓ SUCCESS (5 tested)   
+256          3775.18         16.39           1.205609             ✓ SUCCESS (5 tested)   
+--------------------------------------------------------------------------------------------
+
+* Best batch size = 32
+Cost per M tokens: $1.117735
+```
+
+Example batch_sweep_results.csv:
+```csv
+batch_size,budget_tested,throughput_tokens_per_sec,cost_per_hour,cost_per_million_tokens,total_runtime_hours,total_cost,pipeline_stages,gpu_type,tp_degree,num_gpus,total_layers,is_best,status
+32,8.19,2035.99,8.19,1.117735,0.14,1.12,1,A100,2,2,32,YES,SUCCESS
+32,9.83,2035.99,8.19,1.117735,0.14,1.12,1,A100,2,2,32,YES,SUCCESS
+32,12.29,2035.99,8.19,1.117735,0.14,1.12,1,A100,2,2,32,YES,SUCCESS
+32,157.30,6858.55,32.77,1.327215,0.04,1.33,1,A100,8,8,32,NO,SUCCESS
+32,314.59,6858.55,32.77,1.327215,0.04,1.33,1,A100,8,8,32,NO,SUCCESS
+64,8.19,2035.99,8.19,1.117735,0.14,1.12,1,A100,2,2,32,YES,SUCCESS
+64,9.83,2035.99,8.19,1.117735,0.14,1.12,1,A100,2,2,32,YES,SUCCESS
+64,12.29,2035.99,8.19,1.117735,0.14,1.12,1,A100,2,2,32,YES,SUCCESS
+64,157.30,6858.55,32.77,1.327215,0.04,1.33,1,A100,8,8,32,NO,SUCCESS
+64,314.59,6858.55,32.77,1.327215,0.04,1.33,1,A100,8,8,32,NO,SUCCESS
+128,16.39,3775.18,16.39,1.205609,0.07,1.21,1,A100,4,4,32,YES,SUCCESS
+128,19.66,3775.18,16.39,1.205609,0.07,1.21,1,A100,4,4,32,YES,SUCCESS
+128,24.58,3775.18,16.39,1.205609,0.07,1.21,1,A100,4,4,32,YES,SUCCESS
+128,157.30,6858.55,32.77,1.327215,0.04,1.33,1,A100,8,8,32,NO,SUCCESS
+128,314.59,6858.55,32.77,1.327215,0.04,1.33,1,A100,8,8,32,NO,SUCCESS
+256,16.39,3775.18,16.39,1.205609,0.07,1.21,1,A100,4,4,32,YES,SUCCESS
+256,19.66,3775.18,16.39,1.205609,0.07,1.21,1,A100,4,4,32,YES,SUCCESS
+256,24.58,3775.18,16.39,1.205609,0.07,1.21,1,A100,4,4,32,YES,SUCCESS
+256,157.30,6858.55,32.77,1.327215,0.04,1.33,1,A100,8,8,32,NO,SUCCESS
+256,314.59,6858.55,32.77,1.327215,0.04,1.33,1,A100,8,8,32,NO,SUCCESS
+```
+
 
 ## What It Supports
 
@@ -80,65 +140,6 @@ Result: 2,035 tokens/sec @ $8.19/hour ($1.12 per million tokens)
 - **Cloud Architects** optimizing infrastructure costs
 - **Researchers** studying distributed LLM inference
 - **DevOps Teams** managing GPU clusters
-
-## Quick Start
-
-### Prerequisites
-```bash
-pip install -r requirements.txt
-```
-**⚠️ Note**: Requires Gurobi license. [Get academic license here](https://www.gurobi.com/academia/academic-program-and-licenses/)
-
-### Basic Usage
-
-Change the setup(config) that you want to run in the `run-batch-sweep.sh` script. e.g., `config_dir_list=("config/medium")`
-
-Run `./run-batch-sweep.sh`
-
-The results will be saved in the `config_dir/output-${timestamp}` directory.
-
-For summary of the results, check the `config_dir/output-${timestamp}/batch_sweep_results.csv` file.
-
-Example output log:
-```text
-RESULTS SUMMARY:
---------------------------------------------------------------------------------------------
-Batch Size   Throughput      Cost ($/h)      $/M tokens           Status                   
---------------------------------------------------------------------------------------------
-32           2035.99         8.19            1.117735             ✓ SUCCESS (5 tested)   
-64           2035.99         8.19            1.117735             ✓ SUCCESS (5 tested)   
-128          3775.18         16.39           1.205609             ✓ SUCCESS (5 tested)   
-256          3775.18         16.39           1.205609             ✓ SUCCESS (5 tested)   
---------------------------------------------------------------------------------------------
-
-* Best batch size = 32
-Cost per M tokens: $1.117735
-```
-
-Example batch_sweep_results.csv:
-```csv
-batch_size,budget_tested,throughput_tokens_per_sec,cost_per_hour,cost_per_million_tokens,total_runtime_hours,total_cost,pipeline_stages,gpu_type,tp_degree,num_gpus,total_layers,is_best,status
-32,8.19,2035.99,8.19,1.117735,0.14,1.12,1,A100,2,2,32,YES,SUCCESS
-32,9.83,2035.99,8.19,1.117735,0.14,1.12,1,A100,2,2,32,YES,SUCCESS
-32,12.29,2035.99,8.19,1.117735,0.14,1.12,1,A100,2,2,32,YES,SUCCESS
-32,157.30,6858.55,32.77,1.327215,0.04,1.33,1,A100,8,8,32,NO,SUCCESS
-32,314.59,6858.55,32.77,1.327215,0.04,1.33,1,A100,8,8,32,NO,SUCCESS
-64,8.19,2035.99,8.19,1.117735,0.14,1.12,1,A100,2,2,32,YES,SUCCESS
-64,9.83,2035.99,8.19,1.117735,0.14,1.12,1,A100,2,2,32,YES,SUCCESS
-64,12.29,2035.99,8.19,1.117735,0.14,1.12,1,A100,2,2,32,YES,SUCCESS
-64,157.30,6858.55,32.77,1.327215,0.04,1.33,1,A100,8,8,32,NO,SUCCESS
-64,314.59,6858.55,32.77,1.327215,0.04,1.33,1,A100,8,8,32,NO,SUCCESS
-128,16.39,3775.18,16.39,1.205609,0.07,1.21,1,A100,4,4,32,YES,SUCCESS
-128,19.66,3775.18,16.39,1.205609,0.07,1.21,1,A100,4,4,32,YES,SUCCESS
-128,24.58,3775.18,16.39,1.205609,0.07,1.21,1,A100,4,4,32,YES,SUCCESS
-128,157.30,6858.55,32.77,1.327215,0.04,1.33,1,A100,8,8,32,NO,SUCCESS
-128,314.59,6858.55,32.77,1.327215,0.04,1.33,1,A100,8,8,32,NO,SUCCESS
-256,16.39,3775.18,16.39,1.205609,0.07,1.21,1,A100,4,4,32,YES,SUCCESS
-256,19.66,3775.18,16.39,1.205609,0.07,1.21,1,A100,4,4,32,YES,SUCCESS
-256,24.58,3775.18,16.39,1.205609,0.07,1.21,1,A100,4,4,32,YES,SUCCESS
-256,157.30,6858.55,32.77,1.327215,0.04,1.33,1,A100,8,8,32,NO,SUCCESS
-256,314.59,6858.55,32.77,1.327215,0.04,1.33,1,A100,8,8,32,NO,SUCCESS
-```
 
 ## Configurations:
 
