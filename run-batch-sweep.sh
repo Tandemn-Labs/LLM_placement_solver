@@ -12,14 +12,14 @@ function cleanup() {
 }
 
 # Configuration
-config_dir_list=("config/medium")
-# config_dir_list=("config/hal")
+# config_dir_list=("config/medium")
+config_dir_list=("config/hal")
 batch_size_list=(32 64 128 256)
 cost_optimization_method_list=("enumeration")
-# network_config_list=("400 200")
-network_config_list=("none")
+network_config_list=("400 200")
+# network_config_list=("none")
 cloud_provider="AWS"
-solver="solver_constrained_with_tp-2.py"
+solver="solver.py"
 
 timestamp=$(date +%Y%m%d_%H%M%S)
 

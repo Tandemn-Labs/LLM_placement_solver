@@ -26,7 +26,7 @@ run_on_background=false
 cloud_provider="AWS"
 
 timestamp=$(date +%Y%m%d_%H%M%S)
-solver="solver_constrained_with_tp-2.py"
+solver="solver.py"
 for config_dir in "${config_dir_list[@]}"; do
     for cost_optimization_method in "${cost_optimization_method_list[@]}"; do
         for network_config in "${network_config_list[@]}"; do
