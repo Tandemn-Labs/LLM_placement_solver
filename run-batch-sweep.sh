@@ -12,8 +12,9 @@ function cleanup() {
 }
 
 # Configuration
-# config_dir_list=("config/medium")
-config_dir_list=("config/hal")
+# config_dir_list=("config/large")
+config_dir_list=("config/medium")
+# config_dir_list=("config/hal")
 batch_size_list=(32 64 128 256)
 cost_optimization_method_list=("enumeration")
 network_config_list=("400 200")
