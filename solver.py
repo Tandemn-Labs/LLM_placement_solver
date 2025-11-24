@@ -3198,6 +3198,22 @@ class LLMPlacementSolverWithTP:
         
         import csv
         
+        def format_placement(gpu_assignments):
+            """
+            Format placement as: {PP_1:{GPU_type:TP_degree}, PP_2:{GPU_type:TP_degree}, ...}
+            Example: {PP_1:{A100:2}, PP_2:{L40:4}, PP_3:{L40:4}}
+            """
+            if not gpu_assignments:
+                return '{}'
+            
+            placement_parts = []
+            for i, assignment in enumerate(gpu_assignments, 1):
+                gpu_type = assignment['gpu_type']
+                tp_degree = assignment['tp_degree']
+                placement_parts.append(f"PP_{i}:{{{gpu_type}:{tp_degree}}}")
+            
+            return '{' + ', '.join(placement_parts) + '}'
+        
         # Check if we have enumeration results
         has_enumeration = hasattr(self, 'all_enumeration_results') and self.all_enumeration_results
         
@@ -3207,18 +3223,15 @@ class LLMPlacementSolverWithTP:
             for result in sorted(self.all_enumeration_results, key=lambda x: x['cost_per_token']):
                 sol = result['solution']
                 
-                # Extract GPU info
-                gpu_type = ''
-                tp_degree = ''
+                # Extract aggregated GPU info
                 num_gpus = ''
                 total_layers = ''
+                placement = ''
                 
                 if sol['gpu_assignments']:
-                    first_assignment = sol['gpu_assignments'][0]
-                    gpu_type = first_assignment['gpu_type']
-                    tp_degree = first_assignment['tp_degree']
                     num_gpus = sum(len(a['gpu_ids']) for a in sol['gpu_assignments'])
                     total_layers = sum(a['segment_size'] for a in sol['gpu_assignments'])
+                    placement = format_placement(sol['gpu_assignments'])
                 
                 cost_per_million = result['cost_per_token'] * 1_000_000
                 is_best = (result['cost_per_token'] == min(r['cost_per_token'] for r in self.all_enumeration_results))
@@ -3236,8 +3249,7 @@ class LLMPlacementSolverWithTP:
                     'total_runtime_hours': f"{total_runtime_hours:.2f}",
                     'total_cost': f"{total_cost:.2f}",
                     'pipeline_stages': sol['num_pipeline_stages'],
-                    'gpu_type': gpu_type,
-                    'tp_degree': tp_degree,
+                    'placement': placement,
                     'num_gpus': num_gpus,
                     'total_layers': total_layers,
                     'is_best': 'YES' if is_best else 'NO',
@@ -3248,7 +3260,7 @@ class LLMPlacementSolverWithTP:
             with open(output_file, 'w', newline='') as f:
                 fieldnames = ['batch_size', 'budget_tested', 'throughput_tokens_per_sec', 'cost_per_hour', 
                              'cost_per_million_tokens', 'total_runtime_hours', 'total_cost',
-                             'pipeline_stages', 'gpu_type', 'tp_degree', 'num_gpus', 'total_layers', 
+                             'pipeline_stages', 'placement', 'num_gpus', 'total_layers', 
                              'is_best', 'status']
                 writer = csv.DictWriter(f, fieldnames=fieldnames)
                 writer.writeheader()
@@ -3257,17 +3269,14 @@ class LLMPlacementSolverWithTP:
             logger.info(f"Solution CSV saved with {len(rows)} enumeration results to {output_file}")
         else:
             # Save only the best solution (original behavior)
-            gpu_type = ''
-            tp_degree = ''
             num_gpus = ''
             total_layers = ''
+            placement = ''
             
             if self.solution['gpu_assignments']:
-                first_assignment = self.solution['gpu_assignments'][0]
-                gpu_type = first_assignment['gpu_type']
-                tp_degree = first_assignment['tp_degree']
                 num_gpus = sum(len(a['gpu_ids']) for a in self.solution['gpu_assignments'])
                 total_layers = sum(a['segment_size'] for a in self.solution['gpu_assignments'])
+                placement = format_placement(self.solution['gpu_assignments'])
             
             cost_per_million = self.solution['cost_per_token'] * 1_000_000
             
@@ -3283,8 +3292,7 @@ class LLMPlacementSolverWithTP:
                 'total_runtime_hours': f"{total_runtime_hours:.2f}",
                 'total_cost': f"{total_cost:.2f}",
                 'pipeline_stages': self.solution['num_pipeline_stages'],
-                'gpu_type': gpu_type,
-                'tp_degree': tp_degree,
+                'placement': placement,
                 'num_gpus': num_gpus,
                 'total_layers': total_layers,
                 'status': 'SUCCESS'
@@ -3294,7 +3302,7 @@ class LLMPlacementSolverWithTP:
             with open(output_file, 'w', newline='') as f:
                 fieldnames = ['batch_size', 'throughput_tokens_per_sec', 'cost_per_hour', 
                              'cost_per_million_tokens', 'total_runtime_hours', 'total_cost',
-                             'pipeline_stages', 'gpu_type', 'tp_degree', 'num_gpus', 'total_layers', 
+                             'pipeline_stages', 'placement', 'num_gpus', 'total_layers', 
                              'status']
                 writer = csv.DictWriter(f, fieldnames=fieldnames)
                 writer.writeheader()
