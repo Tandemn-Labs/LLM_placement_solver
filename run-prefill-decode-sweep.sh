@@ -18,7 +18,8 @@ network_config_list=("400 200")
 cloud_provider="AWS"
 solver="solver.py"
 # target_config="hal"
-target_config="medium"
+# target_config="medium"
+target_config="large"
 timestamp=$(date +%Y%m%d_%H%M%S)
 
 echo "========================================================================"
@@ -182,6 +183,7 @@ echo ""
 echo "=== PREFILL PHASE RESULTS ==="
 config_dir="config/${target_config}-prefill"
 results_csv="${config_dir}/output-${timestamp}/batch_sweep_results.csv"
+solution_csv="${config_dir}/output-${timestamp}/solution.csv"
 
 first_batch=true
 for batch_size in "${batch_size_list[@]}"; do
@@ -196,8 +198,23 @@ for batch_size in "${batch_size_list[@]}"; do
     fi
 done
 
-printf "%-10s %-12s %-12s %-10s %-8s %-8s %-15s %-15s\n" "Batch" "Throughput" "Cost(\$/h)" "\$/M tok" "PP" "TP" "#GPUs" "GPU"
-echo "------------------------------------------------------------------------------------------------"
+# Extract best solution (lowest cost_per_million_tokens) to solution.csv
+if [ -f "$results_csv" ]; then
+    # Get header
+    head -n 1 "$results_csv" > "$solution_csv"
+    # Get best solution (skip header, sort by cost_per_million_tokens column, take first)
+    if grep -q "is_best" "$results_csv"; then
+        # Enumeration format with is_best column (column 5 is cost_per_million_tokens)
+        grep ",YES," "$results_csv" | head -n 1 >> "$solution_csv"
+    else
+        # Single solution format (column 4 is cost_per_million_tokens)
+        tail -n +2 "$results_csv" | sort -t',' -k4 -n | head -n 1 >> "$solution_csv"
+    fi
+    echo "Best solution saved to: ${solution_csv}"
+fi
+
+printf "%-10s %-12s %-12s %-12s %-8s %-8s %-50s\n" "Batch" "Throughput" "Cost(\$/h)" "\$/M tok" "PP" "#GPUs" "Placement"
+echo "----------------------------------------------------------------------------------------------------------------------------"
 for batch_size in "${batch_size_list[@]}"; do
     csv_file="${config_dir}/output-${timestamp}/batch_${batch_size}/solution_summary.csv"
     if [ -f "$csv_file" ]; then
@@ -207,25 +224,23 @@ for batch_size in "${batch_size_list[@]}"; do
             cost=$(echo "$data" | cut -d',' -f4)
             cost_per_m=$(echo "$data" | cut -d',' -f5)
             stages=$(echo "$data" | cut -d',' -f8)
-            gpu_type=$(echo "$data" | cut -d',' -f9)
-            tp_degree=$(echo "$data" | cut -d',' -f10)
-            num_gpus=$(echo "$data" | cut -d',' -f11)
+            placement=$(echo "$data" | cut -d',' -f9)
+            num_gpus=$(echo "$data" | cut -d',' -f10)
         else
             data=$(tail -n 1 "$csv_file")
             throughput=$(echo "$data" | cut -d',' -f2)
             cost=$(echo "$data" | cut -d',' -f3)
             cost_per_m=$(echo "$data" | cut -d',' -f4)
             stages=$(echo "$data" | cut -d',' -f7)
-            gpu_type=$(echo "$data" | cut -d',' -f8)
-            tp_degree=$(echo "$data" | cut -d',' -f9)
-            num_gpus=$(echo "$data" | cut -d',' -f10)
+            placement=$(echo "$data" | cut -d',' -f8)
+            num_gpus=$(echo "$data" | cut -d',' -f9)
         fi
-        printf "%-10s %-12s %-12s %-10s %-8s %-8s %-15s %-15s\n" \
+        printf "%-10s %-12s %-12s %-12s %-8s %-8s %-50s\n" \
             "$batch_size" "${throughput:-N/A}" "${cost:-N/A}" "${cost_per_m:-N/A}" \
-            "${stages:-N/A}" "${tp_degree:-N/A}" "${num_gpus:-N/A}" "${gpu_type:-N/A}"
+            "${stages:-N/A}" "${num_gpus:-N/A}" "${placement:-N/A}"
     else
-        printf "%-10s %-12s %-12s %-10s %-8s %-8s %-15s %-15s\n" \
-            "$batch_size" "FAILED" "N/A" "N/A" "N/A" "N/A" "N/A" "N/A"
+        printf "%-10s %-12s %-12s %-12s %-8s %-8s %-50s\n" \
+            "$batch_size" "FAILED" "N/A" "N/A" "N/A" "N/A" "N/A"
     fi
 done
 
@@ -234,6 +249,7 @@ echo ""
 echo "=== DECODE PHASE RESULTS ==="
 config_dir="config/${target_config}-decode"
 results_csv="${config_dir}/output-${timestamp}/batch_sweep_results.csv"
+solution_csv="${config_dir}/output-${timestamp}/solution.csv"
 
 first_batch=true
 for batch_size in "${batch_size_list[@]}"; do
@@ -248,8 +264,23 @@ for batch_size in "${batch_size_list[@]}"; do
     fi
 done
 
-printf "%-10s %-12s %-12s %-10s %-8s %-8s %-15s %-15s\n" "Batch" "Throughput" "Cost(\$/h)" "\$/M tok" "Stages" "TP" "#GPUs" "GPU"
-echo "------------------------------------------------------------------------------------------------"
+# Extract best solution (lowest cost_per_million_tokens) to solution.csv
+if [ -f "$results_csv" ]; then
+    # Get header
+    head -n 1 "$results_csv" > "$solution_csv"
+    # Get best solution (skip header, sort by cost_per_million_tokens column, take first)
+    if grep -q "is_best" "$results_csv"; then
+        # Enumeration format with is_best column (column 5 is cost_per_million_tokens)
+        grep ",YES," "$results_csv" | head -n 1 >> "$solution_csv"
+    else
+        # Single solution format (column 4 is cost_per_million_tokens)
+        tail -n +2 "$results_csv" | sort -t',' -k4 -n | head -n 1 >> "$solution_csv"
+    fi
+    echo "Best solution saved to: ${solution_csv}"
+fi
+
+printf "%-10s %-12s %-12s %-12s %-8s %-8s %-50s\n" "Batch" "Throughput" "Cost(\$/h)" "\$/M tok" "PP" "#GPUs" "Placement"
+echo "----------------------------------------------------------------------------------------------------------------------------"
 for batch_size in "${batch_size_list[@]}"; do
     csv_file="${config_dir}/output-${timestamp}/batch_${batch_size}/solution_summary.csv"
     if [ -f "$csv_file" ]; then
@@ -259,25 +290,23 @@ for batch_size in "${batch_size_list[@]}"; do
             cost=$(echo "$data" | cut -d',' -f4)
             cost_per_m=$(echo "$data" | cut -d',' -f5)
             stages=$(echo "$data" | cut -d',' -f8)
-            gpu_type=$(echo "$data" | cut -d',' -f9)
-            tp_degree=$(echo "$data" | cut -d',' -f10)
-            num_gpus=$(echo "$data" | cut -d',' -f11)
+            placement=$(echo "$data" | cut -d',' -f9)
+            num_gpus=$(echo "$data" | cut -d',' -f10)
         else
             data=$(tail -n 1 "$csv_file")
             throughput=$(echo "$data" | cut -d',' -f2)
             cost=$(echo "$data" | cut -d',' -f3)
             cost_per_m=$(echo "$data" | cut -d',' -f4)
             stages=$(echo "$data" | cut -d',' -f7)
-            gpu_type=$(echo "$data" | cut -d',' -f8)
-            tp_degree=$(echo "$data" | cut -d',' -f9)
-            num_gpus=$(echo "$data" | cut -d',' -f10)
+            placement=$(echo "$data" | cut -d',' -f8)
+            num_gpus=$(echo "$data" | cut -d',' -f9)
         fi
-        printf "%-10s %-12s %-12s %-10s %-8s %-8s %-15s %-15s\n" \
+        printf "%-10s %-12s %-12s %-12s %-8s %-8s %-50s\n" \
             "$batch_size" "${throughput:-N/A}" "${cost:-N/A}" "${cost_per_m:-N/A}" \
-            "${stages:-N/A}" "${tp_degree:-N/A}" "${num_gpus:-N/A}" "${gpu_type:-N/A}"
+            "${stages:-N/A}" "${num_gpus:-N/A}" "${placement:-N/A}"
     else
-        printf "%-10s %-12s %-12s %-10s %-8s %-8s %-15s %-15s\n" \
-            "$batch_size" "FAILED" "N/A" "N/A" "N/A" "N/A" "N/A" "N/A"
+        printf "%-10s %-12s %-12s %-12s %-8s %-8s %-50s\n" \
+            "$batch_size" "FAILED" "N/A" "N/A" "N/A" "N/A" "N/A"
     fi
 done
 
@@ -286,6 +315,11 @@ echo "========================================================================"
 echo "PREFILL-DECODE SWEEP COMPLETE!"
 echo "========================================================================"
 echo "PREFILL results: config/${target_config}-prefill/output-${timestamp}/"
+echo "  - batch_sweep_results.csv: All batch size results"
+echo "  - solution.csv: Best solution (lowest \$/M tokens)"
+echo ""
 echo "DECODE results:  config/${target_config}-decode/output-${timestamp}/"
+echo "  - batch_sweep_results.csv: All batch size results"
+echo "  - solution.csv: Best solution (lowest \$/M tokens)"
 echo "========================================================================"
 
