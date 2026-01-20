@@ -1,4 +1,6 @@
 parameter,value
+workload_phase,prefill
+output_length,0
 sequence_length,2048
 min_batch_size,64
 max_batch_size,64

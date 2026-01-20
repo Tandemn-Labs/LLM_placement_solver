@@ -1,4 +1,6 @@
 parameter,value
+workload_phase,decode
+output_length,128
 sequence_length,2048
 min_batch_size,64
 max_batch_size,64
