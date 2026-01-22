@@ -684,14 +684,16 @@ class LLMPlacementSolverWithTP:
         cloud_specs_file = 'cloud_instances_specs.csv'
         if os.path.exists(cloud_specs_file):
             self.cloud_pricing = self._load_cloud_pricing(cloud_specs_file)
+            self.cloud_gpu_memory = self._load_cloud_gpu_memory(cloud_specs_file)
         else:
             self.cloud_pricing = None
+            self.cloud_gpu_memory = None
             
         # Load configuration
-        gpu_pool_file = os.path.join(config_dir, 'gpu_pool.csv')
-        network_file = os.path.join(config_dir, 'network_bandwidth.csv')
         config_file = os.path.join(config_dir, 'config.csv')
-
+        base_config_dir = os.path.abspath(os.path.join(config_dir, os.pardir))
+        gpu_pool_file = os.path.join(base_config_dir, 'gpu_pool.csv')
+        network_file = os.path.join(base_config_dir, 'network_bandwidth.csv')
         self.gpu_types = self._load_gpu_pool(gpu_pool_file)
         
         # Load or generate network bandwidth
@@ -825,6 +827,43 @@ class LLMPlacementSolverWithTP:
         else:
             # Return cheapest price
             return min(price for _, price in matching_prices)
+
+    def _load_cloud_gpu_memory(self, filename: str) -> Dict[str, float]:
+        """
+        Load cloud GPU memory from cloud_instances_specs.csv
+        Returns dict: gpu_model -> memory_gb
+        """
+        import re
+
+        df = pd.read_csv(filename)
+        memory_map = {}
+
+        for _, row in df.iterrows():
+            gpu_model = row['GPU Model']
+            mem_str = str(row.get('GPU Memory per GPU', ''))
+            numbers = re.findall(r'[\d.]+', mem_str)
+            if not numbers:
+                continue
+            memory_gb = float(numbers[0])
+            memory_map[gpu_model] = memory_gb
+
+        return memory_map
+
+    def _get_cloud_memory(self, gpu_type: str) -> Optional[float]:
+        """Get GPU memory (GB) for a GPU type from cloud specs."""
+        if not self.cloud_gpu_memory:
+            return None
+
+        matching = []
+        for gpu_model, mem_gb in self.cloud_gpu_memory.items():
+            if gpu_type in gpu_model:
+                matching.append(mem_gb)
+
+        if not matching:
+            return None
+
+        # Use the maximum to be conservative when multiple entries exist
+        return max(matching)
     
     def _load_gpu_pool(self, filename: str) -> Dict[str, GPUType]:
         """Load GPU pool configuration"""
@@ -834,6 +873,11 @@ class LLMPlacementSolverWithTP:
         
         for _, row in df.iterrows():
             global_ids = list(range(global_id, global_id + row['count']))
+
+            # Load memory per GPU from cloud specs only
+            memory_gb = self._get_cloud_memory(row['gpu_type'])
+            if memory_gb is None:
+                raise ValueError(f"Missing cloud memory data for {row['gpu_type']} in cloud_instances_specs.csv.")
             
             # Try to get price from config first, then from cloud pricing
             if 'dollar_per_hour' in row and pd.notna(row['dollar_per_hour']):
@@ -856,7 +900,7 @@ class LLMPlacementSolverWithTP:
             gpu_types[row['gpu_type']] = GPUType(
                 name=row['gpu_type'],
                 count=row['count'],
-                memory_gb=row['memory_gb'],
+                memory_gb=memory_gb,
                 global_ids=global_ids,
                 cost_per_hour=cost_per_hour
             )
@@ -2495,11 +2539,11 @@ class LLMPlacementSolverWithTP:
                 logger.info(f"   {improvement:.1f}% better than target!")
             else:
                 shortfall = (best_cpt - target) / target * 100
-                logger.info(f"\nMISSES TARGET: ${best_cpm:.6f} > ${target_per_million:.6f}")
+                logger.info(f"MISSES TARGET: ${best_cpm:.6f} > ${target_per_million:.6f}")
                 logger.info(f"   {shortfall:.1f}% worse than target (infeasible to meet)")
             
             # Log Pareto frontier
-            logger.info(f"\nPareto Frontier (all solutions):")
+            logger.info(f"Pareto Frontier (all solutions):")
             for r in sorted(all_results, key=lambda x: x['cost_per_token']):
                 marker = "*" if r['cost_per_token'] <= target else " "
                 r_cpm = r['cost_per_token'] * 1_000_000
@@ -2619,7 +2663,7 @@ class LLMPlacementSolverWithTP:
         
         throughput_per_sec = raw_throughput * pipeline_efficiency * real_world_efficiency
         
-        logger.info(f"\nThroughput Corrections:")
+        logger.info(f"Throughput Corrections:")
         logger.info(f"  Batch size: {optimal_batch_size}")
         logger.info(f"  Pipeline stages: {num_stages}")
         if num_stages > 1:
@@ -2647,7 +2691,7 @@ class LLMPlacementSolverWithTP:
         cost_per_million_tokens = cost_per_token * 1_000_000
         
         # NEW: Detailed objective breakdown logging
-        logger.info("\n" + "="*80)
+        logger.info("="*80)
         logger.info("SOLUTION ANALYSIS - OBJECTIVE BREAKDOWN")
         logger.info("="*80)
         
@@ -2673,7 +2717,7 @@ class LLMPlacementSolverWithTP:
                 optimal_batch_size = bs
                 break
         
-        logger.info(f"\nCore Metrics:")
+        logger.info(f"Core Metrics:")
         logger.info(f"  Batch Size: {optimal_batch_size}")
         logger.info(f"  Throughput: {throughput_per_sec:.2f} tokens/sec")
         logger.info(f"  Cost: ${cost_per_hour:.2f}/hour")
@@ -2747,14 +2791,14 @@ class LLMPlacementSolverWithTP:
     
     def _log_batch_size_analysis(self):
         """Analyze and explain the batch size selection"""
-        logger.info("\n" + "="*80)
+        logger.info("="*80)
         logger.info("BATCH SIZE ANALYSIS")
         logger.info("="*80)
         
         batch_size_options = self._get_batch_size_options()
         optimal_batch = self.solution.get('batch_size')
         
-        logger.info(f"\nBatch Size Selection:")
+        logger.info(f"Batch Size Selection:")
         logger.info(f"  Optimal: {optimal_batch}")
         logger.info(f"  Search range: [{self.config.min_batch_size}, {self.config.max_batch_size}]")
         logger.info(f"  Options considered: {batch_size_options}")
@@ -2762,7 +2806,7 @@ class LLMPlacementSolverWithTP:
         # Show batch efficiency factor
         if optimal_batch:
             efficiency = ThroughputFunctions.batch_efficiency_factor(optimal_batch)
-            logger.info(f"\nBatch Efficiency Factor: {efficiency:.1%}")
+            logger.info(f"Batch Efficiency Factor: {efficiency:.1%}")
             logger.info(f"  (Larger batches improve GPU utilization)")
             
             # Explain the efficiency
@@ -2777,7 +2821,7 @@ class LLMPlacementSolverWithTP:
         
         # If we have multiple batch size options, show comparison
         if len(batch_size_options) > 1 and optimal_batch and len(self.solution['gpu_assignments']) > 0:
-            logger.info(f"\nBatch Size Impact (estimated for current GPU configuration):")
+            logger.info(f"Batch Size Impact (estimated for current GPU configuration):")
             logger.info("-" * 80)
             logger.info(f"  {'Batch':<8} {'Efficiency':<12} {'Est. Throughput':<18} {'$/M tokens':<15}")
             logger.info("-" * 80)
@@ -2819,13 +2863,13 @@ class LLMPlacementSolverWithTP:
     
     def _log_roofline_analysis(self):
         """Analyze and log roofline model insights for the solution"""
-        logger.info("\n" + "="*80)
+        logger.info("="*80)
         logger.info("ROOFLINE MODEL ANALYSIS")
         logger.info("="*80)
         
         optimal_batch = self.solution.get('batch_size', self.config.min_batch_size)
         
-        logger.info(f"\nPerformance Bottleneck Analysis (Roofline Model):")
+        logger.info(f"Performance Bottleneck Analysis (Roofline Model):")
         logger.info(f"  Determines if each segment is compute-bound or memory-bound")
         logger.info("-" * 80)
         logger.info(f"  {'GPU Type':<10} {'TP':<4} {'Layers':<7} {'AI':<12} {'Ridge':<12} {'Regime':<15} {'Bottleneck'}")
@@ -2866,7 +2910,7 @@ class LLMPlacementSolverWithTP:
             logger.info(f"  {gpu_type:<10} {tp_degree:<4} {segment_size:<7} {ai_str:<12} {ridge_str:<12} {regime_str:<15} {bottleneck}")
         
         # Summary insights
-        logger.info("\n" + "-" * 80)
+        logger.info("-" * 80)
         logger.info("Roofline analysis:")
         logger.info(f"- Arithmetic Intensity (AI) = FLOPs / Byte accessed")
         logger.info(f"- Ridge Point = Peak FLOPS / Peak Memory Bandwidth")
@@ -2904,7 +2948,7 @@ class LLMPlacementSolverWithTP:
         logger.info(f"- Memory-bound segments:  {memory_bound_count}/{total_segments} ({100*memory_bound_count/total_segments:.0f}%)")
         
         if memory_bound_count > compute_bound_count:
-            logger.info(f"\nMost segments are memory-bound.")
+            logger.info(f"Most segments are memory-bound.")
             logger.info(f"- Consider GPUs with higher memory bandwidth for better performance.")
             logger.info(f"- Increasing TP degree can help (reduces memory per GPU).")
         elif compute_bound_count > memory_bound_count:
@@ -2914,7 +2958,7 @@ class LLMPlacementSolverWithTP:
     
     def _log_solution_analysis(self):
         """Comprehensive analysis of why the solution looks the way it does"""
-        logger.info("\n" + "="*80)
+        logger.info("="*80)
         logger.info("SOLUTION ANALYSIS - GPU EFFICIENCY & SELECTION")
         logger.info("="*80)
         
@@ -2966,13 +3010,13 @@ class LLMPlacementSolverWithTP:
         if is_memory_bound:
             sorted_efficiency = sorted(gpu_efficiency.items(), key=lambda x: x[1]['memory_ratio'], reverse=True)
             metric_name = "Memory Bandwidth/$ ratio"
-            logger.info(f"\nWARNING WORKLOAD IS MEMORY-BOUND -> Memory Bandwidth/$ is the key metric!")
+            logger.info(f"WARNING WORKLOAD IS MEMORY-BOUND -> Memory Bandwidth/$ is the key metric!")
         else:
             sorted_efficiency = sorted(gpu_efficiency.items(), key=lambda x: x[1]['compute_ratio'], reverse=True)
             metric_name = "Compute (TFLOP/$) ratio"
-            logger.info(f"\nOK WORKLOAD IS COMPUTE-BOUND -> TFLOP/$ is the key metric!")
+            logger.info(f"OK WORKLOAD IS COMPUTE-BOUND -> TFLOP/$ is the key metric!")
         
-        logger.info(f"\nGPU Efficiency Ranking ({metric_name}):")
+        logger.info(f"GPU Efficiency Ranking ({metric_name}):")
         logger.info("-" * 80)
         for i, (gpu_type, data) in enumerate(sorted_efficiency, 1):
             if is_memory_bound:
@@ -2998,7 +3042,7 @@ class LLMPlacementSolverWithTP:
             gpu_usage[gpu_type]['total_layers'] += assignment['segment_size']
             gpu_usage[gpu_type]['tp_degrees'].append(assignment['tp_degree'])
         
-        logger.info("\nActual GPU Usage in Solution:")
+        logger.info("Actual GPU Usage in Solution:")
         logger.info("-" * 80)
         total_cost = 0
         for gpu_type in sorted(gpu_usage.keys()):
@@ -3009,12 +3053,12 @@ class LLMPlacementSolverWithTP:
                        f"(Efficiency rank: #{efficiency_rank})")
             total_cost += data['total_cost']
         
-        logger.info(f"\n  TOTAL COST: ${total_cost:.2f}/hour")
+        logger.info(f"  TOTAL COST: ${total_cost:.2f}/hour")
         
         # 3. Analyze unused GPUs
         unused_gpus = set(self.gpu_types.keys()) - set(gpu_usage.keys())
         if unused_gpus:
-            logger.info("\nUnused GPUs (and why they might not be chosen):")
+            logger.info("Unused GPUs (and why they might not be chosen):")
             logger.info("-" * 80)
             for gpu_type in sorted(unused_gpus):
                 gpu_obj = self.gpu_types[gpu_type]
@@ -3044,7 +3088,7 @@ class LLMPlacementSolverWithTP:
                     logger.info(f"             Hypothetical (5 layers, TP=4): {hyp_throughput:.0f} tokens/s, ${hyp_cost:.2f}/h")
         
         # 4. Segment-level contribution analysis
-        logger.info("\n" + "="*80)
+        logger.info("="*80)
         logger.info("SEGMENT-LEVEL ANALYSIS")
         logger.info("="*80)
         
@@ -3052,7 +3096,7 @@ class LLMPlacementSolverWithTP:
         min_throughput = min(a['throughput'] for a in self.solution['gpu_assignments'])
         bottleneck_segments = [a for a in self.solution['gpu_assignments'] if abs(a['throughput'] - min_throughput) < 0.01]
         
-        logger.info(f"\nBottleneck Throughput: {min_throughput:.2f} tokens/sec")
+        logger.info(f"Bottleneck Throughput: {min_throughput:.2f} tokens/sec")
         logger.info(f"Bottleneck Segments:")
         for seg in bottleneck_segments:
             seg_cost = self.gpu_types[seg['gpu_type']].cost_per_hour * seg['tp_degree']
@@ -3061,7 +3105,7 @@ class LLMPlacementSolverWithTP:
         
         # 5. Alternative scenario: Check single-segment solution with best efficiency GPU
         best_gpu_type = sorted_efficiency[0][0]
-        logger.info("\n" + "="*80)
+        logger.info("="*80)
         logger.info(f"ALTERNATIVE SCENARIO: Single segment with {best_gpu_type} (best efficiency)")
         logger.info("="*80)
         
@@ -3070,7 +3114,7 @@ class LLMPlacementSolverWithTP:
         optimal_batch = self.solution.get('batch_size', self.config.max_batch_size)
         max_seg_size = self._compute_max_segment_size_for_tp(best_gpu_type, max_tp, optimal_batch)
         
-        logger.info(f"\n{best_gpu_type} specs:")
+        logger.info(f"{best_gpu_type} specs:")
         logger.info(f"  Available: {best_gpu.count} GPUs")
         logger.info(f"  Cost: ${best_gpu.cost_per_hour:.2f}/hour per GPU")
         logger.info(f"  Max segment size (TP={max_tp}): {max_seg_size} layers")
@@ -3092,7 +3136,7 @@ class LLMPlacementSolverWithTP:
             alt_cost_per_token = alt_cost / (alt_throughput * 3600)
             alt_cost_per_million = alt_cost_per_token * 1_000_000
             
-            logger.info(f"\nCAN FIT Single segment with TP={max_tp}:")
+            logger.info(f"CAN FIT Single segment with TP={max_tp}:")
             logger.info(f"  Throughput: {alt_throughput:.0f} tokens/sec")
             logger.info(f"  Cost: ${alt_cost:.2f}/hour")
             logger.info(f"  $/M tokens: ${alt_cost_per_million:.6f}")
@@ -3100,7 +3144,7 @@ class LLMPlacementSolverWithTP:
             # Compare with actual solution
             actual_cpt = self.solution['cost_per_token']
             actual_cpm = actual_cpt * 1_000_000
-            logger.info(f"\nComparison with current multi-segment solution:")
+            logger.info(f"Comparison with current multi-segment solution:")
             logger.info(f"  Current solution $/M tokens: ${actual_cpm:.6f}")
             logger.info(f"  Single-segment $/M tokens:   ${alt_cost_per_million:.6f}")
             
@@ -3112,7 +3156,7 @@ class LLMPlacementSolverWithTP:
                 diff_pct = (alt_cost_per_token/actual_cpt - 1)*100
                 logger.info(f"Current multi-segment is {diff_pct:.1f}% better")
         else:
-            logger.info(f"\nCANNOT FIT: Model needs {self.config.num_decoder_layers} layers but max is {max_seg_size}")
+            logger.info(f"CANNOT FIT: Model needs {self.config.num_decoder_layers} layers but max is {max_seg_size}")
         
         # 6. Objective function check
         logger.info("="*80)
@@ -3153,7 +3197,7 @@ class LLMPlacementSolverWithTP:
                     obj_alt = (t_alt / self.config.throughput_normalization) - \
                              (w/(1-w)) * (c_alt / self.config.cost_normalization)
                     
-                    logger.info(f"\nAlternative ({best_gpu_type} single segment) objective: {obj_alt:.6f}")
+                    logger.info(f"Alternative ({best_gpu_type} single segment) objective: {obj_alt:.6f}")
                     logger.info(f"  Throughput: {t_alt:.0f} tokens/s")
                     logger.info(f"  Cost: ${c_alt:.2f}/h")
                     
