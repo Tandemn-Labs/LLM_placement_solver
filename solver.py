@@ -57,6 +57,7 @@ class Config:
     d_hidden: int
     vocab_size: int
     num_attention_heads: int
+    num_kv_heads: int
     layer_weight_memory_gb: float
     time_limit_seconds: float
     optimality_gap: float
@@ -76,7 +77,8 @@ class Config:
     cost_normalization: float
     total_tokens_to_process: int
     max_total_runtime_hours: float
-    max_total_runtime_hours: float
+    real_world_efficiency: float
+    micro_batch_size: int
 
 # GPU performance tiers for hierarchy constraints
 GPU_PERFORMANCE_TIERS = {
@@ -146,7 +148,9 @@ class ThroughputFunctions:
     @staticmethod
     def calculate_arithmetic_intensity(num_layers: int, batch_size: int, seq_len: int, 
                                       d_model: int, d_hidden: int, bytes_per_element: int,
-                                      tp_degree: int = 1, phase: str = 'prefill') -> float:
+                                      tp_degree: int = 1, phase: str = 'prefill',
+                                      num_attention_heads: Optional[int] = None,
+                                      num_kv_heads: Optional[int] = None) -> float:
         """
         Calculate arithmetic intensity (FLOPs / Byte) using roofline model.
         Higher AI = more compute-bound, lower AI = more memory-bound.
@@ -167,9 +171,20 @@ class ThroughputFunctions:
             Arithmetic intensity in FLOPs per byte
         """
         # === FLOPs Calculation (PHASE-AWARE) ===
+        if num_attention_heads is None:
+            num_attention_heads = max(1, d_model // 128)
+        if num_kv_heads is None:
+            num_kv_heads = num_attention_heads
+        d_head = d_model / num_attention_heads
+        kv_dim = num_kv_heads * d_head
+
         if phase == 'prefill':
             # PREFILL: Process all tokens at once (O(n²) attention)
-            flops_attn_proj = 4 * 2 * batch_size * seq_len * d_model * d_model  # 4 projections
+            flops_q = 2 * batch_size * seq_len * d_model * d_model
+            flops_k = 2 * batch_size * seq_len * d_model * kv_dim
+            flops_v = 2 * batch_size * seq_len * d_model * kv_dim
+            flops_o = 2 * batch_size * seq_len * d_model * d_model
+            flops_attn_proj = flops_q + flops_k + flops_v + flops_o
             flops_attn_scores = 4 * batch_size * seq_len * seq_len * d_model  # QK^T + softmax*V (O(n²))
             flops_attention = flops_attn_proj + flops_attn_scores
             
@@ -185,7 +200,11 @@ class ThroughputFunctions:
             # Note: This function doesn't have output_length parameter, so we can't account for growth
             # The caller (gpu_throughput_with_tp) handles this properly
             kv_cache_len = seq_len  # seq_len represents cached context
-            flops_attn_proj = 4 * 2 * batch_size * 1 * d_model * d_model  # QKV+O for 1 token
+            flops_q = 2 * batch_size * 1 * d_model * d_model
+            flops_k = 2 * batch_size * 1 * d_model * kv_dim
+            flops_v = 2 * batch_size * 1 * d_model * kv_dim
+            flops_o = 2 * batch_size * 1 * d_model * d_model
+            flops_attn_proj = flops_q + flops_k + flops_v + flops_o  # QKV+O for 1 token
             flops_attn_scores = 4 * batch_size * 1 * kv_cache_len * d_model  # Attend to cache (O(n))
             flops_attention = flops_attn_proj + flops_attn_scores
             
@@ -202,13 +221,14 @@ class ThroughputFunctions:
         # === Memory Access Calculation (PHASE-AWARE) ===
         # Weights (divided by TP): same for both phases
         bytes_weights_per_layer = (
-            4 * d_model * d_model +
-            3 * d_model * d_hidden
+            (2 * d_model * d_model) +                 # W_q, W_o
+            (2 * d_model * kv_dim) +                  # W_k, W_v (GQA/MQA aware)
+            (3 * d_model * d_hidden)                  # W_gate, W_up, W_down
         ) * bytes_per_element / tp_degree
         
         if phase == 'prefill':
             # KV cache being written
-            bytes_kv_cache_per_layer = 2 * batch_size * seq_len * d_model * bytes_per_element / tp_degree
+            bytes_kv_cache_per_layer = 2 * batch_size * seq_len * kv_dim * bytes_per_element / tp_degree
             # Activations for all tokens
             bytes_activations_per_layer = batch_size * seq_len * d_model * bytes_per_element
         else:  # decode
@@ -216,7 +236,7 @@ class ThroughputFunctions:
             # Note: This function doesn't have output_length, so can't account for growth
             # The caller (gpu_throughput_with_tp) should pass adjusted seq_len if needed
             kv_cache_len = seq_len
-            bytes_kv_cache_per_layer = 2 * batch_size * kv_cache_len * d_model * bytes_per_element / tp_degree
+            bytes_kv_cache_per_layer = 2 * batch_size * kv_cache_len * kv_dim * bytes_per_element / tp_degree
             # Activations for 1 token only
             bytes_activations_per_layer = batch_size * 1 * d_model * bytes_per_element
         
@@ -270,7 +290,9 @@ class ThroughputFunctions:
     
     @staticmethod
     def gpu_throughput(gpu_type: str, seq_len: int, batch_size: int, num_layers: int, 
-                      d_model: int, bytes_per_element: int, d_hidden: int = None) -> float:
+                      d_model: int, bytes_per_element: int, d_hidden: int = None,
+                      num_attention_heads: Optional[int] = None,
+                      num_kv_heads: Optional[int] = None) -> float:
         """
         Calculate GPU throughput using roofline model.
         Automatically determines if workload is compute-bound or memory-bound.
@@ -298,7 +320,9 @@ class ThroughputFunctions:
         # Note: This function is deprecated in favor of gpu_throughput_with_tp
         # Default to 'prefill' for backward compatibility
         arithmetic_intensity = ThroughputFunctions.calculate_arithmetic_intensity(
-            num_layers, batch_size, seq_len, d_model, d_hidden, bytes_per_element, tp_degree=1, phase='prefill'
+            num_layers, batch_size, seq_len, d_model, d_hidden, bytes_per_element,
+            tp_degree=1, phase='prefill',
+            num_attention_heads=num_attention_heads, num_kv_heads=num_kv_heads
         )
         
         # Get ridge point for this GPU
@@ -308,8 +332,19 @@ class ThroughputFunctions:
         regime = ThroughputFunctions.determine_regime(arithmetic_intensity, ridge_point)
         
         # === Compute FLOPs (same for both regimes) ===
-        # Attention: Q, K, V, O projections + attention scores
-        attn_proj_flops = 2 * 4 * batch_size * seq_len * d_model * d_model  # QKV + output
+        if num_attention_heads is None:
+            num_attention_heads = max(1, d_model // 128)
+        if num_kv_heads is None:
+            num_kv_heads = num_attention_heads
+        d_head = d_model / num_attention_heads
+        kv_dim = num_kv_heads * d_head
+
+        # Attention: Q, K, V, O projections + attention scores (GQA/MQA aware)
+        flops_q = 2 * batch_size * seq_len * d_model * d_model
+        flops_k = 2 * batch_size * seq_len * d_model * kv_dim
+        flops_v = 2 * batch_size * seq_len * d_model * kv_dim
+        flops_o = 2 * batch_size * seq_len * d_model * d_model
+        attn_proj_flops = flops_q + flops_k + flops_v + flops_o
         attn_score_flops = 4 * batch_size * seq_len * seq_len * d_model  # QK^T + softmax*V
         
         # FFN: 3 projections (up, gate, down)
@@ -324,11 +359,15 @@ class ThroughputFunctions:
         
         # === Compute Memory Access (same for both regimes) ===
         # Weights per layer: 4D² (attention) + 3D×d_hidden (FFN)
-        weight_bytes = num_layers * (4 * d_model * d_model + 3 * d_model * d_hidden) * bytes_per_element
+        weight_bytes = num_layers * (
+            (2 * d_model * d_model) +              # W_q, W_o
+            (2 * d_model * kv_dim) +               # W_k, W_v
+            (3 * d_model * d_hidden)
+        ) * bytes_per_element
         
         # Activations + KV cache
         activation_bytes = batch_size * seq_len * d_model * bytes_per_element
-        kv_cache_bytes = num_layers * 2 * batch_size * seq_len * d_model * bytes_per_element
+        kv_cache_bytes = num_layers * 2 * batch_size * seq_len * kv_dim * bytes_per_element
         
         total_bytes = weight_bytes + activation_bytes + kv_cache_bytes
         
@@ -352,7 +391,9 @@ class ThroughputFunctions:
     def gpu_throughput_with_tp(gpu_type: str, seq_len: int, batch_size: int, 
                                num_layers: int, d_model: int, bytes_per_element: int, 
                                tp_degree: int, d_hidden: int = None, nvlink_bw_gbps: float = 300.0,
-                               debug: bool = False, phase: str = 'prefill', output_length: int = 0) -> float:
+                               debug: bool = False, phase: str = 'prefill', output_length: int = 0,
+                               num_attention_heads: Optional[int] = None,
+                               num_kv_heads: Optional[int] = None) -> float:
         """
         GPU throughput with tensor parallelism using roofline model.
         
@@ -389,14 +430,15 @@ class ThroughputFunctions:
         specs = ThroughputFunctions.GPU_SPECS.get(gpu_type, ThroughputFunctions.GPU_SPECS['A100'])
         
         if debug:
-            logger.info(f"\n{'='*80}")
+            logger.info(f'='*80)
             logger.info(f"DEBUG: gpu_throughput_with_tp called")
             logger.info(f"  GPU: {gpu_type}, TP={tp_degree}, batch={batch_size}, seq={seq_len}, layers={num_layers}")
             logger.info(f"  d_model={d_model}, d_hidden={d_hidden}, nvlink_bw={nvlink_bw_gbps} GB/s")
         
         # === Roofline Model Analysis with TP (PHASE-AWARE) ===
         arithmetic_intensity = ThroughputFunctions.calculate_arithmetic_intensity(
-            num_layers, batch_size, seq_len, d_model, d_hidden, bytes_per_element, tp_degree, phase
+            num_layers, batch_size, seq_len, d_model, d_hidden, bytes_per_element, tp_degree, phase,
+            num_attention_heads=num_attention_heads, num_kv_heads=num_kv_heads
         )
         
         ridge_point = ThroughputFunctions.get_ridge_point(gpu_type)
@@ -410,9 +452,20 @@ class ThroughputFunctions:
         # === Compute FLOPs PER GPU (with TP, each GPU does less compute) ===
         # PHASE-AWARE computation: prefill vs decode have different complexity
         
+        if num_attention_heads is None:
+            num_attention_heads = max(1, d_model // 128)
+        if num_kv_heads is None:
+            num_kv_heads = num_attention_heads
+        d_head = d_model / num_attention_heads
+        kv_dim = num_kv_heads * d_head
+
         if phase == 'prefill':
             # PREFILL: Process all tokens in prompt at once (O(n²) attention)
-            attn_proj_flops = 2 * 4 * batch_size * seq_len * d_model * (d_model / tp_degree)  # QKV + output
+            flops_q = 2 * batch_size * seq_len * d_model * (d_model / tp_degree)
+            flops_k = 2 * batch_size * seq_len * d_model * (kv_dim / tp_degree)
+            flops_v = 2 * batch_size * seq_len * d_model * (kv_dim / tp_degree)
+            flops_o = 2 * batch_size * seq_len * d_model * (d_model / tp_degree)
+            attn_proj_flops = flops_q + flops_k + flops_v + flops_o  # QKV + output
             attn_score_flops = 4 * batch_size * seq_len * seq_len * (d_model / tp_degree)  # O(n²) !!!
             
             # FFN for all tokens
@@ -436,7 +489,11 @@ class ThroughputFunctions:
                 # Fallback: use initial cache length (for single-token generation)
                 avg_kv_cache_len = seq_len
             
-            attn_proj_flops = 2 * 4 * batch_size * 1 * d_model * (d_model / tp_degree)  # QKV for 1 token
+            flops_q = 2 * batch_size * 1 * d_model * (d_model / tp_degree)
+            flops_k = 2 * batch_size * 1 * d_model * (kv_dim / tp_degree)
+            flops_v = 2 * batch_size * 1 * d_model * (kv_dim / tp_degree)
+            flops_o = 2 * batch_size * 1 * d_model * (d_model / tp_degree)
+            attn_proj_flops = flops_q + flops_k + flops_v + flops_o  # QKV for 1 token
             attn_score_flops = 4 * batch_size * 1 * avg_kv_cache_len * (d_model / tp_degree)  # O(n) with growing cache
             
             # FFN for 1 token
@@ -457,14 +514,17 @@ class ThroughputFunctions:
         # PHASE-AWARE memory access patterns
         
         # Weights are sharded across TP GPUs (same for both phases)
-        weight_bytes = num_layers * (4 * d_model * (d_model / tp_degree) + 
-                                     3 * d_model * (d_hidden / tp_degree)) * bytes_per_element
+        weight_bytes = num_layers * (
+            (2 * d_model * (d_model / tp_degree)) +           # W_q, W_o
+            (2 * d_model * (kv_dim / tp_degree)) +            # W_k, W_v
+            (3 * d_model * (d_hidden / tp_degree))
+        ) * bytes_per_element
         
         if phase == 'prefill':
             # PREFILL: Activations for all tokens
             activation_bytes = batch_size * seq_len * d_model * bytes_per_element
             # KV cache being written (sharded)
-            kv_cache_bytes = num_layers * 2 * batch_size * seq_len * (d_model / tp_degree) * bytes_per_element
+            kv_cache_bytes = num_layers * 2 * batch_size * seq_len * (kv_dim / tp_degree) * bytes_per_element
         
         else:  # phase == 'decode'
             # DECODE: Activation for 1 token
@@ -475,7 +535,7 @@ class ThroughputFunctions:
                 avg_kv_cache_len = seq_len + (output_length - 1) / 2.0
             else:
                 avg_kv_cache_len = seq_len
-            kv_cache_bytes = num_layers * 2 * batch_size * avg_kv_cache_len * (d_model / tp_degree) * bytes_per_element
+            kv_cache_bytes = num_layers * 2 * batch_size * avg_kv_cache_len * (kv_dim / tp_degree) * bytes_per_element
         
         total_bytes_per_gpu = weight_bytes + activation_bytes + kv_cache_bytes
         
@@ -567,7 +627,7 @@ class ThroughputFunctions:
         if debug:
             logger.info(f"  FINAL per-stage throughput: {base_throughput:,.0f} tokens/sec")
             logger.info(f"  (Pipeline efficiency applied at solver level)")
-            logger.info(f"{'='*80}\n")
+            logger.info('='*80)
         
         # NOTE: We do NOT multiply by tp_degree here!
         # TP is not data parallelism - it processes the same batch across GPUs
@@ -898,6 +958,12 @@ class LLMPlacementSolverWithTP:
         output_length = int(config_dict.get('output_length', 0))
         if workload_phase == 'decode' and output_length == 0:
             logger.warning("Decode phase with output_length=0! This may indicate misconfiguration.")
+
+        # NEW: Runtime calibration knobs (optional)
+        # real_world_efficiency: overall efficiency multiplier [0,1]
+        # micro_batch_size: assumed micro-batch size for pipeline bubble model
+        real_world_efficiency = float(config_dict.get('real_world_efficiency', 0.30))
+        micro_batch_size = int(config_dict.get('micro_batch_size', 8))
         
         return Config(
             workload_phase=workload_phase,
@@ -911,6 +977,7 @@ class LLMPlacementSolverWithTP:
             d_hidden=int(config_dict['d_hidden']),
             vocab_size=int(config_dict['vocab_size']),
             num_attention_heads=int(config_dict['num_attention_heads']),
+            num_kv_heads=int(config_dict.get('num_kv_heads', config_dict['num_attention_heads'])),
             layer_weight_memory_gb=float(config_dict['layer_weight_memory_gb']),
             time_limit_seconds=float(config_dict['time_limit_seconds']),
             optimality_gap=float(config_dict['optimality_gap']),
@@ -928,7 +995,9 @@ class LLMPlacementSolverWithTP:
             throughput_normalization=float(config_dict['throughput_normalization']),
             cost_normalization=float(config_dict['cost_normalization']),
             total_tokens_to_process=int(config_dict['total_tokens_to_process']),
-            max_total_runtime_hours=float(config_dict['max_total_runtime_hours'])
+            max_total_runtime_hours=float(config_dict['max_total_runtime_hours']),
+            real_world_efficiency=real_world_efficiency,
+            micro_batch_size=micro_batch_size
         )
     
     def _get_min_intra_tp_bandwidth(self, gpu_type: str, gpu_set: FrozenSet[int]) -> float:
@@ -1014,6 +1083,17 @@ class LLMPlacementSolverWithTP:
 
             logger.info(f"GPU {gpu_type}: max_tp={max_tp}, generated {len(allocations)} allocations with unique partition IDs")
 
+            # Consistency check: partition_id should map to a single TP degree per GPU type
+            partition_id_to_tp = {}
+            for _, tp_degree, partition_id in allocations:
+                if partition_id in partition_id_to_tp and partition_id_to_tp[partition_id] != tp_degree:
+                    raise ValueError(
+                        f"Partition ID reuse detected for GPU {gpu_type}: "
+                        f"partition_id={partition_id} maps to TP {partition_id_to_tp[partition_id]} "
+                        f"and TP {tp_degree}"
+                    )
+                partition_id_to_tp[partition_id] = tp_degree
+
         return tp_allocations
     
     def _compute_max_segment_sizes(self) -> Dict[Tuple[str, int], int]:
@@ -1077,34 +1157,29 @@ class LLMPlacementSolverWithTP:
     
     def _get_quantized_segment_sizes(self) -> List[int]:
         """
-        Generate coarse quantized segment sizes for performance.
-        
-        PERFORMANCE OPTIMIZATION:
-        - Reduced from 14 sizes to ~7 sizes
-        - Strategic selection: [1, 5, 10, 20, 30, 40]
-        - 5-10× faster while maintaining solution quality
+        Generate quantized segment sizes for performance.
+        Combines exact divisors of total_layers with powers-of-two sizes.
         """
         total_layers = self.config.num_decoder_layers
+
+        sizes = set()
+
+        # # Include all exact divisors (good for even splits like 8+8+8+8 for 32, 10+10+10 for 30)
+        # for d in range(1, int(math.sqrt(total_layers)) + 1):
+        #     if total_layers % d == 0:
+        #         sizes.add(d)
+        #         sizes.add(total_layers // d)
+
+        # Also include powers of two for non-divisible totals
+        power = 1
+        while power <= total_layers:
+            sizes.add(power)
+            power *= 2
+
+        sizes = sorted(sizes)
         
-        # Coarse quantization strategy
-        if total_layers <= 10:
-            # Small models: use fine granularity
-            sizes = [1, 5, total_layers]
-        elif total_layers <= 30:
-            # Medium models: use moderate granularity
-            sizes = [1, 5, 10, 15, 20, total_layers]
-        elif total_layers <= 40:
-            # Large models (like our 40-layer case): use coarse granularity
-            sizes = [1, 5, 10, 20, 30, total_layers]
-        else:
-            # Large models (like our 40-layer case): use coarse granularity
-            sizes = [1, 10, 20, 30, 40, total_layers]
-        
-        # Remove duplicates and sort
-        sizes = sorted(set(sizes))
-        
-        logger.info(f"Quantized segment sizes (coarse): {sizes}")
-        logger.info(f"  Reduced from ~14 to {len(sizes)} sizes for performance")
+        logger.info(f"Quantized segment sizes (divisors + powers of two): {sizes}")
+        logger.info(f"  Using {len(sizes)} sizes for performance")
         return sizes
     
     def _calculate_activation_memory(self, tp_degree: int = 1, batch_size: int = None) -> float:
@@ -1121,14 +1196,18 @@ class LLMPlacementSolverWithTP:
         d_hidden = self.config.d_hidden
         bytes_per_elem = self.config.bytes_per_element
         phase = self.config.workload_phase  # NEW: Get phase from config
+        d_head = hidden / self.config.num_attention_heads
+        kv_dim = self.config.num_kv_heads * d_head
         
         if phase == 'prefill':
             # PREFILL: Process all tokens in prompt
             seq_len = self.config.sequence_length
             
             # Sharded intermediate tensors during computation
-            qkv_memory = (3 * batch * seq_len * (hidden / tp_degree) *
-                         bytes_per_elem) / (1024**3)
+            qkv_memory = (batch * seq_len * (
+                (hidden / tp_degree) +                # Q
+                2 * (kv_dim / tp_degree)              # K, V (GQA/MQA aware)
+            ) * bytes_per_elem) / (1024**3)
             mlp_intermediate = (batch * seq_len * (4 * hidden / tp_degree) *
                                bytes_per_elem) / (1024**3)
             sharded_computation = qkv_memory + mlp_intermediate
@@ -1137,7 +1216,7 @@ class LLMPlacementSolverWithTP:
             full_activation = (batch * seq_len * hidden * bytes_per_elem) / (1024**3)
 
             # KV cache being written (sharded)
-            kv_cache = (2 * batch * seq_len * (hidden / tp_degree) *
+            kv_cache = (2 * batch * seq_len * (kv_dim / tp_degree) *
                        bytes_per_elem) / (1024**3)
 
             # Peak memory
@@ -1148,8 +1227,10 @@ class LLMPlacementSolverWithTP:
             kv_cache_len = self.config.sequence_length  # Context length from prefill
             
             # Sharded intermediate tensors for 1 token
-            qkv_memory = (3 * batch * 1 * (hidden / tp_degree) *
-                         bytes_per_elem) / (1024**3)
+            qkv_memory = (batch * 1 * (
+                (hidden / tp_degree) +
+                2 * (kv_dim / tp_degree)
+            ) * bytes_per_elem) / (1024**3)
             mlp_intermediate = (batch * 1 * (4 * hidden / tp_degree) *
                                bytes_per_elem) / (1024**3)
             sharded_computation = qkv_memory + mlp_intermediate
@@ -1159,7 +1240,7 @@ class LLMPlacementSolverWithTP:
 
             # CRITICAL: Must store FULL KV cache from prefill (sharded)
             # This is persistent and can be HUGE!
-            kv_cache = (2 * batch * kv_cache_len * (hidden / tp_degree) *
+            kv_cache = (2 * batch * kv_cache_len * (kv_dim / tp_degree) *
                        bytes_per_elem) / (1024**3)
 
             # Peak memory
@@ -1273,7 +1354,9 @@ class LLMPlacementSolverWithTP:
                                     gpu_type, self.config.sequence_length,
                                     batch_size, segment_size, self.config.d_model,
                                     self.config.bytes_per_element, tp_degree, self.config.d_hidden, nvlink_bw,
-                                    debug=False, phase=self.config.workload_phase
+                                    debug=False, phase=self.config.workload_phase,
+                                    num_attention_heads=self.config.num_attention_heads,
+                                    num_kv_heads=self.config.num_kv_heads
                                 )
                                 # Store in dictionary for O(1) lookup later
                                 if not hasattr(self, 'segment_throughputs_temp'):
@@ -1306,7 +1389,9 @@ class LLMPlacementSolverWithTP:
                 gpu_type, self.config.sequence_length,
                 batch_size, segment_size, self.config.d_model,
                 self.config.bytes_per_element, tp_degree, self.config.d_hidden, nvlink_bw,
-                debug=False, phase=self.config.workload_phase
+                debug=False, phase=self.config.workload_phase,
+                num_attention_heads=self.config.num_attention_heads,
+                num_kv_heads=self.config.num_kv_heads
             )
             if precomputed is None:
                 logger.error(f"  ✗ Missing pre-computed value for segment: {seg}")
@@ -1420,7 +1505,7 @@ class LLMPlacementSolverWithTP:
             gpu_set1 = seg1[1]
             gpu_set2 = seg2[1]
             tp_degree1 = seg1[2]
-            tp_degree2 = seg1[2]
+            tp_degree2 = seg2[2]
             batch_size1 = seg1[6]
             batch_size2 = seg2[6]
             
@@ -1569,8 +1654,8 @@ class LLMPlacementSolverWithTP:
             name="segment_assignment"
         )
         
-        # TP partition usage: z[gpu_type, partition_id]
-        partition_keys = [(seg[0], seg[3]) for seg in self.valid_segments]
+        # TP partition usage: z[gpu_type, tp_degree, partition_id]
+        partition_keys = [(seg[0], seg[2], seg[3]) for seg in self.valid_segments]
         self.z = self.model.addVars(
             set(partition_keys),
             vtype=GRB.BINARY,
@@ -1631,16 +1716,16 @@ class LLMPlacementSolverWithTP:
                         name=f"gpu_exclusivity_{gpu_type}_{local_gpu_id}"
                     )
                     
-        existing_partition_keys = set((seg[0], seg[3]) for seg in self.valid_segments)
+        existing_partition_keys = set((seg[0], seg[2], seg[3]) for seg in self.valid_segments)
         # 3. Partition usage indicators
         for gpu_type, allocations in self.tp_allocations.items():
             for gpu_set, tp_degree, partition_id in allocations:
-                if (gpu_type, partition_id) in existing_partition_keys:
+                if (gpu_type, tp_degree, partition_id) in existing_partition_keys:
                     self.model.addConstr(
-                        self.z[gpu_type, partition_id] == 
+                        self.z[gpu_type, tp_degree, partition_id] ==
                         gp.quicksum(self.x[seg] for seg in self.valid_segments 
-                                if seg[0] == gpu_type and seg[3] == partition_id),
-                        name=f"partition_usage_{gpu_type}_{partition_id}"
+                                if seg[0] == gpu_type and seg[2] == tp_degree and seg[3] == partition_id),
+                        name=f"partition_usage_{gpu_type}_tp{tp_degree}_{partition_id}"
                     )
         
         # 3b. Global batch size consistency: all segments must use the same batch_size
@@ -1680,10 +1765,10 @@ class LLMPlacementSolverWithTP:
         # 4b. NEW: Cost constraints
         # Cost definition: sum(partition_usage × TP_degree × cost_per_hour)
         cost_expr = gp.quicksum(
-            self.z[gpu_type, partition_id] * tp_degree * self.gpu_types[gpu_type].cost_per_hour
+            self.z[gpu_type, tp_degree, partition_id] * tp_degree * self.gpu_types[gpu_type].cost_per_hour
             for gpu_type, allocations in self.tp_allocations.items()
             for gpu_set, tp_degree, partition_id in allocations
-            if (gpu_type, partition_id) in existing_partition_keys
+            if (gpu_type, tp_degree, partition_id) in existing_partition_keys
         )
         self.model.addConstr(self.cost == cost_expr, name="total_cost_definition")
         
@@ -1736,17 +1821,17 @@ class LLMPlacementSolverWithTP:
         # 6. Partition throughput definition (with variable TP per segment)
         for gpu_type, allocations in self.tp_allocations.items():
             for gpu_set, tp_degree, partition_id in allocations:
-                if (gpu_type, partition_id) in existing_partition_keys:
+                if (gpu_type, tp_degree, partition_id) in existing_partition_keys:
                     # Use pre-computed throughput (OPTIMIZATION)
                     # This avoids recomputing throughput for every segment in every model build
                     throughput_expr = gp.quicksum(
                         self.segment_throughputs[seg] * self.x[seg]
                         for seg in self.valid_segments 
-                        if seg[0] == gpu_type and seg[3] == partition_id  # seg[3]=partition_id
+                        if seg[0] == gpu_type and seg[2] == tp_degree and seg[3] == partition_id  # seg[3]=partition_id
                     )
                     self.model.addConstr(
-                        self.tau[gpu_type, partition_id] == throughput_expr,
-                        name=f"partition_throughput_{gpu_type}_{partition_id}"
+                        self.tau[gpu_type, tp_degree, partition_id] == throughput_expr,
+                        name=f"partition_throughput_{gpu_type}_tp{tp_degree}_{partition_id}"
                     )
         
         # 7. Network throughput definition
@@ -1797,7 +1882,7 @@ class LLMPlacementSolverWithTP:
         Using per-type Big-M causes slower GPUs to incorrectly constrain self.t.
         """
         M_partition = {}
-        existing_partition_keys = set((seg[0], seg[3]) for seg in self.valid_segments)
+        existing_partition_keys = set((seg[0], seg[2], seg[3]) for seg in self.valid_segments)
         
         # STEP 1: Find the maximum possible throughput across ALL GPU types
         max_throughput_global = 0
@@ -1814,7 +1899,9 @@ class LLMPlacementSolverWithTP:
                     gpu_type, self.config.sequence_length,
                     self.config.max_batch_size, max_size, self.config.d_model, 
                     self.config.bytes_per_element, tp_degree, self.config.d_hidden, nvlink_bw,
-                    debug=False, phase=self.config.workload_phase
+                    debug=False, phase=self.config.workload_phase,
+                    num_attention_heads=self.config.num_attention_heads,
+                    num_kv_heads=self.config.num_kv_heads
                 )
                 throughput_by_type[gpu_type] = max_throughput
                 max_throughput_global = max(max_throughput_global, max_throughput)
@@ -1824,8 +1911,8 @@ class LLMPlacementSolverWithTP:
         
         for gpu_type, allocations in self.tp_allocations.items():
             for gpu_set, tp_degree_alloc, partition_id in allocations:
-                if (gpu_type, partition_id) in existing_partition_keys:
-                    M_partition[(gpu_type, partition_id)] = M_global
+                if (gpu_type, tp_degree_alloc, partition_id) in existing_partition_keys:
+                    M_partition[(gpu_type, tp_degree_alloc, partition_id)] = M_global
         
         M_network = max(self.gpu_pair_throughputs.values()) * 2 if self.gpu_pair_throughputs else 1000.0
         
@@ -1910,7 +1997,7 @@ class LLMPlacementSolverWithTP:
         """Add symmetry breaking for identical TP partitions"""
         logger.info("Adding symmetry breaking constraints...")
         constraints_added = 0
-        existing_partition_keys = set((seg[0], seg[3]) for seg in self.valid_segments)
+        existing_partition_keys = set((seg[0], seg[2], seg[3]) for seg in self.valid_segments)
         
         # Group partitions by GPU type AND TP degree (not just GPU type)
         for gpu_type, allocations in self.tp_allocations.items():
@@ -1918,7 +2005,7 @@ class LLMPlacementSolverWithTP:
             from collections import defaultdict
             by_tp = defaultdict(list)
             for gpu_set, tp_degree, partition_id in allocations:
-                if (gpu_type, partition_id) in existing_partition_keys:
+                if (gpu_type, tp_degree, partition_id) in existing_partition_keys:
                     by_tp[tp_degree].append(partition_id)
             
             # Apply symmetry breaking ONLY within same TP degree
@@ -1927,7 +2014,7 @@ class LLMPlacementSolverWithTP:
                 if len(sorted_ids) > 1:
                     for i in range(len(sorted_ids) - 1):
                         self.model.addConstr(
-                            self.z[gpu_type, sorted_ids[i]] >= self.z[gpu_type, sorted_ids[i+1]],
+                            self.z[gpu_type, tp_degree, sorted_ids[i]] >= self.z[gpu_type, tp_degree, sorted_ids[i+1]],
                             name=f"symmetry_break_{gpu_type}_tp{tp_degree}_{i}"
                         )
                         constraints_added += 1
@@ -2011,7 +2098,7 @@ class LLMPlacementSolverWithTP:
         if target_cost_per_token is None:
             target_cost_per_token = self.config.max_cost_per_token
         
-        logger.info(f"\n{'='*80}")
+        logger.info('='*80)
         logger.info(f"ITERATIVE $/M TOKENS OPTIMIZATION")
         logger.info(f"{'='*80}")
         target_cost_per_million_token = target_cost_per_token * 1_000_000
@@ -2023,7 +2110,9 @@ class LLMPlacementSolverWithTP:
             # Use min_batch_size for lower bound estimation
             t_est = ThroughputFunctions.gpu_throughput(
                 gpu_type, self.config.sequence_length, self.config.min_batch_size,
-                1, self.config.d_model, self.config.bytes_per_element, self.config.d_hidden
+                1, self.config.d_model, self.config.bytes_per_element, self.config.d_hidden,
+                num_attention_heads=self.config.num_attention_heads,
+                num_kv_heads=self.config.num_kv_heads
             )
             min_tp_estimates.append(t_est)
         
@@ -2040,7 +2129,7 @@ class LLMPlacementSolverWithTP:
         
         # Step 3: Iterative refinement
         for iteration in range(max_iterations):
-            logger.info(f"\nIteration {iteration + 1}/{max_iterations}:")
+            logger.info(f"Iteration {iteration + 1}/{max_iterations}:")
             logger.info(f"  Cost budget: ${initial_budget:.2f}/hour")
             
             # Update budget constraint efficiently
@@ -2088,7 +2177,7 @@ class LLMPlacementSolverWithTP:
         if best_solution:
             self.solution = best_solution
             best_cpm = best_cpt * 1_000_000
-            logger.info(f"\nBest $/M tokens found: ${best_cpm:.6f}")
+            logger.info(f"Best $/M tokens found: ${best_cpm:.6f}")
             return True
         
         return False
@@ -2155,7 +2244,7 @@ class LLMPlacementSolverWithTP:
         logger.info(f"  Search budget range: ${min_budget:.2f} - ${max_budget:.2f}/hour")
         
         # Log which configurations will/won't be covered
-        logger.info(f"\nConfiguration Coverage Analysis:")
+        logger.info(f"Configuration Coverage Analysis:")
         covered = []
         not_covered = []
         for gpu_type, gpu_info in self.gpu_types.items():
@@ -2195,7 +2284,7 @@ class LLMPlacementSolverWithTP:
                           If None, uses smart hybrid or full range
             use_smart_hybrid: If True, uses iterative first to focus search (faster)
         """
-        logger.info(f"\n{'='*80}")
+        logger.info(f'='*80)
         logger.info(f"OPTIMAL $/M TOKENS SEARCH {'(Smart Hybrid)' if use_smart_hybrid and budget_points is None else '(Full Enumeration)'}")
         logger.info(f"{'='*80}")
         target_cost_per_million_token_display = self.config.max_cost_per_token * 1_000_000
@@ -2208,7 +2297,7 @@ class LLMPlacementSolverWithTP:
             
             if use_smart_hybrid:
                 # SMART HYBRID: Use iterative to find ballpark, then enumerate around it
-                logger.info("\nPhase 1: Iterative search to find ballpark...")
+                logger.info("Phase 1: Iterative search to find ballpark...")
                 phase1_start = time.time()
                 if self.solve_for_min_cost_per_token(max_iterations=3):
                     phase1_time = time.time() - phase1_start
@@ -2226,7 +2315,7 @@ class LLMPlacementSolverWithTP:
                     
                     # PERFORMANCE OPTIMIZATION: Reduced from 12 to 6-8 budget points
                     # COMPETITIVE OPTIMIZATION: Focus on range that can beat competitor
-                    logger.info("\nPhase 2: Coarse enumeration around ballpark...")
+                    logger.info("Phase 2: Coarse enumeration around ballpark...")
                     budget_points = [
                         ballpark_cost * factor
                         for factor in [0.4, 0.7, 0.9, 1.0, 1.2, 1.5]
@@ -2285,7 +2374,7 @@ class LLMPlacementSolverWithTP:
         
         for i, budget in enumerate(sorted(budget_points)):
             iteration_start = time.time()
-            logger.info(f"\n[{i+1}/{len(budget_points)}] Budget: ${budget:.2f}/hour")
+            logger.info(f"[{i+1}/{len(budget_points)}] Budget: ${budget:.2f}/hour")
             
             # Log which TP configurations are feasible at this budget
             feasible_configs = []
@@ -2350,10 +2439,10 @@ class LLMPlacementSolverWithTP:
         self.config.cost_throughput_weight = original_weight
         
         total_enumeration_time = time.time() - model_build_start
-        logger.info(f"\nTotal enumeration time: {total_enumeration_time:.1f}s (model build: {model_build_time:.1f}s, solving: {total_enumeration_time - model_build_time:.1f}s)")
+        logger.info(f"Total enumeration time: {total_enumeration_time:.1f}s (model build: {model_build_time:.1f}s, solving: {total_enumeration_time - model_build_time:.1f}s)")
         
         # Log coverage summary
-        logger.info(f"\n{'='*80}")
+        logger.info(f'='*80)
         logger.info(f"ENUMERATION COVERAGE SUMMARY")
         logger.info(f"{'='*80}")
         logger.info(f"Budget points tested: {len(budget_points)}")
@@ -2376,12 +2465,12 @@ class LLMPlacementSolverWithTP:
                 else:
                     not_explored.append((config_name, config_cost))
         
-        logger.info(f"\n✓ Explored: {len(explored)}/{len(all_configs)} configurations")
+        logger.info(f"✓ Explored: {len(explored)}/{len(all_configs)} configurations")
         for name, cost in explored:
             logger.info(f"  {name:<20} ${cost:.2f}/h")
         
         if not_explored:
-            logger.warning(f"\n✗ NOT explored: {len(not_explored)} configurations (budget too low)")
+            logger.warning(f"✗ NOT explored: {len(not_explored)} configurations (budget too low)")
             for name, cost in not_explored:
                 logger.warning(f"  {name:<20} ${cost:.2f}/h (need >= ${cost:.2f}/h budget)")
         
@@ -2389,7 +2478,7 @@ class LLMPlacementSolverWithTP:
             self.solution = best_solution
             self.all_enumeration_results = all_results  # Store for CSV export
             best_cpm = best_cpt * 1_000_000
-            logger.info(f"\n{'='*80}")
+            logger.info(f'='*80)
             logger.info(f"OPTIMAL $/M TOKENS FOUND")
             logger.info(f"{'='*80}")
             logger.info(f"Best $/M tokens: ${best_cpm:.6f}")
@@ -2402,7 +2491,7 @@ class LLMPlacementSolverWithTP:
             target_per_million = target * 1_000_000
             if best_cpt <= target:
                 improvement = (target - best_cpt) / target * 100
-                logger.info(f"\nMEETS TARGET: ${best_cpm:.6f} <= ${target_per_million:.6f}")
+                logger.info(f"MEETS TARGET: ${best_cpm:.6f} <= ${target_per_million:.6f}")
                 logger.info(f"   {improvement:.1f}% better than target!")
             else:
                 shortfall = (best_cpt - target) / target * 100
@@ -2505,7 +2594,7 @@ class LLMPlacementSolverWithTP:
             # Micro-batching: split batch across pipeline stages to hide bubbles
             # Typical: 4-8 micro-batches per batch
             # More micro-batches = better efficiency (up to a limit)
-            num_micro_batches = max(1, optimal_batch_size // 8)  # Assume micro-batch size ~8
+            num_micro_batches = max(1, optimal_batch_size // self.config.micro_batch_size)
             
             # Pipeline efficiency formula from literature:
             # efficiency ≈ num_micro_batches / (num_micro_batches + num_stages - 1)
@@ -2526,7 +2615,7 @@ class LLMPlacementSolverWithTP:
         # - Gradient checkpointing overhead
         # - Dynamic vs static batching differences
         # Based on expert estimates: our model is ~3-4× too optimistic even after pipeline bubbles
-        real_world_efficiency = 0.30  # 70% overhead from all the above factors
+        real_world_efficiency = self.config.real_world_efficiency
         
         throughput_per_sec = raw_throughput * pipeline_efficiency * real_world_efficiency
         
@@ -2534,7 +2623,7 @@ class LLMPlacementSolverWithTP:
         logger.info(f"  Batch size: {optimal_batch_size}")
         logger.info(f"  Pipeline stages: {num_stages}")
         if num_stages > 1:
-            num_micro_batches = max(1, optimal_batch_size // 8)
+            num_micro_batches = max(1, optimal_batch_size // self.config.micro_batch_size)
             logger.info(f"  Micro-batches: {num_micro_batches}")
             logger.info(f"  Pipeline bubble efficiency: {pipeline_efficiency:.1%} (dynamic: {num_micro_batches}÷{num_micro_batches + num_stages - 1})")
         else:
@@ -2620,7 +2709,7 @@ class LLMPlacementSolverWithTP:
                     'start_layer': start_layer,
                     'end_layer': start_layer + segment_size - 1,
                     'segment_size': segment_size,
-                    'throughput': self.tau[gpu_type, partition_id].x
+                    'throughput': self.tau[gpu_type, tp_degree, partition_id].x
                 }
                 self.solution['gpu_assignments'].append(assignment)
         
@@ -2752,7 +2841,9 @@ class LLMPlacementSolverWithTP:
             ai = ThroughputFunctions.calculate_arithmetic_intensity(
                 segment_size, optimal_batch, self.config.sequence_length,
                 self.config.d_model, self.config.d_hidden, self.config.bytes_per_element, tp_degree,
-                phase=self.config.workload_phase
+                phase=self.config.workload_phase,
+                num_attention_heads=self.config.num_attention_heads,
+                num_kv_heads=self.config.num_kv_heads
             )
             
             # Get ridge point
@@ -2795,7 +2886,9 @@ class LLMPlacementSolverWithTP:
             ai = ThroughputFunctions.calculate_arithmetic_intensity(
                 segment_size, optimal_batch, self.config.sequence_length,
                 self.config.d_model, self.config.d_hidden, self.config.bytes_per_element, tp_degree,
-                phase=self.config.workload_phase
+                phase=self.config.workload_phase,
+                num_attention_heads=self.config.num_attention_heads,
+                num_kv_heads=self.config.num_kv_heads
             )
             ridge_point = ThroughputFunctions.get_ridge_point(gpu_type)
             regime = ThroughputFunctions.determine_regime(ai, ridge_point)
@@ -2838,7 +2931,9 @@ class LLMPlacementSolverWithTP:
             ai = ThroughputFunctions.calculate_arithmetic_intensity(
                 segment_size, optimal_batch, self.config.sequence_length,
                 self.config.d_model, self.config.d_hidden, self.config.bytes_per_element, tp_degree,
-                phase=self.config.workload_phase
+                phase=self.config.workload_phase,
+                num_attention_heads=self.config.num_attention_heads,
+                num_kv_heads=self.config.num_kv_heads
             )
             ridge_point = ThroughputFunctions.get_ridge_point(gpu_type)
             regime = ThroughputFunctions.determine_regime(ai, ridge_point)
@@ -2941,7 +3036,9 @@ class LLMPlacementSolverWithTP:
                     hyp_throughput = ThroughputFunctions.gpu_throughput_with_tp(
                         gpu_type, self.config.sequence_length, self.config.max_batch_size,
                         5, self.config.d_model, self.config.bytes_per_element, 4, self.config.d_hidden, nvlink_bw,
-                        debug=False, phase=self.config.workload_phase
+                        debug=False, phase=self.config.workload_phase,
+                        num_attention_heads=self.config.num_attention_heads,
+                        num_kv_heads=self.config.num_kv_heads
                     )
                     hyp_cost = gpu_obj.cost_per_hour * 4  # TP=4
                     logger.info(f"             Hypothetical (5 layers, TP=4): {hyp_throughput:.0f} tokens/s, ${hyp_cost:.2f}/h")
@@ -2987,7 +3084,9 @@ class LLMPlacementSolverWithTP:
                 best_gpu_type, self.config.sequence_length, self.config.max_batch_size,
                 self.config.num_decoder_layers, self.config.d_model, 
                 self.config.bytes_per_element, max_tp, self.config.d_hidden, nvlink_bw,
-                debug=False, phase=self.config.workload_phase
+                debug=False, phase=self.config.workload_phase,
+                num_attention_heads=self.config.num_attention_heads,
+                num_kv_heads=self.config.num_kv_heads
             )
             alt_cost = best_gpu.cost_per_hour * max_tp
             alt_cost_per_token = alt_cost / (alt_throughput * 3600)
@@ -3016,7 +3115,7 @@ class LLMPlacementSolverWithTP:
             logger.info(f"\nCANNOT FIT: Model needs {self.config.num_decoder_layers} layers but max is {max_seg_size}")
         
         # 6. Objective function check
-        logger.info("\n" + "="*80)
+        logger.info("="*80)
         logger.info("OBJECTIVE FUNCTION VERIFICATION")
         logger.info("="*80)
         
@@ -3046,7 +3145,9 @@ class LLMPlacementSolverWithTP:
                         best_gpu_type, self.config.sequence_length, self.config.max_batch_size,
                         self.config.num_decoder_layers, self.config.d_model,
                         self.config.bytes_per_element, max_tp, self.config.d_hidden, nvlink_bw,
-                        debug=False, phase=self.config.workload_phase
+                        debug=False, phase=self.config.workload_phase,
+                        num_attention_heads=self.config.num_attention_heads,
+                        num_kv_heads=self.config.num_kv_heads
                     )
                     c_alt = best_gpu.cost_per_hour * max_tp
                     obj_alt = (t_alt / self.config.throughput_normalization) - \
@@ -3066,7 +3167,7 @@ class LLMPlacementSolverWithTP:
             logger.error("No solution available")
             return
         
-        logger.info("\n" + "="*100)
+        logger.info("="*100)
         logger.info(f"LLM PLACEMENT OPTIMIZATION RESULTS (COST-AWARE)")
         logger.info("="*100)
         logger.info(f"Model: {self.config.model_name} ({self.config.num_decoder_layers} layers)")
@@ -3143,7 +3244,7 @@ class LLMPlacementSolverWithTP:
                   f"${segment_cost:<9.2f}")
         
         if self.solution['network_connections']:
-            logger.info("\nNETWORK CONNECTIONS:")
+            logger.info("NETWORK CONNECTIONS:")
             logger.info("-" * 80)
             for i, conn in enumerate(self.solution['network_connections']):
                 from_seg = conn['from_segment']
@@ -3154,7 +3255,7 @@ class LLMPlacementSolverWithTP:
                       f"(layers {to_seg['start_layer']}-{to_seg['end_layer']}) "
                       f"[Throughput: {conn['throughput']:.2f}]")
         
-        logger.info("\n" + "="*100)
+        logger.info("="*100)
     
     def save_solution(self, output_file: str):
         """Save solution to JSON file"""
@@ -3447,7 +3548,7 @@ def solve_all_tp_configurations(config_dir: str, **kwargs) -> Tuple[Dict, Dict]:
     best_tp_config = None
     
     for i, tp_config in enumerate(tp_configs):
-        logger.info(f"\n{'='*80}")
+        logger.info("="*80)
         logger.info(f"TP Configuration {i+1}/{len(tp_configs)}: {tp_config}")
         logger.info(f"{'='*80}")
         
@@ -3472,7 +3573,7 @@ def solve_all_tp_configurations(config_dir: str, **kwargs) -> Tuple[Dict, Dict]:
             continue
     
     if best_solution:
-        logger.info(f"\n{'='*80}")
+        logger.info("="*80)
         logger.info(f"BEST SOLUTION ACROSS ALL TP CONFIGURATIONS")
         logger.info(f"{'='*80}")
         logger.info(f"Best TP Configuration: {best_tp_config}")
@@ -3559,7 +3660,7 @@ def main():
             
             if best_solution:
                 # Print summary
-                logger.info("\n" + "="*100)
+                logger.info("="*100)
                 logger.info("BEST SOLUTION SUMMARY")
                 logger.info("="*100)
                 logger.info(f"Best TP Configuration: {best_tp_config}")

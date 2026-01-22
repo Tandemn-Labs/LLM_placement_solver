@@ -30,3 +30,6 @@ total_tokens_to_process,1000000
 storage_bandwidth_gbps,10000.0
 
 
+real_world_efficiency,0.30
+micro_batch_size,8
+num_kv_heads,64

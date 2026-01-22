@@ -17,8 +17,12 @@ function cleanup() {
 # network_config_list=("600 400" "400 200")
 # run_on_background=true
 
-config_dir_list=("config/medium")
-# config_dir_list=("config/large")
+# config_dir_list=("config/medium")
+# config_dir_list=("config/medium-prefill")
+# config_dir_list=("config/medium-decode")
+config_dir_list=("config/large-prefill")
+# config_dir_list=("config/large-decode")
+
 # cost_optimization_method_list=("weighted")
 cost_optimization_method_list=("enumeration")
 network_config_list=("400 200")
@@ -57,7 +61,7 @@ for config_dir in "${config_dir_list[@]}"; do
                 echo "** Solver finished for config: ${config_dir} with method: ${cost_optimization_method} and network: ${intra_bw} ${inter_bw}"
                 end_time=$(date +%s)
                 runtime=$((end_time - start_time))
-                echo "** Solver output_log_path: ${output_log_path}, total runtime: ${runtime}"
+                # echo "** Solver output_log_path: ${output_log_path}, total runtime: ${runtime}"
             fi
         done
     done
