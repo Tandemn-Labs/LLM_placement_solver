@@ -1,3 +1,6 @@
 gurobi-machinelearning
 gurobipy
 gurobipy-pandas
+transformers
+huggingface_hub
+pandas
