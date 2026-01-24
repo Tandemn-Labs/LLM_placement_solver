@@ -18,14 +18,15 @@ function cleanup() {
 # run_on_background=true
 
 # config_dir_list=("config/medium")
-# config_dir_list=("config/medium-prefill")
+config_dir_list=("config/medium-prefill")
 # config_dir_list=("config/medium-decode")
-config_dir_list=("config/large-prefill")
+# config_dir_list=("config/large-prefill")
 # config_dir_list=("config/large-decode")
 
 # cost_optimization_method_list=("weighted")
 cost_optimization_method_list=("enumeration")
-network_config_list=("400 200")
+# Use "none" to force loading config/network_bandwidth.csv
+network_config_list=("none")
 run_on_background=false
 cloud_provider="AWS"
 
@@ -43,15 +44,15 @@ for config_dir in "${config_dir_list[@]}"; do
             start_time=$(date +%s)
             if [ "${network_config}" != "none" ]; then
                 if [ "${run_on_background}" = true ]; then
-                    python3 ${solver} --config-dir ${config_dir} --method ${cost_optimization_method} --generate-network ${intra_bw} ${inter_bw} --cloud-provider ${cloud_provider} &> ${output_log_path} &
+                    python3 ${solver} --config-dir ${config_dir} --method ${cost_optimization_method} --generate-network ${intra_bw} ${inter_bw} --cloud-provider ${cloud_provider} --throughput-debug-samples 5 &> ${output_log_path} &
                 else
-                    python3 ${solver} --config-dir ${config_dir} --method ${cost_optimization_method} --generate-network ${intra_bw} ${inter_bw} --cloud-provider ${cloud_provider} &> ${output_log_path}
+                    python3 ${solver} --config-dir ${config_dir} --method ${cost_optimization_method} --generate-network ${intra_bw} ${inter_bw} --cloud-provider ${cloud_provider} --throughput-debug-samples 5 &> ${output_log_path}
                 fi
             else
                 if [ "${run_on_background}" = true ]; then
-                    python3 ${solver} --config-dir ${config_dir} --method ${cost_optimization_method} --cloud-provider ${cloud_provider} &> ${output_log_path} &
+                    python3 ${solver} --config-dir ${config_dir} --method ${cost_optimization_method} --cloud-provider ${cloud_provider} --throughput-debug-samples 5 &> ${output_log_path} &
                 else
-                    python3 ${solver} --config-dir ${config_dir} --method ${cost_optimization_method} --cloud-provider ${cloud_provider} &> ${output_log_path}
+                    python3 ${solver} --config-dir ${config_dir} --method ${cost_optimization_method} --cloud-provider ${cloud_provider} --throughput-debug-samples 5 &> ${output_log_path}
                 fi
             fi
             if [ "${run_on_background}" = true ]; then

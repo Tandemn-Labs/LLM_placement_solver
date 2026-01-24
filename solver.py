@@ -40,7 +40,8 @@ class GPUType:
     count: int
     memory_gb: float
     global_ids: List[int]
-    cost_per_hour: float = 0.0  # NEW: Cost in $/hour
+    cost_per_hour: float = 0.0  # Cost in $/hour per instance
+    gpu_model: str = ""         # Underlying GPU model (e.g., A100, H100)
 
 @dataclass
 class Config:
@@ -180,19 +181,20 @@ class ThroughputFunctions:
 
         if phase == 'prefill':
             # PREFILL: Process all tokens at once (O(n²) attention)
-            flops_q = 2 * batch_size * seq_len * d_model * d_model
-            flops_k = 2 * batch_size * seq_len * d_model * kv_dim
-            flops_v = 2 * batch_size * seq_len * d_model * kv_dim
-            flops_o = 2 * batch_size * seq_len * d_model * d_model
+            # TP sharding splits compute across GPUs
+            flops_q = 2 * batch_size * seq_len * d_model * (d_model / tp_degree)
+            flops_k = 2 * batch_size * seq_len * d_model * (kv_dim / tp_degree)
+            flops_v = 2 * batch_size * seq_len * d_model * (kv_dim / tp_degree)
+            flops_o = 2 * batch_size * seq_len * d_model * (d_model / tp_degree)
             flops_attn_proj = flops_q + flops_k + flops_v + flops_o
-            flops_attn_scores = 4 * batch_size * seq_len * seq_len * d_model  # QK^T + softmax*V (O(n²))
+            flops_attn_scores = 4 * batch_size * seq_len * seq_len * (d_model / tp_degree)  # O(n²)
             flops_attention = flops_attn_proj + flops_attn_scores
             
             # FFN for all tokens
             flops_ffn = 2 * batch_size * seq_len * (
-                d_model * d_hidden +
-                d_model * d_hidden +
-                d_hidden * d_model
+                d_model * (d_hidden / tp_degree) +
+                d_model * (d_hidden / tp_degree) +
+                (d_hidden / tp_degree) * d_model
             )
         else:  # decode
             # DECODE: Generate ONE token (O(n) attention to KV cache)
@@ -200,19 +202,19 @@ class ThroughputFunctions:
             # Note: This function doesn't have output_length parameter, so we can't account for growth
             # The caller (gpu_throughput_with_tp) handles this properly
             kv_cache_len = seq_len  # seq_len represents cached context
-            flops_q = 2 * batch_size * 1 * d_model * d_model
-            flops_k = 2 * batch_size * 1 * d_model * kv_dim
-            flops_v = 2 * batch_size * 1 * d_model * kv_dim
-            flops_o = 2 * batch_size * 1 * d_model * d_model
+            flops_q = 2 * batch_size * 1 * d_model * (d_model / tp_degree)
+            flops_k = 2 * batch_size * 1 * d_model * (kv_dim / tp_degree)
+            flops_v = 2 * batch_size * 1 * d_model * (kv_dim / tp_degree)
+            flops_o = 2 * batch_size * 1 * d_model * (d_model / tp_degree)
             flops_attn_proj = flops_q + flops_k + flops_v + flops_o  # QKV+O for 1 token
-            flops_attn_scores = 4 * batch_size * 1 * kv_cache_len * d_model  # Attend to cache (O(n))
+            flops_attn_scores = 4 * batch_size * 1 * kv_cache_len * (d_model / tp_degree)  # O(n)
             flops_attention = flops_attn_proj + flops_attn_scores
             
             # FFN for 1 token
             flops_ffn = 2 * batch_size * 1 * (
-                d_model * d_hidden +
-                d_model * d_hidden +
-                d_hidden * d_model
+                d_model * (d_hidden / tp_degree) +
+                d_model * (d_hidden / tp_degree) +
+                (d_hidden / tp_degree) * d_model
             )
         
         flops_per_layer = flops_attention + flops_ffn
@@ -458,7 +460,7 @@ class ThroughputFunctions:
             num_kv_heads = num_attention_heads
         d_head = d_model / num_attention_heads
         kv_dim = num_kv_heads * d_head
-
+        
         if phase == 'prefill':
             # PREFILL: Process all tokens in prompt at once (O(n²) attention)
             flops_q = 2 * batch_size * seq_len * d_model * (d_model / tp_degree)
@@ -521,14 +523,14 @@ class ThroughputFunctions:
         ) * bytes_per_element
         
         if phase == 'prefill':
-            # PREFILL: Activations for all tokens
-            activation_bytes = batch_size * seq_len * d_model * bytes_per_element
+            # PREFILL: Activations for all tokens per layer
+            activation_bytes = num_layers * batch_size * seq_len * d_model * bytes_per_element
             # KV cache being written (sharded)
             kv_cache_bytes = num_layers * 2 * batch_size * seq_len * (kv_dim / tp_degree) * bytes_per_element
         
         else:  # phase == 'decode'
-            # DECODE: Activation for 1 token
-            activation_bytes = batch_size * 1 * d_model * bytes_per_element
+            # DECODE: Activation for 1 token per layer
+            activation_bytes = num_layers * batch_size * 1 * d_model * bytes_per_element
             # CRITICAL: Must READ entire KV cache (which grows during generation!)
             # Use average cache length for realistic estimation
             if output_length > 0:
@@ -642,7 +644,7 @@ class LLMPlacementSolverWithTP:
                  enable_upper_bound: bool = True, enable_tight_bigm: bool = True,
                  enable_flow_conservation: bool = True, threads: Optional[int] = None,
                  max_threads: int = 32, generate_network: Optional[Tuple[float, float]] = None,
-                 cloud_provider: Optional[str] = None):
+                 cloud_provider: Optional[str] = None, throughput_debug_samples: int = 0):
         
         def _read_gurobi_wls_file(wls_path: str) -> Dict[str, Union[str, int]]:
             if not os.path.exists(wls_path):
@@ -671,6 +673,7 @@ class LLMPlacementSolverWithTP:
         self.env = gp.Env(params=self.options)
         self.config_dir = config_dir
         self.cloud_provider = cloud_provider
+        self.throughput_debug_samples = max(0, int(throughput_debug_samples))
         
         # Optimization flags
         self.enable_symmetry_breaking = enable_symmetry_breaking
@@ -681,13 +684,11 @@ class LLMPlacementSolverWithTP:
         self.max_threads = max_threads
 
         # Load cloud pricing data if available
-        cloud_specs_file = 'cloud_instances_specs.csv'
+        cloud_specs_file = 'config/cloud_instances_specs.csv'
         if os.path.exists(cloud_specs_file):
-            self.cloud_pricing = self._load_cloud_pricing(cloud_specs_file)
-            self.cloud_gpu_memory = self._load_cloud_gpu_memory(cloud_specs_file)
+            self.cloud_instances = self._load_cloud_instances(cloud_specs_file)
         else:
-            self.cloud_pricing = None
-            self.cloud_gpu_memory = None
+            self.cloud_instances = None
             
         # Load configuration
         config_file = os.path.join(config_dir, 'config.csv')
@@ -699,14 +700,14 @@ class LLMPlacementSolverWithTP:
         # Load or generate network bandwidth
         if generate_network is not None:
             intra_bw, inter_bw = generate_network
-            self.network_bandwidth = self._generate_network_bandwidth(intra_bw, inter_bw)
+            generated = self._generate_network_bandwidth(intra_bw, inter_bw)
             logger.info(f"Generated network bandwidth matrix: intra={intra_bw} GB/s, inter={inter_bw} GB/s")
-            # Save generated matrix to file
-            self._save_network_bandwidth(network_file, self.network_bandwidth)
+            # Always save to and load from config/network_bandwidth.csv
+            self._save_network_bandwidth(network_file, generated)
             logger.info(f"Saved generated network bandwidth to {network_file}")
-        else:
-            self.network_bandwidth = self._load_network_bandwidth(network_file)
-            logger.info(f"Loaded network bandwidth from {network_file}")
+
+        self.network_bandwidth = self._load_network_bandwidth(network_file)
+        logger.info(f"Loaded network bandwidth from {network_file}")
         
         self.config = self._load_config(config_file)
         self.model = None
@@ -720,8 +721,23 @@ class LLMPlacementSolverWithTP:
             raise ValueError(f"Network bandwidth matrix size ({self.network_bandwidth.shape[0]}) "
                            f"does not match total GPU count ({self.total_gpus})")
         
-        # TP configuration: {gpu_type: max_tp_degree}
-        self.tp_max_configuration = tp_configuration or {gpu_type: 8 for gpu_type in self.gpu_types}
+        # TP configuration: {gpu_type: max_tp_degree} (cap by instance GPU count)
+        if tp_configuration is None:
+            self.tp_max_configuration = {
+                gpu_type: min(8, gpu_obj.count)
+                for gpu_type, gpu_obj in self.gpu_types.items()
+            }
+        else:
+            self.tp_max_configuration = {}
+            for gpu_type, gpu_obj in self.gpu_types.items():
+                requested = tp_configuration.get(gpu_type, 8)
+                capped = min(requested, gpu_obj.count)
+                if capped != requested:
+                    logger.warning(
+                        f"Capping TP for {gpu_type}: requested {requested}, "
+                        f"available GPUs {gpu_obj.count} -> {capped}"
+                    )
+                self.tp_max_configuration[gpu_type] = capped
         
         # Generate TP partitions based on configuration
         self.tp_allocations = self._generate_tp_allocations()
@@ -740,6 +756,10 @@ class LLMPlacementSolverWithTP:
         self._apply_network_bandwidth_filter()
         
         self.gpu_pair_throughputs = self._precompute_network_throughputs()
+
+        if self.throughput_debug_samples > 0:
+            self._log_throughput_debug_samples(self.throughput_debug_samples)
+            self._log_network_debug_samples(self.throughput_debug_samples)
         
         # Validate problem size
         self._validate_problem_size()
@@ -753,18 +773,19 @@ class LLMPlacementSolverWithTP:
         logger.info(f"  - Model: {self.config.num_decoder_layers} layers")
         logger.info(f"  - Problem size: {len(self.valid_segments)} segments, {len(self.valid_connections)} connections")
     
-    def _load_cloud_pricing(self, filename: str) -> Dict[Tuple[str, str], float]:
+    def _load_cloud_instances(self, filename: str) -> Dict[Tuple[str, str], Dict[str, Union[str, float]]]:
         """
-        Load cloud GPU pricing from cloud_instances_specs.csv
-        Returns dict: (provider, gpu_model) -> price_per_gpu_per_hour
+        Load cloud instance specs from cloud_instances_specs.csv
+        Returns dict: (provider, instance_name) -> specs
         """
         import re
         
         df = pd.read_csv(filename)
-        pricing = {}
+        instances = {}
         
         for _, row in df.iterrows():
             provider = row['Cloud Provider']
+            instance_name = row['Instance Name']
             gpu_model = row['GPU Model']
             price_str = row['Price per Hour USD']
             
@@ -796,118 +817,165 @@ class LLMPlacementSolverWithTP:
                 gpu_count = int(gpu_count_numbers[0])
                 price_per_gpu = price_value / gpu_count
             
-            pricing[(provider, gpu_model)] = price_per_gpu
+            num_gpus = row.get('num_gpus')
+            vram_per_gpu = row.get('vram_gb_per_gpu')
+            if pd.isna(num_gpus) or pd.isna(vram_per_gpu):
+                # Fallback to parsing original columns if new ones are missing
+                gpu_count_str = str(row.get('GPU Count', ''))
+                gpu_mem_str = str(row.get('GPU Memory per GPU', ''))
+                gpu_count_numbers = re.findall(r'\d+', gpu_count_str)
+                mem_numbers = re.findall(r'[\d.]+', gpu_mem_str)
+                num_gpus = float(gpu_count_numbers[0]) if gpu_count_numbers else None
+                vram_per_gpu = float(mem_numbers[0]) if mem_numbers else None
+            
+            if num_gpus is None or vram_per_gpu is None:
+                continue
+
+            instances[(provider, instance_name)] = {
+                'instance_name': instance_name,
+                'gpu_model': gpu_model,
+                'num_gpus': float(num_gpus),
+                'vram_gb_per_gpu': float(vram_per_gpu),
+                'price_per_hour': price_value
+            }
         
-        return pricing
+        return instances
     
-    def _get_cloud_price(self, gpu_type: str) -> Optional[float]:
+    def _get_cloud_instance_specs(self, instance_name: str) -> Optional[Dict[str, Union[str, float]]]:
         """
-        Get cloud price for a GPU type from the specified provider.
-        Returns the cheapest price if provider not specified.
+        Get instance specs by instance name.
+        Returns the cheapest instance if provider not specified.
         """
-        if not self.cloud_pricing:
+        if not self.cloud_instances:
             return None
         
-        # Find matching prices
-        matching_prices = []
-        for (provider, gpu_model), price in self.cloud_pricing.items():
-            if gpu_type in gpu_model:  # e.g., "V100" in "NVIDIA V100"
+        matching = []
+        for (provider, inst_name), specs in self.cloud_instances.items():
+            if inst_name == instance_name:
                 if self.cloud_provider is None or provider == self.cloud_provider:
-                    matching_prices.append((provider, price))
+                    matching.append((provider, specs))
         
-        if not matching_prices:
+        if not matching:
             return None
         
         if self.cloud_provider:
-            # Return price from specified provider
-            for provider, price in matching_prices:
+            for provider, specs in matching:
                 if provider == self.cloud_provider:
-                    return price
+                    return specs
             return None
         else:
             # Return cheapest price
-            return min(price for _, price in matching_prices)
+            return min(matching, key=lambda x: x[1]['price_per_hour'])[1]
 
-    def _load_cloud_gpu_memory(self, filename: str) -> Dict[str, float]:
-        """
-        Load cloud GPU memory from cloud_instances_specs.csv
-        Returns dict: gpu_model -> memory_gb
-        """
-        import re
+    def _normalize_gpu_model(self, gpu_model: str) -> str:
+        """Normalize GPU model names to match ThroughputFunctions.GPU_SPECS keys."""
+        model = gpu_model.upper()
+        if "A100" in model:
+            return "A100"
+        if "H100" in model:
+            return "H100"
+        if "H200" in model:
+            return "H200"
+        if "B200" in model:
+            return "B200"
+        if "L40S" in model:
+            return "L40S"
+        if "L40" in model:
+            return "L40"
+        if "A10G" in model or "A10" in model:
+            return "A10"
+        if "V100" in model:
+            return "V100"
+        if "T4" in model:
+            return "T4"
+        if "L4" in model:
+            return "L4"
+        if "RTX4090" in model:
+            return "RTX4090"
+        if "L20" in model:
+            return "L20"
+        if "A40" in model:
+            return "A40"
+        return gpu_model
 
-        df = pd.read_csv(filename)
-        memory_map = {}
-
-        for _, row in df.iterrows():
-            gpu_model = row['GPU Model']
-            mem_str = str(row.get('GPU Memory per GPU', ''))
-            numbers = re.findall(r'[\d.]+', mem_str)
-            if not numbers:
-                continue
-            memory_gb = float(numbers[0])
-            memory_map[gpu_model] = memory_gb
-
-        return memory_map
-
-    def _get_cloud_memory(self, gpu_type: str) -> Optional[float]:
-        """Get GPU memory (GB) for a GPU type from cloud specs."""
-        if not self.cloud_gpu_memory:
-            return None
-
-        matching = []
-        for gpu_model, mem_gb in self.cloud_gpu_memory.items():
-            if gpu_type in gpu_model:
-                matching.append(mem_gb)
-
-        if not matching:
-            return None
-
-        # Use the maximum to be conservative when multiple entries exist
-        return max(matching)
+    def _normalize_gpu_model(self, gpu_model: str) -> str:
+        """Normalize GPU model names to match ThroughputFunctions.GPU_SPECS keys."""
+        model = gpu_model.upper()
+        if "A100" in model:
+            return "A100"
+        if "H100" in model:
+            return "H100"
+        if "H200" in model:
+            return "H200"
+        if "B200" in model:
+            return "B200"
+        if "L40S" in model:
+            return "L40S"
+        if "L40" in model:
+            return "L40"
+        if "A10G" in model or "A10" in model:
+            return "A10"
+        if "V100" in model:
+            return "V100"
+        if "T4" in model:
+            return "T4"
+        if "L4" in model:
+            return "L4"
+        if "RTX4090" in model:
+            return "RTX4090"
+        if "L20" in model:
+            return "L20"
+        if "A40" in model:
+            return "A40"
+        return gpu_model
     
     def _load_gpu_pool(self, filename: str) -> Dict[str, GPUType]:
-        """Load GPU pool configuration"""
+        """Load GPU pool configuration (instance_name,count)"""
         df = pd.read_csv(filename)
         gpu_types = {}
         global_id = 0
         
         for _, row in df.iterrows():
-            global_ids = list(range(global_id, global_id + row['count']))
+            if 'instance_name' not in row or pd.isna(row['instance_name']):
+                raise ValueError("gpu_pool.csv must include 'instance_name' column with valid values.")
+            instance_name = row['instance_name']
+            instance_count = int(row['count'])
+            specs = self._get_cloud_instance_specs(instance_name)
+            if specs is None:
+                raise ValueError(f"Missing cloud specs for instance '{instance_name}' in cloud_instances_specs.csv.")
 
-            # Load memory per GPU from cloud specs only
-            memory_gb = self._get_cloud_memory(row['gpu_type'])
-            if memory_gb is None:
-                raise ValueError(f"Missing cloud memory data for {row['gpu_type']} in cloud_instances_specs.csv.")
+            num_gpus = int(specs['num_gpus'])
+            gpu_model = self._normalize_gpu_model(str(specs['gpu_model']))
+            memory_gb = float(specs['vram_gb_per_gpu'])
+            price_per_hour_instance = float(specs['price_per_hour'])
             
             # Try to get price from config first, then from cloud pricing
             if 'dollar_per_hour' in row and pd.notna(row['dollar_per_hour']):
                 cost_per_hour = float(row['dollar_per_hour'])
                 price_source = "config"
             else:
-                # Look up from cloud pricing
-                cloud_price = self._get_cloud_price(row['gpu_type'])
-                if cloud_price is not None:
-                    cost_per_hour = cloud_price
-                    price_source = f"cloud ({self.cloud_provider or 'cheapest'})"
-                else:
-                    # Fallback to 0.0 with warning
-                    cost_per_hour = 0.0
-                    price_source = "DEFAULT (0.0) - NO PRICING DATA"
-                    logger.warning(f"  WARNING: No cloud price found for {row['gpu_type']}! Using $0.00/hour")
-                    logger.warning(f"           This GPU will appear 'free' in optimization - add pricing to cloud_instances_specs.csv")
-                    assert False, "No cloud price found for GPU"
+                cost_per_hour = price_per_hour_instance
+                price_source = f"cloud ({self.cloud_provider or 'cheapest'})"
+
+            for inst_idx in range(instance_count):
+                instance_key = f"{instance_name}#{inst_idx}"
+                global_ids = list(range(global_id, global_id + num_gpus))
+
+                gpu_types[instance_key] = GPUType(
+                    name=instance_key,
+                    count=num_gpus,
+                    memory_gb=memory_gb,
+                    global_ids=global_ids,
+                    cost_per_hour=cost_per_hour,
+                    gpu_model=gpu_model
+                )
             
-            gpu_types[row['gpu_type']] = GPUType(
-                name=row['gpu_type'],
-                count=row['count'],
-                memory_gb=memory_gb,
-                global_ids=global_ids,
-                cost_per_hour=cost_per_hour
-            )
+                logger.info(
+                    f"  Instance {instance_key}: {num_gpus}×{gpu_model}, "
+                    f"{memory_gb:.0f}GB, ${cost_per_hour:.2f}/instance-hour (from {price_source})"
+                )
             
-            logger.info(f"  GPU {row['gpu_type']}: ${cost_per_hour:.2f}/hour (from {price_source})")
-            
-            global_id += row['count']
+                global_id += num_gpus
         
         return gpu_types
     
@@ -920,6 +988,10 @@ class LLMPlacementSolverWithTP:
             raise ValueError(f"Network bandwidth matrix must be square, got {matrix.shape}")
         
         return matrix
+
+    def _get_gpu_model_name(self, gpu_type: str) -> str:
+        """Resolve GPU model name for a given instance name."""
+        return self.gpu_types[gpu_type].gpu_model
     
     def _save_network_bandwidth(self, filename: str, matrix: np.ndarray) -> None:
         """Save network bandwidth matrix to CSV file"""
@@ -1149,13 +1221,14 @@ class LLMPlacementSolverWithTP:
 
             # With TP, weights are sharded
             weight_per_gpu_per_layer = self.config.layer_weight_memory_gb / tp_degree
+            kv_cache_per_layer = self._calculate_kv_cache_per_layer(tp_degree)
 
-            # Activation memory with TP (accounts for all-reduce and KV cache sharding)
+            # Activation memory with TP (excludes KV cache; KV scales with layers)
             activation_memory = self._calculate_activation_memory(tp_degree)
 
             # Binary search for max layers
             max_layers = self._binary_search_max_layers(
-                gpu_obj.memory_gb, weight_per_gpu_per_layer, activation_memory
+                gpu_obj.memory_gb, weight_per_gpu_per_layer + kv_cache_per_layer, activation_memory
             )
 
             max_sizes[(gpu_type, tp_degree)] = max_layers
@@ -1175,13 +1248,15 @@ class LLMPlacementSolverWithTP:
             tp_degree = self.tp_max_configuration[gpu_type]
             gpu_memory = gpu_obj.memory_gb
             weight_per_layer = self.config.layer_weight_memory_gb / tp_degree
+            kv_cache_per_layer = self._calculate_kv_cache_per_layer(tp_degree)
             activation_memory = self._calculate_activation_memory(tp_degree)
 
             # Total memory = (layers * weight_per_layer) + activation_memory
             # We want: total >= min_memory_utilization * gpu_memory
             # Solving for layers:
             min_layers = max(1, math.ceil(
-                (self.config.min_memory_utilization * gpu_memory - activation_memory) / weight_per_layer
+                (self.config.min_memory_utilization * gpu_memory - activation_memory) /
+                (weight_per_layer + kv_cache_per_layer)
             ))
 
             # Sanity check: if activation alone exceeds target, use 1 layer
@@ -1205,7 +1280,7 @@ class LLMPlacementSolverWithTP:
         Combines exact divisors of total_layers with powers-of-two sizes.
         """
         total_layers = self.config.num_decoder_layers
-
+        
         sizes = set()
 
         # # Include all exact divisors (good for even splits like 8+8+8+8 for 32, 10+10+10 for 30)
@@ -1215,7 +1290,7 @@ class LLMPlacementSolverWithTP:
         #         sizes.add(total_layers // d)
 
         # Also include powers of two for non-divisible totals
-        power = 1
+        power = 4
         while power <= total_layers:
             sizes.add(power)
             power *= 2
@@ -1226,6 +1301,24 @@ class LLMPlacementSolverWithTP:
         logger.info(f"  Using {len(sizes)} sizes for performance")
         return sizes
     
+    def _calculate_kv_cache_per_layer(self, tp_degree: int = 1, batch_size: int = None) -> float:
+        """Calculate KV cache memory per layer per GPU (GB)."""
+        batch = batch_size if batch_size is not None else self.config.min_batch_size
+        bytes_per_elem = self.config.bytes_per_element
+        hidden = self.config.d_model
+        d_head = hidden / self.config.num_attention_heads
+        kv_dim = self.config.num_kv_heads * d_head
+
+        if self.config.workload_phase == 'prefill':
+            kv_cache_len = self.config.sequence_length
+        else:
+            # Peak KV cache during decode includes generated tokens
+            kv_cache_len = self.config.sequence_length + max(self.config.output_length, 0)
+
+        kv_cache_bytes = (2 * batch * kv_cache_len * (kv_dim / tp_degree) *
+                          bytes_per_elem)
+        return kv_cache_bytes / (1024**3)
+
     def _calculate_activation_memory(self, tp_degree: int = 1, batch_size: int = None) -> float:
         """
         Calculate peak activation memory per GPU with TP.
@@ -1259,16 +1352,11 @@ class LLMPlacementSolverWithTP:
             # Full activation tensor after all-reduce (NOT sharded)
             full_activation = (batch * seq_len * hidden * bytes_per_elem) / (1024**3)
 
-            # KV cache being written (sharded)
-            kv_cache = (2 * batch * seq_len * (kv_dim / tp_degree) *
-                       bytes_per_elem) / (1024**3)
-
-            # Peak memory
-            peak_activation = max(sharded_computation, full_activation) + kv_cache
+            # Peak activation memory (exclude KV cache; it scales with layers)
+            peak_activation = max(sharded_computation, full_activation)
         
         else:  # phase == 'decode'
             # DECODE: Generate 1 token at a time
-            kv_cache_len = self.config.sequence_length  # Context length from prefill
             
             # Sharded intermediate tensors for 1 token
             qkv_memory = (batch * 1 * (
@@ -1282,13 +1370,8 @@ class LLMPlacementSolverWithTP:
             # Full activation for 1 token after all-reduce
             full_activation = (batch * 1 * hidden * bytes_per_elem) / (1024**3)
 
-            # CRITICAL: Must store FULL KV cache from prefill (sharded)
-            # This is persistent and can be HUGE!
-            kv_cache = (2 * batch * kv_cache_len * (kv_dim / tp_degree) *
-                       bytes_per_elem) / (1024**3)
-
-            # Peak memory
-            peak_activation = max(sharded_computation, full_activation) + kv_cache
+            # Peak activation memory (exclude KV cache; it scales with layers)
+            peak_activation = max(sharded_computation, full_activation)
 
         # Framework overhead (15%)
         total_with_overhead = peak_activation * 1.15
@@ -1317,20 +1400,23 @@ class LLMPlacementSolverWithTP:
         """Compute max segment size for a specific (gpu_type, tp_degree, batch_size)"""
         gpu_obj = self.gpu_types[gpu_type]
         weight_per_gpu_per_layer = self.config.layer_weight_memory_gb / tp_degree
+        kv_cache_per_layer = self._calculate_kv_cache_per_layer(tp_degree, batch_size)
         activation_memory = self._calculate_activation_memory(tp_degree, batch_size)
         
         return self._binary_search_max_layers(
-            gpu_obj.memory_gb, weight_per_gpu_per_layer, activation_memory
+            gpu_obj.memory_gb, weight_per_gpu_per_layer + kv_cache_per_layer, activation_memory
         )
 
     def _compute_min_segment_size_for_tp(self, gpu_type: str, tp_degree: int, batch_size: int) -> int:
         """Compute min segment size for a specific (gpu_type, tp_degree, batch_size)"""
         gpu_obj = self.gpu_types[gpu_type]
         weight_per_layer = self.config.layer_weight_memory_gb / tp_degree
+        kv_cache_per_layer = self._calculate_kv_cache_per_layer(tp_degree, batch_size)
         activation_memory = self._calculate_activation_memory(tp_degree, batch_size)
         
         min_layers = max(1, math.ceil(
-            (self.config.min_memory_utilization * gpu_obj.memory_gb - activation_memory) / weight_per_layer
+            (self.config.min_memory_utilization * gpu_obj.memory_gb - activation_memory) /
+            (weight_per_layer + kv_cache_per_layer)
         ))
         
         if activation_memory > self.config.min_memory_utilization * gpu_obj.memory_gb:
@@ -1360,6 +1446,9 @@ class LLMPlacementSolverWithTP:
         valid_segments = []
         batch_size_options = self._get_batch_size_options()
         logger.info(f"Batch size options: {batch_size_options}")
+        min_pipeline_segment_size = math.ceil(
+            self.config.num_decoder_layers / max(1, self.config.max_pipeline_stages)
+        )
         # MAX_SEGMENTS = 10000 # NOTE: Hardcoded max segment. not ideal though... it prevents combinatorial explosion
         for gpu_type, allocations in self.tp_allocations.items():
             for gpu_set, tp_degree, partition_id in allocations:
@@ -1383,7 +1472,7 @@ class LLMPlacementSolverWithTP:
                                                 self.config.num_decoder_layers - start_layer + 2))
                         
                         for segment_size in valid_sizes:
-                            if segment_size < self.config.min_layers_per_stage:
+                            if segment_size < max(self.config.min_layers_per_stage, min_pipeline_segment_size):
                                 continue
                             if start_layer + segment_size - 1 <= self.config.num_decoder_layers:
                                 # NEW FORMAT: (gpu_type, gpu_set, tp_degree, partition_id, start_layer, segment_size, batch_size)
@@ -1395,7 +1484,7 @@ class LLMPlacementSolverWithTP:
                                 # Get actual network bandwidth from topology (not hardcoded!)
                                 nvlink_bw = self._get_min_intra_tp_bandwidth(gpu_type, gpu_set)
                                 throughput = ThroughputFunctions.gpu_throughput_with_tp(
-                                    gpu_type, self.config.sequence_length,
+                                    self._get_gpu_model_name(gpu_type), self.config.sequence_length,
                                     batch_size, segment_size, self.config.d_model,
                                     self.config.bytes_per_element, tp_degree, self.config.d_hidden, nvlink_bw,
                                     debug=False, phase=self.config.workload_phase,
@@ -1430,7 +1519,7 @@ class LLMPlacementSolverWithTP:
             precomputed = throughput_dict.get(seg, None)
             nvlink_bw = self._get_min_intra_tp_bandwidth(gpu_type, gpu_set)
             recalculated = ThroughputFunctions.gpu_throughput_with_tp(
-                gpu_type, self.config.sequence_length,
+                self._get_gpu_model_name(gpu_type), self.config.sequence_length,
                 batch_size, segment_size, self.config.d_model,
                 self.config.bytes_per_element, tp_degree, self.config.d_hidden, nvlink_bw,
                 debug=False, phase=self.config.workload_phase,
@@ -1623,6 +1712,139 @@ class LLMPlacementSolverWithTP:
             gpu_pair_throughputs[(seg1, seg2)] = throughput
         
         return gpu_pair_throughputs
+
+    def _log_throughput_debug_samples(self, sample_count: int) -> None:
+        """Log detailed throughput components for a few representative segments."""
+        if sample_count <= 0:
+            return
+
+        logger.info("=" * 80)
+        logger.info("THROUGHPUT DEBUG SAMPLES (roofline + TP + comm)")
+        logger.info("=" * 80)
+
+        min_batch = min(self._get_batch_size_options())
+        samples = []
+        seen_models = set()
+        remaining = []
+        for gpu_type in sorted(self.gpu_types.keys()):
+            max_tp = self.tp_max_configuration[gpu_type]
+            candidates = [
+                seg for seg in self.valid_segments
+                if seg[0] == gpu_type and seg[2] == max_tp and seg[6] == min_batch
+            ]
+            if not candidates:
+                continue
+            gpu_model = self._get_gpu_model_name(gpu_type)
+            if gpu_model not in seen_models:
+                samples.append(candidates[0])
+                seen_models.add(gpu_model)
+            else:
+                remaining.append(candidates[0])
+            if len(samples) >= sample_count:
+                break
+        if len(samples) < sample_count:
+            samples.extend(remaining[:max(0, sample_count - len(samples))])
+
+        for seg in samples:
+            gpu_type, gpu_set, tp_degree, _, _, segment_size, batch_size = seg
+            nvlink_bw = self._get_min_intra_tp_bandwidth(gpu_type, gpu_set)
+            gpu_model = self._get_gpu_model_name(gpu_type)
+            logger.info(
+                f"Sample segment: {gpu_type} (model={gpu_model}) "
+                f"TP={tp_degree}, batch={batch_size}, layers={segment_size}, "
+                f"nvlink_bw={nvlink_bw:.2f} GB/s"
+            )
+            ThroughputFunctions.gpu_throughput_with_tp(
+                gpu_model,
+                self.config.sequence_length,
+                batch_size,
+                segment_size,
+                self.config.d_model,
+                self.config.bytes_per_element,
+                tp_degree,
+                d_hidden=self.config.d_hidden,
+                nvlink_bw_gbps=nvlink_bw,
+                debug=True,
+                phase=self.config.workload_phase,
+                output_length=self.config.output_length,
+                num_attention_heads=self.config.num_attention_heads,
+                num_kv_heads=self.config.num_kv_heads
+            )
+
+    def _log_network_debug_samples(self, sample_count: int) -> None:
+        """Log detailed network throughput components for a few connections."""
+        if sample_count <= 0:
+            return
+        if not self.valid_connections:
+            logger.info("No valid connections available for network debug samples.")
+            return
+
+        logger.info("=" * 80)
+        logger.info("NETWORK DEBUG SAMPLES (all-reduce -> inter-stage -> all-scatter)")
+        logger.info("=" * 80)
+
+        samples = self.valid_connections[:sample_count]
+        for seg1, seg2 in samples:
+            gpu_type1, gpu_set1, tp_degree1 = seg1[0], seg1[1], seg1[2]
+            gpu_type2, gpu_set2, tp_degree2 = seg2[0], seg2[1], seg2[2]
+            batch_size1 = seg1[6]
+
+            if self.config.workload_phase == 'prefill':
+                tensor_size_gb = (batch_size1 * self.config.sequence_length *
+                                  self.config.d_model * self.config.bytes_per_element) / (1024**3)
+                tokens_per_batch = batch_size1 * self.config.sequence_length
+            else:
+                tensor_size_gb = (batch_size1 * 1 *
+                                  self.config.d_model * self.config.bytes_per_element) / (1024**3)
+                tokens_per_batch = batch_size1
+
+            # Source all-reduce
+            if tp_degree1 > 1:
+                min_intra_bw_source = float('inf')
+                for id1 in gpu_set1:
+                    g1 = self._get_global_gpu_id(gpu_type1, id1)
+                    for id2 in gpu_set1:
+                        if id1 != id2:
+                            g2 = self._get_global_gpu_id(gpu_type1, id2)
+                            min_intra_bw_source = min(min_intra_bw_source, self.network_bandwidth[g1, g2])
+                all_reduce_bw = min_intra_bw_source * (tp_degree1 - 1) / tp_degree1
+            else:
+                all_reduce_bw = float('inf')
+
+            # Inter-stage transfer
+            master_global_id1 = self._get_global_gpu_id(gpu_type1, min(gpu_set1))
+            master_global_id2 = self._get_global_gpu_id(gpu_type2, min(gpu_set2))
+            inter_stage_bw = self.network_bandwidth[master_global_id1, master_global_id2]
+
+            # Dest all-scatter
+            if tp_degree2 > 1:
+                min_intra_bw_dest = float('inf')
+                for id1 in gpu_set2:
+                    g1 = self._get_global_gpu_id(gpu_type2, id1)
+                    for id2 in gpu_set2:
+                        if id1 != id2:
+                            g2 = self._get_global_gpu_id(gpu_type2, id2)
+                            min_intra_bw_dest = min(min_intra_bw_dest, self.network_bandwidth[g1, g2])
+                all_scatter_bw = min_intra_bw_dest * (tp_degree2 - 1) / tp_degree2
+            else:
+                all_scatter_bw = float('inf')
+
+            effective_bw = min(all_reduce_bw, inter_stage_bw, all_scatter_bw)
+            if effective_bw > 0:
+                transfer_time = tensor_size_gb / effective_bw
+                throughput = tokens_per_batch / transfer_time
+            else:
+                transfer_time = float('inf')
+                throughput = float('inf')
+
+            logger.info(
+                f"{gpu_type1}(TP={tp_degree1}) -> {gpu_type2}(TP={tp_degree2}), "
+                f"tensor={tensor_size_gb:.4f}GB, "
+                f"all-reduce={all_reduce_bw:.2f}GB/s, inter={inter_stage_bw:.2f}GB/s, "
+                f"all-scatter={all_scatter_bw:.2f}GB/s, "
+                f"effective={effective_bw:.2f}GB/s, "
+                f"throughput={throughput:,.0f} tokens/s"
+            )
     
     def _validate_problem_size(self):
         """Validate problem size"""
@@ -1705,6 +1927,13 @@ class LLMPlacementSolverWithTP:
             vtype=GRB.BINARY,
             name="partition_usage"
         )
+
+        # Instance usage: y[gpu_type] (instance_key)
+        self.y = self.model.addVars(
+            list(self.gpu_types.keys()),
+            vtype=GRB.BINARY,
+            name="instance_usage"
+        )
         
         # Network connections: e[seg1, seg2]
         self.e = self.model.addVars(
@@ -1755,8 +1984,9 @@ class LLMPlacementSolverWithTP:
                 ]
                 
                 if segments_using_gpu:
+                    # If an instance is used, all GPUs in that instance must be used exactly once.
                     self.model.addConstr(
-                        gp.quicksum(self.x[seg] for seg in segments_using_gpu) <= 1,
+                        gp.quicksum(self.x[seg] for seg in segments_using_gpu) == self.y[gpu_type],
                         name=f"gpu_exclusivity_{gpu_type}_{local_gpu_id}"
                     )
                     
@@ -1807,12 +2037,10 @@ class LLMPlacementSolverWithTP:
         logger.info(f"Added max pipeline depth constraint: {self.config.max_pipeline_stages} stages")
         
         # 4b. NEW: Cost constraints
-        # Cost definition: sum(partition_usage × TP_degree × cost_per_hour)
+        # Cost definition: sum(instance_usage × instance_cost_per_hour)
         cost_expr = gp.quicksum(
-            self.z[gpu_type, tp_degree, partition_id] * tp_degree * self.gpu_types[gpu_type].cost_per_hour
-            for gpu_type, allocations in self.tp_allocations.items()
-            for gpu_set, tp_degree, partition_id in allocations
-            if (gpu_type, tp_degree, partition_id) in existing_partition_keys
+            self.y[gpu_type] * self.gpu_types[gpu_type].cost_per_hour
+            for gpu_type in self.gpu_types.keys()
         )
         self.model.addConstr(self.cost == cost_expr, name="total_cost_definition")
         
@@ -1932,15 +2160,18 @@ class LLMPlacementSolverWithTP:
         max_throughput_global = 0
         throughput_by_type = {}
         
+        min_pipeline_segment_size = math.ceil(
+            self.config.num_decoder_layers / max(1, self.config.max_pipeline_stages)
+        )
         for gpu_type, allocations in self.tp_allocations.items():
             tp_degree = self.tp_max_configuration[gpu_type]
             max_size = self.max_segment_size[(gpu_type, tp_degree)]
             
-            if max_size > 0:
+            if max_size >= min_pipeline_segment_size:
                 # Use max_batch_size for upper bound calculation
                 nvlink_bw = self._get_representative_tp_bandwidth(gpu_type, tp_degree)
                 max_throughput = ThroughputFunctions.gpu_throughput_with_tp(
-                    gpu_type, self.config.sequence_length,
+                    self._get_gpu_model_name(gpu_type), self.config.sequence_length,
                     self.config.max_batch_size, max_size, self.config.d_model, 
                     self.config.bytes_per_element, tp_degree, self.config.d_hidden, nvlink_bw,
                     debug=False, phase=self.config.workload_phase,
@@ -2153,7 +2384,7 @@ class LLMPlacementSolverWithTP:
         for gpu_type in self.gpu_types:
             # Use min_batch_size for lower bound estimation
             t_est = ThroughputFunctions.gpu_throughput(
-                gpu_type, self.config.sequence_length, self.config.min_batch_size,
+                self._get_gpu_model_name(gpu_type), self.config.sequence_length, self.config.min_batch_size,
                 1, self.config.d_model, self.config.bytes_per_element, self.config.d_hidden,
                 num_attention_heads=self.config.num_attention_heads,
                 num_kv_heads=self.config.num_kv_heads
@@ -2254,7 +2485,7 @@ class LLMPlacementSolverWithTP:
                     continue
                 
                 # Cost for this configuration
-                config_cost = gpu_info.cost_per_hour * tp_degree
+                config_cost = gpu_info.cost_per_hour
                 costs.append(config_cost)
         
         if not costs:
@@ -2295,7 +2526,7 @@ class LLMPlacementSolverWithTP:
             for tp_degree in [1, 2, 4, 8]:
                 if tp_degree > gpu_info.count:
                     continue
-                config_cost = gpu_info.cost_per_hour * tp_degree
+                config_cost = gpu_info.cost_per_hour
                 if config_cost <= max_budget:
                     covered.append(f"{gpu_type} TP={tp_degree} (${config_cost:.2f}/h)")
                 else:
@@ -2426,7 +2657,7 @@ class LLMPlacementSolverWithTP:
                 for tp_degree in [1, 2, 4, 8]:
                     if tp_degree > gpu_info.count:
                         continue
-                    config_cost = gpu_info.cost_per_hour * tp_degree
+                    config_cost = gpu_info.cost_per_hour
                     if config_cost <= budget:
                         feasible_configs.append(f"{gpu_type}×{tp_degree}")
             if feasible_configs:
@@ -2501,7 +2732,7 @@ class LLMPlacementSolverWithTP:
             for tp_degree in [1, 2, 4, 8]:
                 if tp_degree > gpu_info.count:
                     continue
-                config_cost = gpu_info.cost_per_hour * tp_degree
+                config_cost = gpu_info.cost_per_hour
                 config_name = f"{gpu_type} TP={tp_degree}"
                 all_configs.append((config_name, config_cost))
                 if config_cost <= max_budget_tested:
@@ -2891,7 +3122,7 @@ class LLMPlacementSolverWithTP:
             )
             
             # Get ridge point
-            ridge_point = ThroughputFunctions.get_ridge_point(gpu_type)
+            ridge_point = ThroughputFunctions.get_ridge_point(self._get_gpu_model_name(gpu_type))
             
             # Determine regime
             regime = ThroughputFunctions.determine_regime(ai, ridge_point)
@@ -2934,7 +3165,7 @@ class LLMPlacementSolverWithTP:
                 num_attention_heads=self.config.num_attention_heads,
                 num_kv_heads=self.config.num_kv_heads
             )
-            ridge_point = ThroughputFunctions.get_ridge_point(gpu_type)
+            ridge_point = ThroughputFunctions.get_ridge_point(self._get_gpu_model_name(gpu_type))
             regime = ThroughputFunctions.determine_regime(ai, ridge_point)
             
             if regime == "COMPUTE_BOUND":
@@ -2979,7 +3210,7 @@ class LLMPlacementSolverWithTP:
                 num_attention_heads=self.config.num_attention_heads,
                 num_kv_heads=self.config.num_kv_heads
             )
-            ridge_point = ThroughputFunctions.get_ridge_point(gpu_type)
+            ridge_point = ThroughputFunctions.get_ridge_point(self._get_gpu_model_name(gpu_type))
             regime = ThroughputFunctions.determine_regime(ai, ridge_point)
             
             if regime == "COMPUTE_BOUND":
@@ -2989,18 +3220,26 @@ class LLMPlacementSolverWithTP:
         
         is_memory_bound = memory_bound_count > compute_bound_count
         
-        # 1. Compute GPU efficiency ratios (both FLOP/$ and Bandwidth/$)
+        # 1. Compute instance efficiency ratios (both FLOP/$ and Bandwidth/$)
+        # Note: specs are per-GPU, cost is per-instance, so we multiply by GPU count
         gpu_efficiency = {}
         for gpu_type, gpu_obj in self.gpu_types.items():
-            specs = ThroughputFunctions.GPU_SPECS.get(gpu_type)
+            specs = ThroughputFunctions.GPU_SPECS.get(self._get_gpu_model_name(gpu_type))
             if specs:
-                effective_flops = specs['tflops'] * specs['efficiency']
-                effective_bw = specs['mem_bw'] * specs['efficiency']
-                compute_efficiency = effective_flops / gpu_obj.cost_per_hour
-                memory_efficiency = effective_bw / gpu_obj.cost_per_hour
+                # Per-GPU specs
+                effective_flops_per_gpu = specs['tflops'] * specs['efficiency']
+                effective_bw_per_gpu = specs['mem_bw'] * specs['efficiency']
+                # Total instance capacity (all GPUs in instance)
+                total_flops = effective_flops_per_gpu * gpu_obj.count
+                total_bw = effective_bw_per_gpu * gpu_obj.count
+                # Efficiency = total capacity / instance cost
+                compute_efficiency = total_flops / gpu_obj.cost_per_hour
+                memory_efficiency = total_bw / gpu_obj.cost_per_hour
                 gpu_efficiency[gpu_type] = {
-                    'flops': effective_flops,
-                    'bandwidth': effective_bw,
+                    'flops': effective_flops_per_gpu,
+                    'bandwidth': effective_bw_per_gpu,
+                    'total_flops': total_flops,
+                    'total_bw': total_bw,
                     'cost': gpu_obj.cost_per_hour,
                     'compute_ratio': compute_efficiency,
                     'memory_ratio': memory_efficiency
@@ -3032,13 +3271,13 @@ class LLMPlacementSolverWithTP:
                 gpu_usage[gpu_type] = {
                     'segments': 0,
                     'total_gpus': 0,
-                    'total_cost': 0,
+                    'total_cost': self.gpu_types[gpu_type].cost_per_hour,  # Instance cost (paid once per instance)
                     'total_layers': 0,
                     'tp_degrees': []
                 }
             gpu_usage[gpu_type]['segments'] += 1
             gpu_usage[gpu_type]['total_gpus'] += assignment['tp_degree']
-            gpu_usage[gpu_type]['total_cost'] += self.gpu_types[gpu_type].cost_per_hour * assignment['tp_degree']
+            # Note: total_cost is set once per instance, not accumulated per segment
             gpu_usage[gpu_type]['total_layers'] += assignment['segment_size']
             gpu_usage[gpu_type]['tp_degrees'].append(assignment['tp_degree'])
         
@@ -3060,6 +3299,9 @@ class LLMPlacementSolverWithTP:
         if unused_gpus:
             logger.info("Unused GPUs (and why they might not be chosen):")
             logger.info("-" * 80)
+            min_pipeline_segment_size = math.ceil(
+                self.config.num_decoder_layers / max(1, self.config.max_pipeline_stages)
+            )
             for gpu_type in sorted(unused_gpus):
                 gpu_obj = self.gpu_types[gpu_type]
                 efficiency_rank = next(i for i, (gt, _) in enumerate(sorted_efficiency, 1) if gt == gpu_type)
@@ -3072,20 +3314,31 @@ class LLMPlacementSolverWithTP:
                 logger.info(f"  {gpu_type:<10} count={gpu_obj.count}, ${gpu_obj.cost_per_hour:.2f}/h, "
                            f"efficiency rank #{efficiency_rank}")
                 logger.info(f"             Max segment size (TP={max_tp}): {max_seg} layers")
+                if max_seg < min_pipeline_segment_size:
+                    logger.info(
+                        f"             Excluded by min pipeline segment size: "
+                        f"{min_pipeline_segment_size} layers"
+                    )
+                    continue
                 
                 # Hypothetical: what if we used this GPU?
-                if max_seg >= 5:  # Can fit at least 5 layers
+                hypothetical_tp = min(4, max_tp)
+                hyp_max_seg = self._compute_max_segment_size_for_tp(gpu_type, hypothetical_tp, optimal_batch)
+                if hyp_max_seg >= 5:  # Can fit at least 5 layers
                     # Use max_batch_size for optimistic throughput estimate
-                    nvlink_bw = self._get_representative_tp_bandwidth(gpu_type, 4)
+                    nvlink_bw = self._get_representative_tp_bandwidth(gpu_type, hypothetical_tp)
                     hyp_throughput = ThroughputFunctions.gpu_throughput_with_tp(
-                        gpu_type, self.config.sequence_length, self.config.max_batch_size,
-                        5, self.config.d_model, self.config.bytes_per_element, 4, self.config.d_hidden, nvlink_bw,
+                        self._get_gpu_model_name(gpu_type), self.config.sequence_length, self.config.max_batch_size,
+                        5, self.config.d_model, self.config.bytes_per_element, hypothetical_tp, self.config.d_hidden, nvlink_bw,
                         debug=False, phase=self.config.workload_phase,
                         num_attention_heads=self.config.num_attention_heads,
                         num_kv_heads=self.config.num_kv_heads
                     )
-                    hyp_cost = gpu_obj.cost_per_hour * 4  # TP=4
-                    logger.info(f"             Hypothetical (5 layers, TP=4): {hyp_throughput:.0f} tokens/s, ${hyp_cost:.2f}/h")
+                    hyp_cost = gpu_obj.cost_per_hour  # Instance cost (same regardless of TP)
+                    logger.info(
+                        f"             Hypothetical (5 layers, TP={hypothetical_tp}): "
+                        f"{hyp_throughput:.0f} tokens/s, ${hyp_cost:.2f}/h"
+                    )
         
         # 4. Segment-level contribution analysis
         logger.info("="*80)
@@ -3099,7 +3352,7 @@ class LLMPlacementSolverWithTP:
         logger.info(f"Bottleneck Throughput: {min_throughput:.2f} tokens/sec")
         logger.info(f"Bottleneck Segments:")
         for seg in bottleneck_segments:
-            seg_cost = self.gpu_types[seg['gpu_type']].cost_per_hour * seg['tp_degree']
+            seg_cost = self.gpu_types[seg['gpu_type']].cost_per_hour  # Instance cost (same regardless of TP)
             logger.info(f"  {seg['gpu_type']} TP={seg['tp_degree']}, layers {seg['start_layer']}-{seg['end_layer']}, "
                        f"${seg_cost:.2f}/h, {seg['throughput']:.0f} tokens/s")
         
@@ -3116,7 +3369,7 @@ class LLMPlacementSolverWithTP:
         
         logger.info(f"{best_gpu_type} specs:")
         logger.info(f"  Available: {best_gpu.count} GPUs")
-        logger.info(f"  Cost: ${best_gpu.cost_per_hour:.2f}/hour per GPU")
+        logger.info(f"  Cost: ${best_gpu.cost_per_hour:.2f}/hour (instance)")
         logger.info(f"  Max segment size (TP={max_tp}): {max_seg_size} layers")
         logger.info(f"  Model needs: {self.config.num_decoder_layers} layers")
         
@@ -3125,17 +3378,17 @@ class LLMPlacementSolverWithTP:
             # Use max_batch_size for optimal throughput estimate
             nvlink_bw = self._get_representative_tp_bandwidth(best_gpu_type, max_tp)
             alt_throughput = ThroughputFunctions.gpu_throughput_with_tp(
-                best_gpu_type, self.config.sequence_length, self.config.max_batch_size,
+                self._get_gpu_model_name(best_gpu_type), self.config.sequence_length, self.config.max_batch_size,
                 self.config.num_decoder_layers, self.config.d_model, 
                 self.config.bytes_per_element, max_tp, self.config.d_hidden, nvlink_bw,
                 debug=False, phase=self.config.workload_phase,
                 num_attention_heads=self.config.num_attention_heads,
                 num_kv_heads=self.config.num_kv_heads
             )
-            alt_cost = best_gpu.cost_per_hour * max_tp
+            alt_cost = best_gpu.cost_per_hour  # Instance cost (same regardless of TP)
             alt_cost_per_token = alt_cost / (alt_throughput * 3600)
             alt_cost_per_million = alt_cost_per_token * 1_000_000
-            
+
             logger.info(f"CAN FIT Single segment with TP={max_tp}:")
             logger.info(f"  Throughput: {alt_throughput:.0f} tokens/sec")
             logger.info(f"  Cost: ${alt_cost:.2f}/hour")
@@ -3186,14 +3439,14 @@ class LLMPlacementSolverWithTP:
                     # Use max_batch_size for optimal throughput estimate
                     nvlink_bw = self._get_representative_tp_bandwidth(best_gpu_type, max_tp)
                     t_alt = ThroughputFunctions.gpu_throughput_with_tp(
-                        best_gpu_type, self.config.sequence_length, self.config.max_batch_size,
+                        self._get_gpu_model_name(best_gpu_type), self.config.sequence_length, self.config.max_batch_size,
                         self.config.num_decoder_layers, self.config.d_model,
                         self.config.bytes_per_element, max_tp, self.config.d_hidden, nvlink_bw,
                         debug=False, phase=self.config.workload_phase,
                         num_attention_heads=self.config.num_attention_heads,
                         num_kv_heads=self.config.num_kv_heads
                     )
-                    c_alt = best_gpu.cost_per_hour * max_tp
+                    c_alt = best_gpu.cost_per_hour  # Instance cost (same regardless of TP)
                     obj_alt = (t_alt / self.config.throughput_normalization) - \
                              (w/(1-w)) * (c_alt / self.config.cost_normalization)
                     
@@ -3280,7 +3533,7 @@ class LLMPlacementSolverWithTP:
             # Calculate segment cost
             gpu_type = assignment['gpu_type']
             tp_degree = assignment['tp_degree']
-            segment_cost = self.gpu_types[gpu_type].cost_per_hour * tp_degree
+            segment_cost = self.gpu_types[gpu_type].cost_per_hour
             
             logger.info(f"{gpu_type:<12} {tp_degree:<4} "
                   f"{gpu_ids_str:<20} {layers_str:<15} "
@@ -3469,10 +3722,10 @@ def filter_tp_configurations_by_hierarchy(gpu_types: Dict[str, GPUType],
         
         # Check hierarchy: higher tier should have TP >= lower tier
         for gpu1, tp1 in config.items():
-            tier1 = GPU_PERFORMANCE_TIERS.get(gpu1, 2)
+            tier1 = GPU_PERFORMANCE_TIERS.get(gpu_types[gpu1].gpu_model, 2)
             
             for gpu2, tp2 in config.items():
-                tier2 = GPU_PERFORMANCE_TIERS.get(gpu2, 2)
+                tier2 = GPU_PERFORMANCE_TIERS.get(gpu_types[gpu2].gpu_model, 2)
                 
                 # Hierarchy violation: better GPU has lower TP
                 if tier1 > tier2 and tp1 < tp2:
@@ -3491,11 +3744,13 @@ def filter_tp_configurations_by_hierarchy(gpu_types: Dict[str, GPUType],
 
 def filter_extreme_tp_pp_combinations(gpu_types: Dict[str, GPUType],
                                      tp_configs: List[Dict[str, int]],
-                                     num_layers: int) -> List[Dict[str, int]]:
+                                     num_layers: int) -> List[Dict[str, int]]:  # noqa: ARG001
     """
     Filter extreme TP-PP combinations based on heuristics.
     - If max TP >= 8, estimated PP should be <= 8
     - If estimated PP >= 16, max TP should be <= 4
+
+    Note: num_layers is kept for potential future use in PP depth estimation.
     """
     filtered = []
     
@@ -3552,7 +3807,7 @@ def enumerate_tp_configurations(gpu_types: Dict[str, GPUType],
     
     # Sort by heuristic: try high-TP on good GPUs first
     configs.sort(key=lambda cfg: sum(
-        GPU_PERFORMANCE_TIERS.get(gpu, 2) * tp_degree 
+        GPU_PERFORMANCE_TIERS.get(gpu_types[gpu].gpu_model, 2) * tp_degree 
         for gpu, tp_degree in cfg.items()
     ), reverse=True)
     
@@ -3663,6 +3918,10 @@ def main():
     parser.add_argument('--generate-network', type=float, nargs=2, metavar=('INTRA_BW', 'INTER_BW'),
                        help='Generate network bandwidth matrix instead of reading from CSV. '
                             'Args: intra_bandwidth (GB/s within same GPU type) inter_bandwidth (GB/s between different GPU types)')
+
+    # Debugging arguments
+    parser.add_argument('--throughput-debug-samples', type=int, default=0,
+                       help='Log detailed throughput/network debug for N sample segments/connections')
     
     # Cloud pricing arguments
     parser.add_argument('--cloud-provider', type=str, 
@@ -3693,7 +3952,8 @@ def main():
             'threads': args.threads,
             'max_threads': args.max_threads,
             'generate_network': generate_network,
-            'cloud_provider': args.cloud_provider
+            'cloud_provider': args.cloud_provider,
+            'throughput_debug_samples': args.throughput_debug_samples
         }
         
         if args.search_all_tp:
