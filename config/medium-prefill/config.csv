@@ -1,9 +1,4 @@
 parameter,value
-workload_phase,prefill
-sequence_length,8192
-output_length,0
-min_batch_size,64
-max_batch_size,64
 model_name,llama3-8b-prefill
 num_decoder_layers,32
 d_model,4096

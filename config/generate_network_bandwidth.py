@@ -21,14 +21,14 @@ def parse_first_number(value: str) -> float | None:
     return float(numbers[0]) if numbers else None
 
 
-def parse_internal_bw_gbps(value: str) -> float:
+def parse_internal_bw_gbps(value: str) -> float | None:
     """
     Parse internal GPU interconnect bandwidth.
     Returns GB/s (not Gbps). Requires a concrete numeric value.
     """
     value = str(value)
     if not value or value == "nan":
-        raise ValueError("Missing Internal GPU Interconnect Bandwidth")
+        return None
 
     # Examples:
     # "600 GB/s NVLink per GPU | 600 GB/s NVSwitch total"
@@ -36,13 +36,42 @@ def parse_internal_bw_gbps(value: str) -> float:
     # "900 GB/s NVLink per GPU | 3.6 TB/s NVSwitch total"
     match = re.search(r"([\d.]+)\s*(GB/s|TB/s)", value)
     if not match:
-        raise ValueError(f"Unrecognized internal bandwidth format: {value}")
+        return None
 
     bw = float(match.group(1))
     unit = match.group(2)
     if unit == "TB/s":
         bw *= 1000.0
     return bw
+
+
+def parse_pcie_bw_gbps(value: str) -> float | None:
+    """
+    Parse PCIe bandwidth from a string like "PCIe 4.0 x16".
+    Returns GB/s, or None if not parseable.
+    """
+    value = str(value)
+    if not value or value == "nan":
+        return None
+
+    match = re.search(r"PCIe\s*([0-9.]+)", value, re.IGNORECASE)
+    if not match:
+        return None
+    version = float(match.group(1))
+    lanes_match = re.search(r"x(\d+)", value, re.IGNORECASE)
+    lanes = int(lanes_match.group(1)) if lanes_match else 16
+
+    # Approximate theoretical GB/s for x16 per PCIe generation.
+    gen_x16_bw = {
+        2.0: 8.0,
+        3.0: 16.0,
+        4.0: 32.0,
+        5.0: 64.0,
+    }
+    base_bw = gen_x16_bw.get(version)
+    if base_bw is None:
+        return None
+    return base_bw * (lanes / 16.0)
 
 
 def parse_external_bw_gbps(value: str) -> float:
@@ -106,7 +135,17 @@ def main() -> int:
         if not num_gpus or num_gpus < 1:
             raise ValueError(f"Invalid GPU Count for {instance_name}: {spec.get('GPU Count')}")
 
-        internal_bw_gbps = parse_internal_bw_gbps(spec.get("Internal GPU Interconnect Bandwidth", ""))
+        internal_bw_gbps = parse_internal_bw_gbps(
+            spec.get("Internal GPU Interconnect Bandwidth", "")
+        )
+        if internal_bw_gbps is None:
+            internal_bw_gbps = parse_pcie_bw_gbps(spec.get("PCIe Bandwidth", ""))
+        if internal_bw_gbps is None:
+            raise ValueError(
+                f"Missing internal interconnect and PCIe bandwidth for {instance_name}: "
+                f"{spec.get('Internal GPU Interconnect Bandwidth')} | "
+                f"{spec.get('PCIe Bandwidth')}"
+            )
         external_bw_gbps = parse_external_bw_gbps(spec.get("External Network Bandwidth", ""))
 
         for inst_idx in range(instance_count):

@@ -644,7 +644,10 @@ class LLMPlacementSolverWithTP:
                  enable_upper_bound: bool = True, enable_tight_bigm: bool = True,
                  enable_flow_conservation: bool = True, threads: Optional[int] = None,
                  max_threads: int = 32, generate_network: Optional[Tuple[float, float]] = None,
-                 cloud_provider: Optional[str] = None, throughput_debug_samples: int = 0):
+                 cloud_provider: Optional[str] = None, throughput_debug_samples: int = 0,
+                 workload_phase: Optional[str] = None, sequence_length: Optional[int] = None,
+                 output_length: Optional[int] = None, min_batch_size: Optional[int] = None,
+                 max_batch_size: Optional[int] = None):
         
         def _read_gurobi_wls_file(wls_path: str) -> Dict[str, Union[str, int]]:
             if not os.path.exists(wls_path):
@@ -709,7 +712,14 @@ class LLMPlacementSolverWithTP:
         self.network_bandwidth = self._load_network_bandwidth(network_file)
         logger.info(f"Loaded network bandwidth from {network_file}")
         
-        self.config = self._load_config(config_file)
+        self.config = self._load_config(
+            config_file,
+            workload_phase=workload_phase,
+            sequence_length=sequence_length,
+            output_length=output_length,
+            min_batch_size=min_batch_size,
+            max_batch_size=max_batch_size,
+        )
         self.model = None
         self.solution = None
         
@@ -1042,7 +1052,15 @@ class LLMPlacementSolverWithTP:
         logger.info(f"Generated {total_gpus}×{total_gpus} network bandwidth matrix")
         return matrix
     
-    def _load_config(self, filename: str) -> Config:
+    def _load_config(
+        self,
+        filename: str,
+        workload_phase: Optional[str] = None,
+        sequence_length: Optional[int] = None,
+        output_length: Optional[int] = None,
+        min_batch_size: Optional[int] = None,
+        max_batch_size: Optional[int] = None,
+    ) -> Config:
         """Load runtime configuration"""
         df = pd.read_csv(filename)
         config_dict = dict(zip(df['parameter'], df['value']))
@@ -1065,15 +1083,33 @@ class LLMPlacementSolverWithTP:
             raise ValueError("Config must specify either 'optimization_priority' or 'cost_throughput_weight'")
         
         # Load workload phase (NEW: prefill/decode disaggregation)
-        workload_phase = config_dict.get('workload_phase', 'prefill').lower()
+        if workload_phase is None:
+            workload_phase = config_dict.get('workload_phase', None)
+        workload_phase = str(workload_phase).lower() if workload_phase is not None else None
+        if workload_phase is None:
+            raise ValueError("Missing workload_phase: provide via argparse or config.csv")
         if workload_phase not in ['prefill', 'decode']:
             raise ValueError(f"Invalid workload_phase: '{workload_phase}'. Must be 'prefill' or 'decode'")
         logger.info(f"Workload phase: {workload_phase}")
         
         # Load output_length (NEW: for decode phase)
-        output_length = int(config_dict.get('output_length', 0))
+        if output_length is None:
+            output_length = int(config_dict.get('output_length', 0))
         if workload_phase == 'decode' and output_length == 0:
             logger.warning("Decode phase with output_length=0! This may indicate misconfiguration.")
+
+        if sequence_length is None:
+            if 'sequence_length' not in config_dict:
+                raise ValueError("Missing sequence_length: provide via argparse or config.csv")
+            sequence_length = int(config_dict['sequence_length'])
+        if min_batch_size is None:
+            if 'min_batch_size' not in config_dict:
+                raise ValueError("Missing min_batch_size: provide via argparse or config.csv")
+            min_batch_size = int(config_dict['min_batch_size'])
+        if max_batch_size is None:
+            if 'max_batch_size' not in config_dict:
+                raise ValueError("Missing max_batch_size: provide via argparse or config.csv")
+            max_batch_size = int(config_dict['max_batch_size'])
 
         # NEW: Runtime calibration knobs (optional)
         # real_world_efficiency: overall efficiency multiplier [0,1]
@@ -1083,10 +1119,10 @@ class LLMPlacementSolverWithTP:
         
         return Config(
             workload_phase=workload_phase,
-            sequence_length=int(config_dict['sequence_length']),
+            sequence_length=sequence_length,
             output_length=output_length,
-            min_batch_size=int(config_dict['min_batch_size']),
-            max_batch_size=int(config_dict['max_batch_size']),
+            min_batch_size=min_batch_size,
+            max_batch_size=max_batch_size,
             model_name=config_dict['model_name'],
             num_decoder_layers=int(config_dict['num_decoder_layers']),
             d_model=int(config_dict['d_model']),
@@ -3611,6 +3647,48 @@ class LLMPlacementSolverWithTP:
                 placement_parts.append(f"PP_{i}:{{{gpu_type}:{tp_degree}}}")
             
             return '{' + ', '.join(placement_parts) + '}'
+
+        def format_layer_mapping(gpu_assignments):
+            """Format layer ranges per PP stage: {PP_1:0-15, PP_2:16-31}"""
+            if not gpu_assignments:
+                return '{}'
+            parts = []
+            for i, assignment in enumerate(gpu_assignments, 1):
+                parts.append(f"PP_{i}:{assignment['start_layer']}-{assignment['end_layer']}")
+            return '{' + ', '.join(parts) + '}'
+
+        def format_tp_per_stage(gpu_assignments):
+            """Format TP degree per PP stage: {PP_1:2, PP_2:4}"""
+            if not gpu_assignments:
+                return '{}'
+            parts = []
+            for i, assignment in enumerate(gpu_assignments, 1):
+                parts.append(f"PP_{i}:{assignment['tp_degree']}")
+            return '{' + ', '.join(parts) + '}'
+
+        def format_stage_mem_gb(gpu_assignments):
+            """Format per-stage GPU memory: {PP_1:48, PP_2:80}"""
+            if not gpu_assignments:
+                return '{}'
+            parts = []
+            for i, assignment in enumerate(gpu_assignments, 1):
+                gpu_type = assignment['gpu_type']
+                mem_gb = self.gpu_types[gpu_type].memory_gb
+                parts.append(f"PP_{i}:{mem_gb}")
+            return '{' + ', '.join(parts) + '}'
+
+        def get_device_types(gpu_assignments):
+            if not gpu_assignments:
+                return ''
+            unique_types = sorted({a['gpu_type'] for a in gpu_assignments})
+            return ','.join(unique_types)
+
+        def get_phase_throughputs(total_throughput):
+            if self.config.workload_phase == 'prefill':
+                return total_throughput, 0.0
+            if self.config.workload_phase == 'decode':
+                return 0.0, total_throughput
+            return 0.0, 0.0
         
         # Check if we have enumeration results
         has_enumeration = hasattr(self, 'all_enumeration_results') and self.all_enumeration_results
@@ -3625,11 +3703,19 @@ class LLMPlacementSolverWithTP:
                 num_gpus = ''
                 total_layers = ''
                 placement = ''
+                layer_mapping = ''
+                tp_per_stage = ''
+                stage_mem_gb = ''
+                device_types = ''
                 
                 if sol['gpu_assignments']:
                     num_gpus = sum(len(a['gpu_ids']) for a in sol['gpu_assignments'])
                     total_layers = sum(a['segment_size'] for a in sol['gpu_assignments'])
                     placement = format_placement(sol['gpu_assignments'])
+                    layer_mapping = format_layer_mapping(sol['gpu_assignments'])
+                    tp_per_stage = format_tp_per_stage(sol['gpu_assignments'])
+                    stage_mem_gb = format_stage_mem_gb(sol['gpu_assignments'])
+                    device_types = get_device_types(sol['gpu_assignments'])
                 
                 cost_per_million = result['cost_per_token'] * 1_000_000
                 is_best = (result['cost_per_token'] == min(r['cost_per_token'] for r in self.all_enumeration_results))
@@ -3638,16 +3724,28 @@ class LLMPlacementSolverWithTP:
                 total_runtime_hours = self.config.total_tokens_to_process / result['throughput'] / 3600
                 total_cost = result['cost'] * total_runtime_hours
                 
+                input_tps, output_tps = get_phase_throughputs(result['throughput'])
+                
                 rows.append({
+                    'model_name': self.config.model_name,
+                    'max_input_length': self.config.sequence_length,
+                    'max_output_length': self.config.output_length,
                     'batch_size': sol.get('batch_size', ''),
                     'budget_tested': f"{result['budget']:.2f}",
-                    'throughput_tokens_per_sec': f"{result['throughput']:.2f}",
+                    'total_tokens_per_sec': f"{result['throughput']:.2f}",
+                    'input_tokens_per_sec': f"{input_tps:.2f}",
+                    'output_tokens_per_sec': f"{output_tps:.2f}",
                     'cost_per_hour': f"{result['cost']:.2f}",
-                    'cost_per_million_tokens': f"{cost_per_million:.6f}",
+                    'dollar_per_million_token': f"{cost_per_million:.6f}",
                     'total_runtime_hours': f"{total_runtime_hours:.2f}",
                     'total_cost': f"{total_cost:.2f}",
                     'pipeline_stages': sol['num_pipeline_stages'],
+                    'device_type': device_types,
+                    'pp': sol['num_pipeline_stages'],
+                    'mem_per_gpu_gb': stage_mem_gb,
                     'placement': placement,
+                    'layer_mapping': layer_mapping,
+                    'tp_per_stage': tp_per_stage,
                     'num_gpus': num_gpus,
                     'total_layers': total_layers,
                     'is_best': 'YES' if is_best else 'NO',
@@ -3656,10 +3754,14 @@ class LLMPlacementSolverWithTP:
             
             # Write CSV with all results
             with open(output_file, 'w', newline='') as f:
-                fieldnames = ['batch_size', 'budget_tested', 'throughput_tokens_per_sec', 'cost_per_hour', 
-                             'cost_per_million_tokens', 'total_runtime_hours', 'total_cost',
-                             'pipeline_stages', 'placement', 'num_gpus', 'total_layers', 
-                             'is_best', 'status']
+                fieldnames = [
+                    'model_name', 'max_input_length', 'max_output_length', 'batch_size', 'budget_tested',
+                    'total_tokens_per_sec', 'input_tokens_per_sec', 'output_tokens_per_sec',
+                    'cost_per_hour', 'dollar_per_million_token', 'total_runtime_hours', 'total_cost',
+                    'pipeline_stages', 'device_type', 'pp', 'mem_per_gpu_gb',
+                    'placement', 'layer_mapping', 'tp_per_stage',
+                    'num_gpus', 'total_layers', 'is_best', 'status'
+                ]
                 writer = csv.DictWriter(f, fieldnames=fieldnames)
                 writer.writeheader()
                 writer.writerows(rows)
@@ -3670,11 +3772,19 @@ class LLMPlacementSolverWithTP:
             num_gpus = ''
             total_layers = ''
             placement = ''
+            layer_mapping = ''
+            tp_per_stage = ''
+            stage_mem_gb = ''
+            device_types = ''
             
             if self.solution['gpu_assignments']:
                 num_gpus = sum(len(a['gpu_ids']) for a in self.solution['gpu_assignments'])
                 total_layers = sum(a['segment_size'] for a in self.solution['gpu_assignments'])
                 placement = format_placement(self.solution['gpu_assignments'])
+                layer_mapping = format_layer_mapping(self.solution['gpu_assignments'])
+                tp_per_stage = format_tp_per_stage(self.solution['gpu_assignments'])
+                stage_mem_gb = format_stage_mem_gb(self.solution['gpu_assignments'])
+                device_types = get_device_types(self.solution['gpu_assignments'])
             
             cost_per_million = self.solution['cost_per_token'] * 1_000_000
             
@@ -3682,15 +3792,27 @@ class LLMPlacementSolverWithTP:
             total_runtime_hours = self.config.total_tokens_to_process / self.solution['throughput_tokens_per_sec'] / 3600
             total_cost = self.solution['cost_per_hour'] * total_runtime_hours
             
+            input_tps, output_tps = get_phase_throughputs(self.solution['throughput_tokens_per_sec'])
+            
             row = {
+                'model_name': self.config.model_name,
+                'max_input_length': self.config.sequence_length,
+                'max_output_length': self.config.output_length,
                 'batch_size': self.solution.get('batch_size', ''),
-                'throughput_tokens_per_sec': f"{self.solution['throughput_tokens_per_sec']:.2f}",
+                'total_tokens_per_sec': f"{self.solution['throughput_tokens_per_sec']:.2f}",
+                'input_tokens_per_sec': f"{input_tps:.2f}",
+                'output_tokens_per_sec': f"{output_tps:.2f}",
                 'cost_per_hour': f"{self.solution['cost_per_hour']:.2f}",
-                'cost_per_million_tokens': f"{cost_per_million:.6f}",
+                'dollar_per_million_token': f"{cost_per_million:.6f}",
                 'total_runtime_hours': f"{total_runtime_hours:.2f}",
                 'total_cost': f"{total_cost:.2f}",
                 'pipeline_stages': self.solution['num_pipeline_stages'],
+                'device_type': device_types,
+                'pp': self.solution['num_pipeline_stages'],
+                'mem_per_gpu_gb': stage_mem_gb,
                 'placement': placement,
+                'layer_mapping': layer_mapping,
+                'tp_per_stage': tp_per_stage,
                 'num_gpus': num_gpus,
                 'total_layers': total_layers,
                 'status': 'SUCCESS'
@@ -3698,10 +3820,14 @@ class LLMPlacementSolverWithTP:
             
             # Write CSV (with header)
             with open(output_file, 'w', newline='') as f:
-                fieldnames = ['batch_size', 'throughput_tokens_per_sec', 'cost_per_hour', 
-                             'cost_per_million_tokens', 'total_runtime_hours', 'total_cost',
-                             'pipeline_stages', 'placement', 'num_gpus', 'total_layers', 
-                             'status']
+                fieldnames = [
+                    'model_name', 'max_input_length', 'max_output_length', 'batch_size',
+                    'total_tokens_per_sec', 'input_tokens_per_sec', 'output_tokens_per_sec',
+                    'cost_per_hour', 'dollar_per_million_token', 'total_runtime_hours', 'total_cost',
+                    'pipeline_stages', 'device_type', 'pp', 'mem_per_gpu_gb',
+                'placement', 'layer_mapping', 'tp_per_stage',
+                    'num_gpus', 'total_layers', 'status'
+                ]
                 writer = csv.DictWriter(f, fieldnames=fieldnames)
                 writer.writeheader()
                 writer.writerow(row)
@@ -3888,6 +4014,7 @@ def main():
         description='LLM Placement Optimizer with TP and Practical Constraints'
     )
     parser.add_argument('--config-dir', required=True, help='Configuration directory')
+    parser.add_argument('--output-dir', required=True, help='Output directory')
     parser.add_argument('--verbose', action='store_true', help='Enable verbose logging')
     parser.add_argument('--tp-config', type=str, 
                        help='TP configuration as JSON (e.g., \'{"A100": 4, "V100": 1}\')')
@@ -3913,6 +4040,17 @@ def main():
                        help='Override cost_throughput_weight from config (0.0=pure throughput, 1.0=pure cost)')
     parser.add_argument('--method', type=str, choices=['weighted', 'enumeration'], default='weighted',
                        help='Optimization method: weighted (fast, approximate) or enumeration (slow, guaranteed optimal)')
+    parser.add_argument('--sequence-length', type=int, required=True,
+                       help='Sequence length for prefill (or KV cache length for decode)')
+    parser.add_argument('--workload-phase', type=str, required=True,
+                       choices=['prefill', 'decode'],
+                       help='Workload phase to model: prefill or decode')
+    parser.add_argument('--output-length', type=int, default=0,
+                       help='Output length for decode phase (default: 0)')
+    parser.add_argument('--min-batch-size', type=int, required=True,
+                       help='Minimum batch size to consider')
+    parser.add_argument('--max-batch-size', type=int, required=True,
+                       help='Maximum batch size to consider')
     
     # Network bandwidth generation arguments
     parser.add_argument('--generate-network', type=float, nargs=2, metavar=('INTRA_BW', 'INTER_BW'),
@@ -3953,7 +4091,12 @@ def main():
             'max_threads': args.max_threads,
             'generate_network': generate_network,
             'cloud_provider': args.cloud_provider,
-            'throughput_debug_samples': args.throughput_debug_samples
+            'throughput_debug_samples': args.throughput_debug_samples,
+            'sequence_length': args.sequence_length,
+            'workload_phase': args.workload_phase,
+            'output_length': args.output_length,
+            'min_batch_size': args.min_batch_size,
+            'max_batch_size': args.max_batch_size
         }
         
         if args.search_all_tp:
@@ -3973,7 +4116,7 @@ def main():
                 logger.info("="*100)
                 
                 # Save best solution
-                output_file = os.path.join(args.config_dir, 'solution_best_tp.json')
+                output_file = os.path.join(args.output_dir, 'solution_best_tp.json')
                 with open(output_file, 'w') as f:
                     json.dump({
                         'best_tp_configuration': best_tp_config,
@@ -4013,11 +4156,11 @@ def main():
             
             if success:
                 solver.print_solution()
-                output_file = os.path.join(args.config_dir, 'solution_with_tp.json')
+                output_file = os.path.join(args.output_dir, 'solution_with_tp.json')
                 solver.save_solution(output_file)
                 
                 # Also save CSV summary
-                csv_file = os.path.join(args.config_dir, 'solution_summary.csv')
+                csv_file = os.path.join(args.output_dir, 'solution_summary.csv')
                 solver.save_solution_csv(csv_file)
             else:
                 logger.error("Failed to find optimal solution")

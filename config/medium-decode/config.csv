@@ -1,9 +1,4 @@
 parameter,value
-workload_phase,decode
-sequence_length,4096
-output_length,512
-min_batch_size,64
-max_batch_size,64
 model_name,llama3-8b-decode
 num_decoder_layers,32
 d_model,4096

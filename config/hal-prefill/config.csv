@@ -1,9 +1,4 @@
 parameter,value
-workload_phase,prefill
-output_length,0
-sequence_length,4096
-min_batch_size,64
-max_batch_size,64
 model_name,llama-70b
 num_decoder_layers,80
 d_model,8192

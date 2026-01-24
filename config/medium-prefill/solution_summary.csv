@@ -1,0 +1,6 @@
+batch_size,budget_tested,throughput_tokens_per_sec,cost_per_hour,cost_per_million_tokens,total_runtime_hours,total_cost,pipeline_stages,placement,num_gpus,total_layers,is_best,status
+64,196.61,21533.23,27.39,0.353330,0.01,0.35,1,{PP_1:{g6e.48xlarge#1:8}},8,32,YES,SUCCESS
+64,393.22,21533.23,27.39,0.353330,0.01,0.35,1,{PP_1:{g6e.48xlarge#1:8}},8,32,YES,SUCCESS
+64,17.01,9034.60,13.70,0.421220,0.03,0.42,4,"{PP_1:{g6e.24xlarge#1:1}, PP_2:{g6e.24xlarge#1:1}, PP_3:{g6e.24xlarge#1:1}, PP_4:{g6e.24xlarge#1:1}}",4,32,NO,SUCCESS
+64,11.34,4581.26,11.34,0.687583,0.06,0.69,4,"{PP_1:{g5.12xlarge#3:2}, PP_2:{g5.12xlarge#3:2}, PP_3:{g5.12xlarge#2:2}, PP_4:{g5.12xlarge#2:2}}",8,32,NO,SUCCESS
+64,13.61,4581.26,11.34,0.687583,0.06,0.69,4,"{PP_1:{g5.12xlarge#3:2}, PP_2:{g5.12xlarge#3:2}, PP_3:{g5.12xlarge#2:2}, PP_4:{g5.12xlarge#2:2}}",8,32,NO,SUCCESS
