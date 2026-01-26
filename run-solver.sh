@@ -17,34 +17,20 @@ function cleanup() {
 # network_config_list=("600 400" "400 200")
 # run_on_background=true
 
-# config_dir_list=("config/medium")
-# config_dir_list=("config/medium-prefill")
-# config_dir_list=("config/medium-decode")
-# config_dir_list=("config/large-prefill" "config/large-decode")
-config_dir_list=("config/large-prefill")
-# config_dir_list=("config/large-decode")
+# config_dir_list=("config/medium-prefill" "config/medium-decode")
+config_dir_list=("config/large-prefill" "config/large-decode")
 
-    # parser.add_argument('--sequence-length', type=int, required=True,
-    #                    help='Sequence length for prefill (or KV cache length for decode)')
-    # parser.add_argument('--output-length', type=int, default=0,
-    #                    help='Output length for decode phase (default: 0)')
-    # parser.add_argument('--min-batch-size', type=int, required=True,
-    #                    help='Minimum batch size to consider')
-    # parser.add_argument('--max-batch-size', type=int, required=True,
-    #                    help='Maximum batch size to consider')
-
-workload_phase_list=("prefill")
-# workload_phase_list=("prefill" "decode")
-# Pair input/output lengths (space-separated)
-io_length_pairs=("8192 2048")
-# io_length_pairs=("1024 1024" "2048 2048" "4096 2048" "8192 2048" "16384 2048")
+# workload_phase_list=("prefill")
+workload_phase_list=("prefill" "decode")
+# io_length_pairs=("8192 2048")
+io_length_pairs=("1024 1024" "2048 2048" "4096 4096" "8192 8192" "16384 16384")
 
 # workload_phase_list=("prefill")
 # input_token_length_list=(8192)
 # output_token_length_list=(1024)
 
 # Pair min/max batch sizes (space-separated)
-batch_size_pairs=("64 64")
+batch_size_pairs=("32 32" "64 64")
 
 # cost_optimization_method_list=("weighted")
 cost_optimization_method_list=("enumeration")
