@@ -80,6 +80,12 @@ class Config:
     max_total_runtime_hours: float
     real_world_efficiency: float
     micro_batch_size: int
+    # NEW: Interference factor for aggregated mode (accounts for prefill-decode mixing overhead)
+    # Research suggests 0.7-0.9 depending on workload characteristics
+    interference_factor: float = 0.80  # Default: 20% overhead from mixing
+    # NEW: Penalty for cross-instance PP connections (encourages intra-node placement)
+    # Higher values more strongly prefer same-instance connections
+    cross_instance_penalty: float = 0.01  # Default: small penalty per cross-instance edge
 
 # GPU performance tiers for hierarchy constraints
 GPU_PERFORMANCE_TIERS = {
@@ -390,25 +396,27 @@ class ThroughputFunctions:
         return final_throughput
     
     @staticmethod
-    def gpu_throughput_with_tp(gpu_type: str, seq_len: int, batch_size: int, 
-                               num_layers: int, d_model: int, bytes_per_element: int, 
+    def gpu_throughput_with_tp(gpu_type: str, seq_len: int, batch_size: int,
+                               num_layers: int, d_model: int, bytes_per_element: int,
                                tp_degree: int, d_hidden: int = None, nvlink_bw_gbps: float = 300.0,
                                debug: bool = False, phase: str = 'prefill', output_length: int = 0,
                                num_attention_heads: Optional[int] = None,
-                               num_kv_heads: Optional[int] = None) -> float:
+                               num_kv_heads: Optional[int] = None,
+                               interference_factor: float = 0.80) -> float:
         """
         GPU throughput with tensor parallelism using roofline model.
-        
+
         CRITICAL: TP is NOT data parallelism!
         - TP splits model weights across GPUs for the SAME batch
         - Each GPU processes the SAME sequences (not different ones)
         - Purpose: fit larger models in memory, NOT increase throughput
         - Throughput effect: minor speedup from reduced memory pressure, offset by communication
-        
-        NEW: Phase-aware throughput modeling (prefill vs decode)
+
+        NEW: Phase-aware throughput modeling (prefill vs decode vs aggregated)
         - Prefill: O(n²) attention on full prompt (all tokens processed in parallel)
         - Decode: O(n) attention per token (sequential generation, one token at a time)
-        
+        - Aggregated: Combined prefill→decode throughput with interference factor
+
         Args:
             gpu_type: GPU type name
             seq_len: Sequence length (for prefill) OR KV cache length (for decode)
@@ -420,17 +428,53 @@ class ThroughputFunctions:
             d_hidden: FFN intermediate dimension (defaults to 4*d_model)
             nvlink_bw_gbps: NVLink bandwidth in GB/s (from network topology, NOT hardcoded)
             debug: Enable debug logging
-            phase: 'prefill' or 'decode' (NEW)
-        
+            phase: 'prefill', 'decode', or 'aggregated'
+            interference_factor: Penalty for prefill-decode mixing in aggregated mode (0.7-0.9)
+
         Returns:
             Throughput in tokens/second with TP (NOT multiplied by tp_degree!)
         """
+        # Handle aggregated phase: compute prefill and decode separately, then combine
+        if phase == 'aggregated':
+            # Default FFN dimension if not provided (needed for recursive calls)
+            if d_hidden is None:
+                d_hidden = 4 * d_model
+
+            # Compute prefill throughput (output_length=0 for pure prefill)
+            prefill_tp = ThroughputFunctions.gpu_throughput_with_tp(
+                gpu_type=gpu_type, seq_len=seq_len, batch_size=batch_size,
+                num_layers=num_layers, d_model=d_model, bytes_per_element=bytes_per_element,
+                tp_degree=tp_degree, d_hidden=d_hidden, nvlink_bw_gbps=nvlink_bw_gbps,
+                debug=debug, phase='prefill', output_length=0,
+                num_attention_heads=num_attention_heads, num_kv_heads=num_kv_heads
+            )
+            # Compute decode throughput
+            decode_tp = ThroughputFunctions.gpu_throughput_with_tp(
+                gpu_type=gpu_type, seq_len=seq_len, batch_size=batch_size,
+                num_layers=num_layers, d_model=d_model, bytes_per_element=bytes_per_element,
+                tp_degree=tp_degree, d_hidden=d_hidden, nvlink_bw_gbps=nvlink_bw_gbps,
+                debug=debug, phase='decode', output_length=output_length,
+                num_attention_heads=num_attention_heads, num_kv_heads=num_kv_heads
+            )
+            # Combine using request-level throughput model with interference factor
+            aggregated_tp = ThroughputFunctions.calculate_aggregated_throughput(
+                prefill_throughput=prefill_tp,
+                decode_throughput=decode_tp,
+                seq_len=seq_len,
+                output_len=output_length,
+                interference_factor=interference_factor
+            )
+            if debug:
+                logger.info(f"AGGREGATED: prefill={prefill_tp:.0f} tok/s, decode={decode_tp:.0f} tok/s, "
+                           f"combined={aggregated_tp:.0f} tok/s (interference={interference_factor})")
+            return aggregated_tp
+
         # Default FFN dimension if not provided
         if d_hidden is None:
             d_hidden = 4 * d_model
-        
+
         specs = ThroughputFunctions.GPU_SPECS.get(gpu_type, ThroughputFunctions.GPU_SPECS['A100'])
-        
+
         if debug:
             logger.info(f'='*80)
             logger.info(f"DEBUG: gpu_throughput_with_tp called")
@@ -633,8 +677,50 @@ class ThroughputFunctions:
         
         # NOTE: We do NOT multiply by tp_degree here!
         # TP is not data parallelism - it processes the same batch across GPUs
-        
+
         return base_throughput
+
+    @staticmethod
+    def calculate_aggregated_throughput(
+        prefill_throughput: float,
+        decode_throughput: float,
+        seq_len: int,
+        output_len: int,
+        interference_factor: float = 0.80
+    ) -> float:
+        """
+        Request-level throughput model for aggregated clusters.
+
+        Models vLLM-style continuous batching where same GPUs handle
+        complete requests (prefill → decode) with interference effects.
+
+        Args:
+            prefill_throughput: Throughput for pure prefill workload (tokens/sec)
+            decode_throughput: Throughput for pure decode workload (tokens/sec)
+            seq_len: Input sequence length (prefill tokens)
+            output_len: Output length (decode tokens to generate)
+            interference_factor: Penalty for prefill-decode mixing (0.7-0.9 typical)
+
+        Returns:
+            Effective aggregated throughput in tokens/second
+        """
+        if prefill_throughput <= 0 or decode_throughput <= 0:
+            return 0.0
+        if seq_len <= 0 and output_len <= 0:
+            return 0.0
+
+        # Time to process one complete request (request-level model)
+        prefill_time = seq_len / prefill_throughput  # seconds
+        decode_time = output_len / decode_throughput  # seconds
+        total_time = prefill_time + decode_time
+
+        # Total tokens in one request
+        total_tokens = seq_len + output_len
+
+        # Effective throughput with interference penalty
+        base_throughput = total_tokens / total_time if total_time > 0 else 0.0
+
+        return base_throughput * interference_factor
 
 class LLMPlacementSolverWithTP:
     """LLM placement solver with Tensor Parallelism and practical constraints"""
@@ -1088,8 +1174,8 @@ class LLMPlacementSolverWithTP:
         workload_phase = str(workload_phase).lower() if workload_phase is not None else None
         if workload_phase is None:
             raise ValueError("Missing workload_phase: provide via argparse or config.csv")
-        if workload_phase not in ['prefill', 'decode']:
-            raise ValueError(f"Invalid workload_phase: '{workload_phase}'. Must be 'prefill' or 'decode'")
+        if workload_phase not in ['prefill', 'decode', 'aggregated']:
+            raise ValueError(f"Invalid workload_phase: '{workload_phase}'. Must be 'prefill', 'decode', or 'aggregated'")
         logger.info(f"Workload phase: {workload_phase}")
         
         # Load output_length (NEW: for decode phase)
@@ -1097,6 +1183,8 @@ class LLMPlacementSolverWithTP:
             output_length = int(config_dict.get('output_length', 0))
         if workload_phase == 'decode' and output_length == 0:
             logger.warning("Decode phase with output_length=0! This may indicate misconfiguration.")
+        if workload_phase == 'aggregated' and output_length == 0:
+            raise ValueError("Aggregated phase requires output_length > 0 to model prefill→decode throughput")
 
         if sequence_length is None:
             if 'sequence_length' not in config_dict:
@@ -1116,6 +1204,12 @@ class LLMPlacementSolverWithTP:
         # micro_batch_size: assumed micro-batch size for pipeline bubble model
         real_world_efficiency = float(config_dict.get('real_world_efficiency', 0.30))
         micro_batch_size = int(config_dict.get('micro_batch_size', 8))
+
+        # NEW: Interference factor for aggregated mode (accounts for prefill-decode mixing overhead)
+        interference_factor = float(config_dict.get('interference_factor', 0.80))
+
+        # NEW: Penalty for cross-instance PP connections (encourages intra-node placement)
+        cross_instance_penalty = float(config_dict.get('cross_instance_penalty', 0.01))
         
         return Config(
             workload_phase=workload_phase,
@@ -1149,7 +1243,9 @@ class LLMPlacementSolverWithTP:
             total_tokens_to_process=int(config_dict['total_tokens_to_process']),
             max_total_runtime_hours=float(config_dict['max_total_runtime_hours']),
             real_world_efficiency=real_world_efficiency,
-            micro_batch_size=micro_batch_size
+            micro_batch_size=micro_batch_size,
+            interference_factor=interference_factor,
+            cross_instance_penalty=cross_instance_penalty
         )
     
     def _get_min_intra_tp_bandwidth(self, gpu_type: str, gpu_set: FrozenSet[int]) -> float:
@@ -1348,7 +1444,8 @@ class LLMPlacementSolverWithTP:
         if self.config.workload_phase == 'prefill':
             kv_cache_len = self.config.sequence_length
         else:
-            # Peak KV cache during decode includes generated tokens
+            # Peak KV cache during decode/aggregated includes generated tokens
+            # For aggregated: use decode peak since that's the maximum KV cache needed
             kv_cache_len = self.config.sequence_length + max(self.config.output_length, 0)
 
         kv_cache_bytes = (2 * batch * kv_cache_len * (kv_dim / tp_degree) *
@@ -1359,10 +1456,11 @@ class LLMPlacementSolverWithTP:
         """
         Calculate peak activation memory per GPU with TP.
         Accounts for all-reduce operations and KV cache sharding.
-        
-        NEW: Phase-aware memory calculation (prefill vs decode)
+
+        NEW: Phase-aware memory calculation (prefill vs decode vs aggregated)
         - Prefill: Activations for all tokens + KV cache being written
         - Decode: Activations for 1 token + FULL KV cache being read (much larger!)
+        - Aggregated: Use prefill peak (larger activations for seq_len tokens)
         """
         batch = batch_size if batch_size is not None else self.config.min_batch_size
         hidden = self.config.d_model
@@ -1371,11 +1469,12 @@ class LLMPlacementSolverWithTP:
         phase = self.config.workload_phase  # NEW: Get phase from config
         d_head = hidden / self.config.num_attention_heads
         kv_dim = self.config.num_kv_heads * d_head
-        
-        if phase == 'prefill':
-            # PREFILL: Process all tokens in prompt
+
+        if phase == 'prefill' or phase == 'aggregated':
+            # PREFILL/AGGREGATED: Use prefill peak (larger due to seq_len tokens)
+            # For aggregated: prefill activations are larger than decode (1 token)
             seq_len = self.config.sequence_length
-            
+
             # Sharded intermediate tensors during computation
             qkv_memory = (batch * seq_len * (
                 (hidden / tp_degree) +                # Q
@@ -1390,10 +1489,10 @@ class LLMPlacementSolverWithTP:
 
             # Peak activation memory (exclude KV cache; it scales with layers)
             peak_activation = max(sharded_computation, full_activation)
-        
+
         else:  # phase == 'decode'
             # DECODE: Generate 1 token at a time
-            
+
             # Sharded intermediate tensors for 1 token
             qkv_memory = (batch * 1 * (
                 (hidden / tp_degree) +
@@ -1684,6 +1783,12 @@ class LLMPlacementSolverWithTP:
                 # Prefill: Transfer activations for all tokens in the sequence
                 tensor_size_gb = (batch_size1 * self.config.sequence_length *
                                 self.config.d_model * self.config.bytes_per_element) / (1024**3)
+            elif self.config.workload_phase == 'aggregated':
+                # Aggregated: Use PREFILL tensor size for inter-stage communication
+                # In PP, the full prefill tensor must transfer before any decode can happen
+                # This is the bottleneck for network throughput, not the averaged size
+                tensor_size_gb = (batch_size1 * self.config.sequence_length *
+                                self.config.d_model * self.config.bytes_per_element) / (1024**3)
             else:  # decode
                 # Decode: Transfer activations for 1 token only (sequential generation)
                 tensor_size_gb = (batch_size1 * 1 *
@@ -1738,6 +1843,10 @@ class LLMPlacementSolverWithTP:
                 transfer_time_sec = tensor_size_gb / effective_bandwidth_gbps
                 # PHASE-AWARE: Throughput in tokens/sec
                 if self.config.workload_phase == 'prefill':
+                    tokens_per_batch = batch_size1 * self.config.sequence_length
+                elif self.config.workload_phase == 'aggregated':
+                    # Aggregated: Use PREFILL tokens per batch (consistent with tensor size)
+                    # Network throughput is limited by the prefill phase transfer
                     tokens_per_batch = batch_size1 * self.config.sequence_length
                 else:  # decode
                     tokens_per_batch = batch_size1 * 1  # 1 token per forward pass
@@ -2356,32 +2465,50 @@ class LLMPlacementSolverWithTP:
     def _set_objective(self):
         """
         Set optimization objective with cost-throughput trade-off.
-        
-        Objective = w*(t/T_norm) - (1-w)*(cost/C_norm)
+
+        Objective = w*(t/T_norm) - (1-w)*(cost/C_norm) - penalty*cross_instance_edges
         where w = cost_throughput_weight
-        
+
         Special cases:
         - w=0: Pure throughput maximization (backward compatible)
         - w=1: Pure cost minimization
         - 0<w<1: Weighted trade-off
+
+        NEW: Cross-instance penalty encourages intra-node PP placement
         """
         w = self.config.cost_throughput_weight
-        
+
+        # NEW: Compute cross-instance penalty term
+        # Penalize edges that cross instance boundaries (seg1[0] != seg2[0])
+        cross_instance_edges = [
+            conn for conn in self.valid_connections
+            if conn[0][0] != conn[1][0]  # Different instance (gpu_type includes instance ID)
+        ]
+        cross_instance_penalty_term = gp.quicksum(
+            self.e[conn] for conn in cross_instance_edges
+        ) * self.config.cross_instance_penalty
+
+        num_cross_instance = len(cross_instance_edges)
+        num_same_instance = len(self.valid_connections) - num_cross_instance
+        logger.info(f"Cross-instance penalty: {self.config.cross_instance_penalty} per edge")
+        logger.info(f"  - Same-instance connections: {num_same_instance}")
+        logger.info(f"  - Cross-instance connections: {num_cross_instance}")
+
         if w == 0.0:
             # Pure throughput maximization (original objective)
-            obj_expr = self.t
+            obj_expr = self.t - cross_instance_penalty_term
             logger.info("Objective: Maximize throughput (cost ignored)")
-            
+
         elif w == 1.0:
             # Pure cost minimization (minimize = maximize negative)
-            obj_expr = -self.cost
+            obj_expr = -self.cost - cross_instance_penalty_term
             logger.info("Objective: Minimize cost (throughput ignored)")
-            
+
         else:
             # Weighted multi-objective
             t_norm = self.t / self.config.throughput_normalization
             c_norm = self.cost / self.config.cost_normalization
-            
+
             # Convert weight to trade-off parameter
             # w=0.5 → λ=1 (equal weight)
             # w=0.8 → λ=4 (prioritize cost 4x)
@@ -2389,15 +2516,15 @@ class LLMPlacementSolverWithTP:
                 lambda_param = w / (1.0 - w)
             else:
                 lambda_param = 100.0  # Approximate infinity
-            
-            obj_expr = t_norm - lambda_param * c_norm
-            
+
+            obj_expr = t_norm - lambda_param * c_norm - cross_instance_penalty_term
+
             logger.info(f"Objective: Weighted cost-throughput optimization")
             logger.info(f"  - Weight (w): {w:.2f}")
             logger.info(f"  - Trade-off (λ): {lambda_param:.2f}")
             logger.info(f"  - Throughput emphasis: {1/(1+lambda_param):.2%}")
             logger.info(f"  - Cost emphasis: {lambda_param/(1+lambda_param):.2%}")
-        
+
         self.model.setObjective(obj_expr, GRB.MAXIMIZE)
     
     def solve_for_min_cost_per_token(self, target_cost_per_token: float = None, max_iterations: int = 5) -> bool:
@@ -3688,6 +3815,16 @@ class LLMPlacementSolverWithTP:
                 return total_throughput, 0.0
             if self.config.workload_phase == 'decode':
                 return 0.0, total_throughput
+            if self.config.workload_phase == 'aggregated':
+                # Report prefill and decode components proportionally
+                prefill_tokens = self.config.sequence_length
+                decode_tokens = self.config.output_length
+                total_tokens = prefill_tokens + decode_tokens
+                if total_tokens > 0:
+                    # Proportional allocation based on token count
+                    prefill_tps = total_throughput * prefill_tokens / total_tokens
+                    decode_tps = total_throughput * decode_tokens / total_tokens
+                    return prefill_tps, decode_tps
             return 0.0, 0.0
         
         # Check if we have enumeration results
@@ -4043,8 +4180,8 @@ def main():
     parser.add_argument('--sequence-length', type=int, required=True,
                        help='Sequence length for prefill (or KV cache length for decode)')
     parser.add_argument('--workload-phase', type=str, required=True,
-                       choices=['prefill', 'decode'],
-                       help='Workload phase to model: prefill or decode')
+                       choices=['prefill', 'decode', 'aggregated'],
+                       help='Workload phase to model: prefill, decode, or aggregated (combined prefill→decode)')
     parser.add_argument('--output-length', type=int, default=0,
                        help='Output length for decode phase (default: 0)')
     parser.add_argument('--min-batch-size', type=int, required=True,
