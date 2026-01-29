@@ -1,0 +1,474 @@
+"""
+LLM-based GPU configuration advisor.
+Uses sparse performance data + GPU specs to recommend optimal configurations.
+"""
+
+from dataclasses import dataclass
+from typing import List, Optional, Dict, Any
+import json
+import os
+
+from .gpu_specs import GPU_SPECS, format_gpu_specs_for_prompt, estimate_model_size
+from .perf_data import PerfDataLoader, PerfEntry, format_entries_for_prompt, SOURCE_TRUST
+
+
+@dataclass
+class GPUPool:
+    """Represents available GPU resources."""
+    resources: Dict[str, int]  # gpu_type -> count
+
+    def to_string(self) -> str:
+        """Format as readable string."""
+        parts = []
+        for gpu_type, count in sorted(self.resources.items()):
+            parts.append(f"{count}x {gpu_type}")
+        return ", ".join(parts)
+
+    def get_gpu_types(self) -> List[str]:
+        """Get list of available GPU types."""
+        return list(self.resources.keys())
+
+
+@dataclass
+class WorkloadSpec:
+    """Specification of the workload."""
+    input_length: int
+    output_length: int
+    batch_size: int = 1
+    num_requests: Optional[int] = None  # Total requests to process
+    target_throughput: Optional[float] = None  # Desired tok/s
+    slo_seconds: Optional[float] = None  # Max latency SLO
+
+
+@dataclass
+class ConfigRecommendation:
+    """A configuration recommendation from the advisor."""
+    gpu_type: str
+    tp: int
+    pp: int
+    num_gpus: int
+    replicas: int
+    confidence: str  # HIGH, MEDIUM, LOW
+    reasoning: str
+    predicted_throughput: Optional[float] = None
+    predicted_cost: Optional[float] = None
+    warnings: List[str] = None
+
+    def to_dict(self) -> dict:
+        return {
+            "gpu_type": self.gpu_type,
+            "tp": self.tp,
+            "pp": self.pp,
+            "num_gpus": self.num_gpus,
+            "replicas": self.replicas,
+            "confidence": self.confidence,
+            "reasoning": self.reasoning,
+            "predicted_throughput": self.predicted_throughput,
+            "predicted_cost": self.predicted_cost,
+            "warnings": self.warnings or [],
+        }
+
+
+class LLMAdvisor:
+    """
+    LLM-based advisor for GPU configuration selection.
+
+    Uses sparse performance data from multiple sources (benchmarks, simulator, solver)
+    combined with GPU specifications to make informed recommendations.
+    """
+
+    def __init__(
+        self,
+        perf_data: PerfDataLoader = None,
+        api_key: str = None,
+        model: str = "claude-sonnet-4-20250514",
+    ):
+        """
+        Initialize the advisor.
+
+        Args:
+            perf_data: Performance data loader (will create default if None)
+            api_key: API key for LLM (defaults to ANTHROPIC_API_KEY env var)
+            model: LLM model to use
+        """
+        self.perf_data = perf_data or PerfDataLoader()
+        self.api_key = api_key or os.environ.get("ANTHROPIC_API_KEY")
+        self.model = model
+
+        if not self.api_key:
+            print("Warning: No API key provided. Set ANTHROPIC_API_KEY or pass api_key.")
+
+    def build_context(
+        self,
+        model_name: str,
+        gpu_pool: GPUPool,
+        workload: WorkloadSpec,
+    ) -> Dict[str, Any]:
+        """
+        Build context for the LLM by gathering relevant information.
+
+        Returns a structured context with:
+        - GPU specifications
+        - Relevant performance data
+        - Model requirements
+        - Workload details
+        """
+        context = {}
+
+        # 1. Get GPU specs for available GPUs
+        available_gpu_types = gpu_pool.get_gpu_types()
+        context["gpu_specs"] = {
+            gpu: GPU_SPECS.get(gpu, {}) for gpu in available_gpu_types
+        }
+
+        # 2. Find relevant performance data
+        all_relevant = []
+        for gpu_type in available_gpu_types:
+            entries = self.perf_data.find_relevant_entries(
+                model_name=model_name,
+                gpu_type=gpu_type,
+                input_length_range=(workload.input_length * 0.5, workload.input_length * 2),
+                output_length_range=(workload.output_length * 0.5, workload.output_length * 2),
+                max_results=15,
+            )
+            all_relevant.extend(entries)
+
+        # Also get entries for the model regardless of workload match
+        model_entries = self.perf_data.find_relevant_entries(
+            model_name=model_name,
+            max_results=20,
+        )
+        for e in model_entries:
+            if e not in all_relevant:
+                all_relevant.append(e)
+
+        # Sort by trust and relevance
+        all_relevant.sort(key=lambda e: (-e.trust_score, -e.total_tokens_per_sec))
+        context["perf_data"] = all_relevant[:30]
+
+        # 3. Get model size estimate
+        context["model_info"] = estimate_model_size(model_name)
+
+        # 4. Get available configs from data
+        context["available_configs"] = {}
+        for gpu_type in available_gpu_types:
+            context["available_configs"][gpu_type] = self.perf_data.get_available_configs_for_gpu(gpu_type)
+
+        # 5. Data coverage info
+        context["data_summary"] = self.perf_data.get_summary()
+
+        return context
+
+    def build_prompt(
+        self,
+        model_name: str,
+        gpu_pool: GPUPool,
+        workload: WorkloadSpec,
+        context: Dict[str, Any],
+    ) -> str:
+        """
+        Build a comprehensive prompt for the LLM.
+
+        This is critical - the prompt must provide:
+        1. Clear task description
+        2. Available data with trust levels
+        3. Hardware specs
+        4. Constraints and requirements
+        5. Output format
+        """
+        prompt_parts = []
+
+        # System context
+        prompt_parts.append("""# GPU Configuration Advisor
+
+You are an expert system for selecting optimal GPU configurations for LLM inference.
+Your task is to recommend the best (gpu_type, tensor_parallelism, pipeline_parallelism, replicas) configuration.
+
+## Your Knowledge Sources
+
+You have access to SPARSE performance data from THREE sources with different trust levels:
+
+1. **BENCHMARK (HIGH trust)**: Real measurements from AWS hardware. Most reliable but limited coverage.
+2. **SIMULATOR (MEDIUM trust)**: Vidur simulator predictions. Validated to ~9% error. Good coverage.
+3. **SOLVER (LOW trust)**: Analytical roofline model estimates. Approximation that may miss real-world effects.
+
+IMPORTANT: The data is SPARSE - not all (model, gpu, tp, pp, workload) combinations have measurements.
+You must reason carefully when extrapolating from available data.
+
+## Key Principles
+
+1. **Prefer configurations with HIGH trust data** when available
+2. **Memory constraints are hard**: Model must fit in GPU memory with KV cache
+3. **Tensor Parallelism (TP)**: Splits model across GPUs. Higher TP = more communication overhead.
+4. **Pipeline Parallelism (PP)**: Splits layers across GPUs. Has pipeline bubble overhead.
+5. **Consider the workload**: Long sequences need more memory. Batch size affects throughput.
+6. **Cost matters**: More GPUs = higher cost. Find the efficient frontier.
+""")
+
+        # Query section
+        prompt_parts.append(f"""
+## Your Task
+
+Recommend the optimal GPU configuration for:
+
+**Model**: {model_name}
+**Available GPUs**: {gpu_pool.to_string()}
+**Workload**:
+  - Input length: {workload.input_length} tokens
+  - Output length: {workload.output_length} tokens
+  - Batch size: {workload.batch_size}
+""")
+
+        if workload.target_throughput:
+            prompt_parts.append(f"  - Target throughput: {workload.target_throughput} tok/s")
+        if workload.slo_seconds:
+            prompt_parts.append(f"  - Latency SLO: {workload.slo_seconds}s")
+        if workload.num_requests:
+            prompt_parts.append(f"  - Total requests: {workload.num_requests}")
+
+        # GPU Specs
+        prompt_parts.append("\n" + format_gpu_specs_for_prompt(gpu_pool.get_gpu_types()))
+
+        # Model info
+        model_info = context.get("model_info", {})
+        if model_info:
+            prompt_parts.append(f"""
+## Model Size Estimates
+
+- Parameters: ~{model_info.get('params_billions', 'unknown')}B
+- FP16 model size: ~{model_info.get('fp16_size_gb', 'unknown')} GB
+- Minimum VRAM (with KV cache): ~{model_info.get('min_vram_inference_gb', 'unknown')} GB
+- Recommended TP: {model_info.get('recommended_tp', 'varies')}
+""")
+
+        # Performance data
+        perf_entries = context.get("perf_data", [])
+        prompt_parts.append("\n" + format_entries_for_prompt(perf_entries, max_entries=25))
+
+        # Available configs summary
+        prompt_parts.append("\n## Available Configurations in Data\n")
+        for gpu_type, configs in context.get("available_configs", {}).items():
+            if configs:
+                prompt_parts.append(f"\n**{gpu_type}**:")
+                for cfg in configs[:10]:
+                    sources = ", ".join(cfg["sources"])
+                    prompt_parts.append(f"  - TP={cfg['tp']}, PP={cfg['pp']}: {cfg['data_points']} data points ({sources})")
+
+        # Output format
+        prompt_parts.append("""
+
+## Required Output Format
+
+Provide your recommendation in the following JSON format, followed by your reasoning:
+
+```json
+{
+  "recommendation": {
+    "gpu_type": "<GPU type>",
+    "tp": <tensor parallelism>,
+    "pp": <pipeline parallelism>,
+    "num_gpus": <total GPUs needed = tp * pp * replicas>,
+    "replicas": <number of model replicas>
+  },
+  "confidence": "<HIGH|MEDIUM|LOW>",
+  "predicted_throughput_tok_s": <estimated total throughput or null>,
+  "warnings": ["<any caveats or risks>"]
+}
+```
+
+Then explain your reasoning, including:
+1. Why you chose this GPU type
+2. Why this TP/PP configuration
+3. What data you based this on (cite specific entries if relevant)
+4. Any extrapolations or assumptions you made
+5. Alternative configurations to consider
+
+Be explicit about uncertainty. If data is sparse, say so.
+""")
+
+        return "\n".join(prompt_parts)
+
+    def get_recommendation(
+        self,
+        model_name: str,
+        gpu_pool: GPUPool,
+        workload: WorkloadSpec,
+    ) -> ConfigRecommendation:
+        """
+        Get a configuration recommendation from the LLM.
+
+        Args:
+            model_name: Name of the LLM to deploy (e.g., "llama-70b")
+            gpu_pool: Available GPU resources
+            workload: Workload specification
+
+        Returns:
+            ConfigRecommendation with the suggested configuration
+        """
+        # Build context
+        context = self.build_context(model_name, gpu_pool, workload)
+
+        # Build prompt
+        prompt = self.build_prompt(model_name, gpu_pool, workload, context)
+
+        # Call LLM
+        response_text = self._call_llm(prompt)
+
+        # Parse response
+        recommendation = self._parse_response(response_text)
+
+        return recommendation
+
+    def _call_llm(self, prompt: str) -> str:
+        """Call the LLM API."""
+        if not self.api_key:
+            return self._mock_response(prompt)
+
+        try:
+            import anthropic
+
+            client = anthropic.Anthropic(api_key=self.api_key)
+
+            message = client.messages.create(
+                model=self.model,
+                max_tokens=2000,
+                messages=[
+                    {"role": "user", "content": prompt}
+                ]
+            )
+
+            return message.content[0].text
+
+        except ImportError:
+            print("Warning: anthropic package not installed. Using mock response.")
+            return self._mock_response(prompt)
+        except Exception as e:
+            print(f"Error calling LLM: {e}")
+            return self._mock_response(prompt)
+
+    def _mock_response(self, prompt: str) -> str:
+        """Generate a mock response for testing without API."""
+        return """```json
+{
+  "recommendation": {
+    "gpu_type": "L40S",
+    "tp": 4,
+    "pp": 1,
+    "num_gpus": 4,
+    "replicas": 1
+  },
+  "confidence": "MEDIUM",
+  "predicted_throughput_tok_s": 500,
+  "warnings": ["No API key - this is a mock response for testing"]
+}
+```
+
+**Reasoning (MOCK)**:
+This is a placeholder response. To get real recommendations, please set your ANTHROPIC_API_KEY.
+"""
+
+    def _parse_response(self, response_text: str) -> ConfigRecommendation:
+        """Parse LLM response into ConfigRecommendation."""
+        # Extract JSON block
+        json_str = None
+        if "```json" in response_text:
+            start = response_text.find("```json") + 7
+            end = response_text.find("```", start)
+            json_str = response_text[start:end].strip()
+        elif "{" in response_text:
+            # Try to find JSON object
+            start = response_text.find("{")
+            # Find matching closing brace
+            depth = 0
+            for i, c in enumerate(response_text[start:], start):
+                if c == "{":
+                    depth += 1
+                elif c == "}":
+                    depth -= 1
+                    if depth == 0:
+                        json_str = response_text[start:i+1]
+                        break
+
+        if json_str:
+            try:
+                data = json.loads(json_str)
+                rec = data.get("recommendation", data)
+
+                # Extract reasoning (everything after JSON)
+                reasoning_start = response_text.find("```", response_text.find("```json") + 7) + 3
+                reasoning = response_text[reasoning_start:].strip() if reasoning_start > 3 else ""
+
+                return ConfigRecommendation(
+                    gpu_type=rec.get("gpu_type", "unknown"),
+                    tp=rec.get("tp", 1),
+                    pp=rec.get("pp", 1),
+                    num_gpus=rec.get("num_gpus", 1),
+                    replicas=rec.get("replicas", 1),
+                    confidence=data.get("confidence", "LOW"),
+                    reasoning=reasoning,
+                    predicted_throughput=data.get("predicted_throughput_tok_s"),
+                    warnings=data.get("warnings", []),
+                )
+            except json.JSONDecodeError as e:
+                print(f"Failed to parse JSON: {e}")
+
+        # Fallback
+        return ConfigRecommendation(
+            gpu_type="unknown",
+            tp=1,
+            pp=1,
+            num_gpus=1,
+            replicas=1,
+            confidence="LOW",
+            reasoning=f"Failed to parse response:\n{response_text[:500]}",
+            warnings=["Failed to parse LLM response"],
+        )
+
+    def get_prompt_only(
+        self,
+        model_name: str,
+        gpu_pool: GPUPool,
+        workload: WorkloadSpec,
+    ) -> str:
+        """
+        Get just the prompt (for debugging or using with other LLMs).
+        """
+        context = self.build_context(model_name, gpu_pool, workload)
+        return self.build_prompt(model_name, gpu_pool, workload, context)
+
+
+# Convenience functions
+def create_advisor(csv_path: str = None, api_key: str = None) -> LLMAdvisor:
+    """Create an LLM advisor with optional custom data path."""
+    perf_data = PerfDataLoader(csv_path) if csv_path else PerfDataLoader()
+    return LLMAdvisor(perf_data=perf_data, api_key=api_key)
+
+
+def quick_recommend(
+    model_name: str,
+    gpu_pool: Dict[str, int],
+    input_length: int,
+    output_length: int,
+    batch_size: int = 1,
+) -> ConfigRecommendation:
+    """
+    Quick recommendation function.
+
+    Example:
+        result = quick_recommend(
+            model_name="llama-70b",
+            gpu_pool={"L40S": 8, "A10G": 4},
+            input_length=2048,
+            output_length=512,
+        )
+    """
+    advisor = create_advisor()
+    return advisor.get_recommendation(
+        model_name=model_name,
+        gpu_pool=GPUPool(resources=gpu_pool),
+        workload=WorkloadSpec(
+            input_length=input_length,
+            output_length=output_length,
+            batch_size=batch_size,
+        ),
+    )
