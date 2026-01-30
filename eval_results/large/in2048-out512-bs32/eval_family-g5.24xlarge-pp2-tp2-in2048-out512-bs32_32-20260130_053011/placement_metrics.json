@@ -1,0 +1,46 @@
+{
+  "config": {
+    "model_name": "llama3-70b",
+    "num_decoder_layers": 80,
+    "sequence_length": 2048,
+    "output_length": 512,
+    "min_batch_size": 32,
+    "max_batch_size": 32,
+    "d_model": 8192,
+    "d_hidden": 28672,
+    "max_pipeline_stages": 8,
+    "min_memory_utilization": 0.5
+  },
+  "placement": {
+    "batch_size": 32,
+    "sequence_length": 2048,
+    "output_length": 512,
+    "workload_phase": "aggregated",
+    "stages": [
+      {
+        "gpu_type": "g5.24xlarge#0",
+        "tp_degree": 2,
+        "gpu_ids": [
+          0,
+          1
+        ],
+        "start_layer": 1,
+        "end_layer": 40
+      },
+      {
+        "gpu_type": "g5.24xlarge#1",
+        "tp_degree": 2,
+        "gpu_ids": [
+          0,
+          1
+        ],
+        "start_layer": 41,
+        "end_layer": 80
+      }
+    ]
+  },
+  "solution": {
+    "status": "INFEASIBLE",
+    "error": "INFEASIBLE placement. Context: model_layers=80, phase=aggregated, seq_len=2048, output_len=512, batch=32, pp_stages=2. Reasons: Stage 1 (g5.24xlarge#0, TP=2, layers 1-40, size=40): memory overflow: required=44.27GB (activation=3.02GB + 40\u00d7per_layer=1.03GB) > GPU_mem=24.0GB. Max feasible layers=20 (max_required=23.64GB). per_layer breakdown: weights=0.88GB + kv_cache=0.16GB | Stage 2 (g5.24xlarge#1, TP=2, layers 41-80, size=40): memory overflow: required=44.27GB (activation=3.02GB + 40\u00d7per_layer=1.03GB) > GPU_mem=24.0GB. Max feasible layers=20 (max_required=23.64GB). per_layer breakdown: weights=0.88GB + kv_cache=0.16GB"
+  }
+}

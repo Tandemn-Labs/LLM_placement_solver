@@ -1,0 +1,54 @@
+{
+  "config": {
+    "model_name": "llama3-70b",
+    "num_decoder_layers": 80,
+    "sequence_length": 2048,
+    "min_batch_size": 32,
+    "max_batch_size": 32,
+    "optimal_batch_size": 32,
+    "d_model": 8192,
+    "d_hidden": 28672,
+    "max_pipeline_stages": 8,
+    "min_memory_utilization": 0.5
+  },
+  "solution": {
+    "objective_value": 0.0,
+    "batch_size": 32,
+    "throughput_tokens_per_sec": 311.45633942355437,
+    "raw_throughput_tokens_per_sec": 1038.1877980785146,
+    "pipeline_efficiency": 1.0,
+    "cost_per_hour": 27.39,
+    "cost_per_token": 2.4428250031496847e-05,
+    "total_runtime_hours": 0.8918674710294576,
+    "meets_cost_threshold": true,
+    "tp_configuration": {
+      "g6e.48xlarge#0": 4
+    },
+    "gpu_assignments": [
+      {
+        "gpu_type": "g6e.48xlarge#0",
+        "partition_id": 0,
+        "gpu_ids": [
+          0,
+          1,
+          2,
+          3
+        ],
+        "global_gpu_ids": [
+          40,
+          41,
+          42,
+          43
+        ],
+        "tp_degree": 4,
+        "start_layer": 1,
+        "end_layer": 80,
+        "segment_size": 80,
+        "throughput": 1038.1877980785146
+      }
+    ],
+    "network_connections": [],
+    "solve_status": null,
+    "num_pipeline_stages": 1
+  }
+}

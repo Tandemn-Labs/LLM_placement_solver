@@ -24,6 +24,7 @@ import argparse
 import json
 import logging
 import math
+import shutil
 from typing import Dict, List, Tuple, Optional, FrozenSet, Union
 from dataclasses import dataclass
 import time
@@ -32,6 +33,28 @@ from itertools import product, combinations
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
+
+
+def _json_safe(value):
+    """Convert numpy scalars/arrays to JSON-serializable Python types."""
+    if isinstance(value, np.generic):
+        return value.item()
+    if isinstance(value, np.ndarray):
+        return value.tolist()
+    if isinstance(value, dict):
+        return {k: _json_safe(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_json_safe(v) for v in value]
+    return value
+
+
+def _resolve_eval_output_dir(args, config_dir: str, result_dir_name: str) -> str:
+    """Build eval output path as {root}/{config}/{result_dir}."""
+    config_name = os.path.basename(os.path.normpath(config_dir))
+    root = args.eval_output_root or args.output_dir or config_dir
+    return os.path.join(root, config_name, result_dir_name)
+
+
 
 @dataclass
 class GPUType:
@@ -733,7 +756,7 @@ class LLMPlacementSolverWithTP:
                  cloud_provider: Optional[str] = None, throughput_debug_samples: int = 0,
                  workload_phase: Optional[str] = None, sequence_length: Optional[int] = None,
                  output_length: Optional[int] = None, min_batch_size: Optional[int] = None,
-                 max_batch_size: Optional[int] = None):
+                 max_batch_size: Optional[int] = None, skip_gurobi: bool = False):
         
         def _read_gurobi_wls_file(wls_path: str) -> Dict[str, Union[str, int]]:
             if not os.path.exists(wls_path):
@@ -758,8 +781,12 @@ class LLMPlacementSolverWithTP:
 
             return options
         
-        self.options = _read_gurobi_wls_file("gurobi.wls")
-        self.env = gp.Env(params=self.options)
+        if skip_gurobi:
+            self.options = {}
+            self.env = None
+        else:
+            self.options = _read_gurobi_wls_file("gurobi.wls")
+            self.env = gp.Env(params=self.options)
         self.config_dir = config_dir
         self.cloud_provider = cloud_provider
         self.throughput_debug_samples = max(0, int(throughput_debug_samples))
@@ -1415,11 +1442,11 @@ class LLMPlacementSolverWithTP:
         
         sizes = set()
 
-        # # Include all exact divisors (good for even splits like 8+8+8+8 for 32, 10+10+10 for 30)
-        # for d in range(1, int(math.sqrt(total_layers)) + 1):
-        #     if total_layers % d == 0:
-        #         sizes.add(d)
-        #         sizes.add(total_layers // d)
+        # Include all exact divisors (good for even splits like 8+8+8+8 for 32, 10+10+10 for 30)
+        for d in range(1, int(math.sqrt(total_layers)) + 1):
+            if total_layers % d == 0:
+                sizes.add(d)
+                sizes.add(total_layers // d)
 
         # Also include powers of two for non-divisible totals
         power = 4
@@ -1575,6 +1602,378 @@ class LLMPlacementSolverWithTP:
             batch_sizes.append(self.config.max_batch_size)
         logger.info(f"Batch size options: {batch_sizes}")
         return batch_sizes
+
+    def _describe_eval_failure(self, placement: Dict, exc: Exception) -> str:
+        """Build a descriptive, root-cause explanation for eval infeasibility."""
+        stages = placement.get("stages", [])
+        batch_size = placement.get("batch_size", self.config.min_batch_size)
+        min_pipeline_segment_size = math.ceil(
+            self.config.num_decoder_layers / max(1, self.config.max_pipeline_stages)
+        )
+        quantized_sizes = self.quantized_sizes or []
+
+        reasons = []
+        for idx, stage in enumerate(stages):
+            gpu_type = stage.get("gpu_type")
+            tp_degree = int(stage.get("tp_degree", 1))
+            start_layer = int(stage.get("start_layer", 0))
+            end_layer = int(stage.get("end_layer", 0))
+            if start_layer <= 0 or end_layer < start_layer or gpu_type not in self.gpu_types:
+                continue
+            segment_size = end_layer - start_layer + 1
+
+            max_seg = self._compute_max_segment_size_for_tp(gpu_type, tp_degree, batch_size)
+            min_seg = self._compute_min_segment_size_for_tp(gpu_type, tp_degree, batch_size)
+
+            gpu_mem = self.gpu_types[gpu_type].memory_gb
+            weight_per_layer = self.config.layer_weight_memory_gb / tp_degree
+            kv_cache_per_layer = self._calculate_kv_cache_per_layer(tp_degree, batch_size)
+            activation_memory = self._calculate_activation_memory(tp_degree, batch_size)
+            min_util_target = self.config.min_memory_utilization * gpu_mem
+            per_layer_total = weight_per_layer + kv_cache_per_layer
+
+            min_layers_formula = max(1, math.ceil(
+                (min_util_target - activation_memory) / per_layer_total
+            )) if per_layer_total > 0 else 1
+
+            stage_header = (
+                f"Stage {idx + 1} ({gpu_type}, TP={tp_degree}, layers {start_layer}-{end_layer}, "
+                f"size={segment_size})"
+            )
+
+            stage_reasons = []
+            if segment_size > max_seg:
+                total_mem = activation_memory + segment_size * per_layer_total
+                max_mem = activation_memory + max_seg * per_layer_total
+                stage_reasons.append(
+                    f"memory overflow: required={total_mem:.2f}GB "
+                    f"(activation={activation_memory:.2f}GB + "
+                    f"{segment_size}×per_layer={per_layer_total:.2f}GB) > "
+                    f"GPU_mem={gpu_mem:.1f}GB. "
+                    f"Max feasible layers={max_seg} "
+                    f"(max_required={max_mem:.2f}GB). "
+                    f"per_layer breakdown: weights={weight_per_layer:.2f}GB + "
+                    f"kv_cache={kv_cache_per_layer:.2f}GB"
+                )
+            if segment_size < min_seg:
+                stage_reasons.append(
+                    f"underutilized GPU: segment uses {segment_size} layers, but the minimum to "
+                    f"reach {self.config.min_memory_utilization:.0%} of GPU memory is {min_seg} layers. "
+                    f"Target memory={min_util_target:.2f}GB (= {self.config.min_memory_utilization:.0%} of "
+                    f"{gpu_mem:.1f}GB), activation={activation_memory:.2f}GB, per_layer={per_layer_total:.2f}GB "
+                    f"⇒ required_layers=ceil(({min_util_target:.2f} - {activation_memory:.2f}) / "
+                    f"{per_layer_total:.2f}) = {min_layers_formula}"
+                )
+            if segment_size < self.config.min_layers_per_stage:
+                stage_reasons.append(
+                    f"below min_layers_per_stage={self.config.min_layers_per_stage}"
+                )
+            if segment_size < min_pipeline_segment_size:
+                stage_reasons.append(
+                    f"below min_pipeline_segment_size={min_pipeline_segment_size} "
+                    f"(num_layers={self.config.num_decoder_layers}, max_pp={self.config.max_pipeline_stages})"
+                )
+            if quantized_sizes and segment_size not in quantized_sizes:
+                stage_reasons.append(
+                    f"not in allowed segment sizes {quantized_sizes}"
+                )
+
+            if stage_reasons:
+                reasons.append(f"{stage_header}: " + "; ".join(stage_reasons))
+
+        if not reasons:
+            reasons.append(str(exc))
+
+        return (
+            f"INFEASIBLE placement. "
+            f"Context: model_layers={self.config.num_decoder_layers}, "
+            f"phase={self.config.workload_phase}, seq_len={self.config.sequence_length}, "
+            f"output_len={self.config.output_length}, batch={batch_size}, "
+            f"pp_stages={len(stages)}. "
+            f"Reasons: " + " | ".join(reasons)
+        )
+
+    def _compute_network_throughput_between_segments(self, seg1: Tuple, seg2: Tuple) -> float:
+        """Compute network throughput between two segments (tokens/sec)."""
+        gpu_type1 = seg1[0]
+        gpu_type2 = seg2[0]
+        gpu_set1 = seg1[1]
+        gpu_set2 = seg2[1]
+        tp_degree1 = seg1[2]
+        tp_degree2 = seg2[2]
+        batch_size = seg1[6]
+
+        if self.config.workload_phase in ['prefill', 'aggregated']:
+            tensor_size_gb = (batch_size * self.config.sequence_length *
+                              self.config.d_model * self.config.bytes_per_element) / (1024**3)
+            tokens_per_batch = batch_size * self.config.sequence_length
+        else:
+            tensor_size_gb = (batch_size * 1 *
+                              self.config.d_model * self.config.bytes_per_element) / (1024**3)
+            tokens_per_batch = batch_size * 1
+
+        if tp_degree1 > 1:
+            min_intra_bw_source = float('inf')
+            for id1 in gpu_set1:
+                global_id1 = self._get_global_gpu_id(gpu_type1, id1)
+                for id2 in gpu_set1:
+                    if id1 != id2:
+                        global_id2 = self._get_global_gpu_id(gpu_type1, id2)
+                        min_intra_bw_source = min(min_intra_bw_source, self.network_bandwidth[global_id1, global_id2])
+            all_reduce_bw = min_intra_bw_source * (tp_degree1 - 1) / tp_degree1
+        else:
+            all_reduce_bw = float('inf')
+
+        master_global_id1 = self._get_global_gpu_id(gpu_type1, min(gpu_set1))
+        master_global_id2 = self._get_global_gpu_id(gpu_type2, min(gpu_set2))
+        inter_stage_bw = self.network_bandwidth[master_global_id1, master_global_id2]
+
+        if tp_degree2 > 1:
+            min_intra_bw_dest = float('inf')
+            for id1 in gpu_set2:
+                global_id1 = self._get_global_gpu_id(gpu_type2, id1)
+                for id2 in gpu_set2:
+                    if id1 != id2:
+                        global_id2 = self._get_global_gpu_id(gpu_type2, id2)
+                        min_intra_bw_dest = min(min_intra_bw_dest, self.network_bandwidth[global_id1, global_id2])
+            all_scatter_bw = min_intra_bw_dest * (tp_degree2 - 1) / tp_degree2
+        else:
+            all_scatter_bw = float('inf')
+
+        effective_bandwidth_gbps = min(all_reduce_bw, inter_stage_bw, all_scatter_bw)
+        if effective_bandwidth_gbps > 0:
+            transfer_time_sec = tensor_size_gb / effective_bandwidth_gbps
+            return tokens_per_batch / transfer_time_sec
+
+        return float('inf')
+
+    def evaluate_manual_placement(self, placement: Dict) -> Dict:
+        """
+        Evaluate throughput/cost metrics for a user-provided placement.
+
+        Expected format:
+        {
+          "batch_size": 32,
+          "stages": [
+            {"gpu_type": "p4d.24xlarge#0", "tp_degree": 8, "start_layer": 1, "end_layer": 16},
+            {"gpu_type": "p4d.24xlarge#1", "tp_degree": 8, "start_layer": 17, "end_layer": 32}
+          ],
+          "sequence_length": 8192,           # optional override
+          "output_length": 2048,             # optional override
+          "workload_phase": "aggregated"     # optional override
+        }
+        """
+        if "sequence_length" in placement:
+            self.config.sequence_length = int(placement["sequence_length"])
+        if "output_length" in placement:
+            self.config.output_length = int(placement["output_length"])
+        if "workload_phase" in placement:
+            self.config.workload_phase = str(placement["workload_phase"]).lower()
+
+        batch_size = int(placement.get("batch_size", self.config.min_batch_size))
+        self.config.min_batch_size = batch_size
+        self.config.max_batch_size = batch_size
+
+        stages = placement.get("stages", [])
+        if not stages:
+            raise ValueError("Placement must include non-empty 'stages' list.")
+        if len(stages) > self.config.max_pipeline_stages:
+            raise ValueError(
+                f"PP stages {len(stages)} exceed max_pipeline_stages {self.config.max_pipeline_stages}"
+            )
+
+        used_local_ids: Dict[str, set] = {gpu_type: set() for gpu_type in self.gpu_types}
+        assignments = []
+        segments = []
+        tp_configuration: Dict[str, int] = {}
+        min_pipeline_segment_size = math.ceil(
+            self.config.num_decoder_layers / max(1, self.config.max_pipeline_stages)
+        )
+
+        for idx, stage in enumerate(stages):
+            gpu_type = stage.get("gpu_type")
+            if gpu_type not in self.gpu_types:
+                raise ValueError(f"Unknown gpu_type '{gpu_type}' in placement.")
+
+            start_layer = int(stage.get("start_layer", 0))
+            if "end_layer" in stage:
+                end_layer = int(stage["end_layer"])
+            elif "segment_size" in stage:
+                end_layer = start_layer + int(stage["segment_size"]) - 1
+            else:
+                raise ValueError("Each stage must include 'end_layer' or 'segment_size'.")
+
+            if start_layer <= 0 or end_layer < start_layer:
+                raise ValueError(f"Invalid layer range: start={start_layer}, end={end_layer}")
+
+            gpu_ids = stage.get("gpu_ids")
+            if gpu_ids is not None:
+                gpu_set = frozenset(int(i) for i in gpu_ids)
+                tp_degree = int(stage.get("tp_degree", len(gpu_set)))
+                if len(gpu_set) != tp_degree:
+                    raise ValueError(f"gpu_ids length does not match tp_degree for {gpu_type}")
+                if used_local_ids[gpu_type].intersection(gpu_set):
+                    raise ValueError(f"GPU IDs overlap between stages for {gpu_type}: {sorted(gpu_set)}")
+            else:
+                tp_degree = int(stage.get("tp_degree", 0))
+                if tp_degree <= 0:
+                    raise ValueError(f"Missing tp_degree for stage {idx} on {gpu_type}")
+                if tp_degree > self.gpu_types[gpu_type].count:
+                    raise ValueError(
+                        f"TP degree {tp_degree} exceeds available GPUs ({self.gpu_types[gpu_type].count}) "
+                        f"for {gpu_type}"
+                    )
+                available = [i for i in range(self.gpu_types[gpu_type].count)
+                             if i not in used_local_ids[gpu_type]]
+                if len(available) < tp_degree:
+                    raise ValueError(f"Not enough available GPUs for {gpu_type}: need {tp_degree}, have {len(available)}")
+                gpu_set = frozenset(available[:tp_degree])
+
+            used_local_ids[gpu_type].update(gpu_set)
+            segment_size = end_layer - start_layer + 1
+            max_seg_size = self._compute_max_segment_size_for_tp(gpu_type, tp_degree, batch_size)
+            if segment_size > max_seg_size:
+                raise ValueError(
+                    f"Segment {start_layer}-{end_layer} (size={segment_size}) exceeds "
+                    f"max feasible size {max_seg_size} for {gpu_type} TP={tp_degree} batch={batch_size}"
+                )
+            min_seg_size = self._compute_min_segment_size_for_tp(gpu_type, tp_degree, batch_size)
+            if segment_size < min_seg_size:
+                raise ValueError(
+                    f"Segment {start_layer}-{end_layer} (size={segment_size}) below "
+                    f"min feasible size {min_seg_size} for {gpu_type} TP={tp_degree} batch={batch_size}"
+                )
+            if segment_size < self.config.min_layers_per_stage:
+                raise ValueError(
+                    f"Segment size {segment_size} below min_layers_per_stage {self.config.min_layers_per_stage}"
+                )
+            if segment_size < min_pipeline_segment_size:
+                raise ValueError(
+                    f"Segment size {segment_size} below min pipeline segment size {min_pipeline_segment_size}"
+                )
+            if self.quantized_sizes and segment_size not in self.quantized_sizes:
+                raise ValueError(
+                    f"Segment size {segment_size} not in quantized sizes {self.quantized_sizes}"
+                )
+            partition_id = idx
+            segment = (gpu_type, gpu_set, tp_degree, partition_id, start_layer, segment_size, batch_size)
+            segments.append(segment)
+
+            nvlink_bw = self._get_min_intra_tp_bandwidth(gpu_type, gpu_set)
+            throughput = ThroughputFunctions.gpu_throughput_with_tp(
+                self._get_gpu_model_name(gpu_type), self.config.sequence_length,
+                batch_size, segment_size, self.config.d_model,
+                self.config.bytes_per_element, tp_degree, self.config.d_hidden, nvlink_bw,
+                debug=False, phase=self.config.workload_phase,
+                output_length=self.config.output_length,
+                num_attention_heads=self.config.num_attention_heads,
+                num_kv_heads=self.config.num_kv_heads,
+                interference_factor=self.config.interference_factor
+            )
+
+            tp_configuration[gpu_type] = max(tp_configuration.get(gpu_type, 0), tp_degree)
+            assignments.append({
+                'gpu_type': gpu_type,
+                'partition_id': partition_id,
+                'gpu_ids': sorted(list(gpu_set)),
+                'global_gpu_ids': sorted([self._get_global_gpu_id(gpu_type, i) for i in gpu_set]),
+                'tp_degree': tp_degree,
+                'start_layer': start_layer,
+                'end_layer': end_layer,
+                'segment_size': segment_size,
+                'throughput': throughput
+            })
+
+        assignments.sort(key=lambda x: x['start_layer'])
+        segments_sorted = sorted(segments, key=lambda s: s[4])
+
+        expected_start = 1
+        last_end = 0
+        for seg in segments_sorted:
+            start_layer = seg[4]
+            end_layer = seg[4] + seg[5] - 1
+            if start_layer != expected_start:
+                raise ValueError(
+                    f"Non-contiguous placement: expected start {expected_start}, got {start_layer}"
+                )
+            if start_layer <= last_end:
+                raise ValueError(
+                    f"Overlapping segments detected: start {start_layer} <= previous end {last_end}"
+                )
+            last_end = end_layer
+            expected_start = end_layer + 1
+        if last_end != self.config.num_decoder_layers:
+            raise ValueError(
+                f"Placement does not cover all layers: ends at {last_end}, "
+                f"model has {self.config.num_decoder_layers}"
+            )
+
+        connections = []
+        network_throughputs = []
+        for i in range(len(segments_sorted) - 1):
+            seg1 = segments_sorted[i]
+            seg2 = segments_sorted[i + 1]
+            conn_throughput = self._compute_network_throughput_between_segments(seg1, seg2)
+            network_throughputs.append(conn_throughput)
+            connections.append({
+                'from_segment': {
+                    'gpu_type': seg1[0],
+                    'partition_id': seg1[3],
+                    'start_layer': seg1[4],
+                    'end_layer': seg1[4] + seg1[5] - 1
+                },
+                'to_segment': {
+                    'gpu_type': seg2[0],
+                    'partition_id': seg2[3],
+                    'start_layer': seg2[4],
+                    'end_layer': seg2[4] + seg2[5] - 1
+                },
+                'throughput': conn_throughput
+            })
+
+        stage_throughputs = [a['throughput'] for a in assignments]
+        bottleneck_candidates = stage_throughputs + network_throughputs
+        raw_throughput = min(bottleneck_candidates) if bottleneck_candidates else 0.0
+
+        num_stages = len(assignments)
+        if num_stages <= 1:
+            pipeline_efficiency = 1.00
+        else:
+            num_micro_batches = max(1, batch_size // self.config.micro_batch_size)
+            ideal_efficiency = num_micro_batches / (num_micro_batches + num_stages - 1)
+            scheduling_overhead = 0.10
+            pipeline_efficiency = max(0.50, ideal_efficiency * (1.0 - scheduling_overhead))
+
+        throughput_per_sec = raw_throughput * pipeline_efficiency * self.config.real_world_efficiency
+
+        used_instances = sorted({a['gpu_type'] for a in assignments})
+        cost_per_hour = sum(self.gpu_types[gpu_type].cost_per_hour for gpu_type in used_instances)
+
+        if throughput_per_sec > 0:
+            cost_per_token = cost_per_hour / (throughput_per_sec * 3600)
+            total_runtime_hours = self.config.total_tokens_to_process / (throughput_per_sec * 3600)
+        else:
+            cost_per_token = float('inf')
+            total_runtime_hours = float('inf')
+
+        self.solution = {
+            'objective_value': 0.0,
+            'batch_size': batch_size,
+            'throughput_tokens_per_sec': throughput_per_sec,
+            'raw_throughput_tokens_per_sec': raw_throughput,
+            'pipeline_efficiency': pipeline_efficiency,
+            'cost_per_hour': cost_per_hour,
+            'cost_per_token': cost_per_token,
+            'total_runtime_hours': total_runtime_hours,
+            'meets_cost_threshold': cost_per_token <= self.config.max_cost_per_token,
+            'tp_configuration': tp_configuration,
+            'gpu_assignments': assignments,
+            'network_connections': connections,
+            'solve_status': None,
+            'num_pipeline_stages': num_stages
+        }
+
+        return self.solution
     
     def _generate_valid_segments(self) -> List[Tuple]:
         """Generate segments with variable TP degree and batch size per segment"""
@@ -2015,7 +2414,10 @@ class LLMPlacementSolverWithTP:
         logger.info("Building optimization model with TP and practical constraints...")
         
         model_init_start = time.time()
-        self.model = gp.Model("llm_placement_with_tp_constrained", env=self.env)
+        if self.env is None:
+            self.model = gp.Model("llm_placement_with_tp_constrained")
+        else:
+            self.model = gp.Model("llm_placement_with_tp_constrained", env=self.env)
         
         # Solver parameters optimized for parallelism
         self.model.setParam('Presolve', 1)  # Normal presolve (was 2=aggressive, reduce to allow more B&B)
@@ -3740,7 +4142,7 @@ class LLMPlacementSolverWithTP:
         }
         
         with open(output_file, 'w') as f:
-            json.dump(output_data, f, indent=2)
+            json.dump(_json_safe(output_data), f, indent=2)
         
         logger.info(f"Solution saved to {output_file}")
     
@@ -4151,7 +4553,7 @@ def main():
         description='LLM Placement Optimizer with TP and Practical Constraints'
     )
     parser.add_argument('--config-dir', required=True, help='Configuration directory')
-    parser.add_argument('--output-dir', required=True, help='Output directory')
+    parser.add_argument('--output-dir', required=False, help='Output directory')
     parser.add_argument('--verbose', action='store_true', help='Enable verbose logging')
     parser.add_argument('--tp-config', type=str, 
                        help='TP configuration as JSON (e.g., \'{"A100": 4, "V100": 1}\')')
@@ -4204,6 +4606,18 @@ def main():
                        choices=['AWS', 'GCP', 'Azure', 'Lambda', 'CoreWeave', 'Nebius'],
                        help='Cloud provider for pricing (uses cheapest if not specified). '
                             'Prices loaded from cloud_instances_specs.csv')
+    parser.add_argument('--evaluate-placement', type=str,
+                       help='Path to placement JSON file to evaluate (skips optimization)')
+    parser.add_argument('--eval-output-root', type=str,
+                       help='Root directory for eval outputs (results under {root}/{config}/{result_dir})')
+    parser.add_argument('--evaluate-throughput', action='store_true',
+                       help='Evaluate throughput/cost for a uniform PP/TP placement (skips optimization)')
+    parser.add_argument('--eval-instance-family', type=str,
+                       help='Instance family/name from gpu_pool.csv (e.g., p4d.24xlarge)')
+    parser.add_argument('--eval-tp-degree', type=int,
+                       help='TP degree to use for all PP stages in eval mode')
+    parser.add_argument('--eval-pp-stages', type=int,
+                       help='Number of PP stages in eval mode')
     
     args = parser.parse_args()
     
@@ -4235,7 +4649,176 @@ def main():
             'min_batch_size': args.min_batch_size,
             'max_batch_size': args.max_batch_size
         }
+
+        if not (args.evaluate_throughput or args.evaluate_placement) and not args.output_dir:
+            raise ValueError("Solver mode requires --output-dir")
         
+        if args.evaluate_throughput:
+            if not args.output_dir and not args.eval_output_root:
+                raise ValueError("Eval mode requires --output-dir or --eval-output-root")
+            if not args.eval_instance_family:
+                raise ValueError("--eval-instance-family is required for --evaluate-throughput")
+            if not args.eval_tp_degree or args.eval_tp_degree <= 0:
+                raise ValueError("--eval-tp-degree must be a positive integer")
+            if not args.eval_pp_stages or args.eval_pp_stages <= 0:
+                raise ValueError("--eval-pp-stages must be a positive integer")
+
+            result_dir_name = (
+                f"eval_family-{args.eval_instance_family}-pp{args.eval_pp_stages}-"
+                f"tp{args.eval_tp_degree}-in{args.sequence_length}-out{args.output_length}-"
+                f"bs{args.min_batch_size}_{args.max_batch_size}-"
+                f"{time.strftime('%Y%m%d_%H%M%S')}"
+            )
+            output_dir = _resolve_eval_output_dir(args, args.config_dir, result_dir_name)
+            os.makedirs(output_dir, exist_ok=True)
+            config_src = os.path.join(args.config_dir, "config.csv")
+            if os.path.exists(config_src):
+                shutil.copy2(config_src, os.path.join(output_dir, "config.csv"))
+
+            solver = LLMPlacementSolverWithTP(
+                args.config_dir,
+                tp_configuration=None,
+                **solver_kwargs,
+                skip_gurobi=True
+            )
+
+            family = args.eval_instance_family
+            matching_instances = [
+                instance_key for instance_key in solver.gpu_types.keys()
+                if instance_key.split("#", 1)[0] == family
+            ]
+            if not matching_instances:
+                raise ValueError(f"No instances found for family '{family}' in gpu_pool.csv")
+
+            pp_stages = args.eval_pp_stages
+            if pp_stages > len(matching_instances):
+                raise ValueError(
+                    f"Not enough instances for PP={pp_stages} using family '{family}': "
+                    f"available {len(matching_instances)}"
+                )
+
+            matching_instances = sorted(matching_instances)[:pp_stages]
+            per_instance_gpu_count = solver.gpu_types[matching_instances[0]].count
+            if args.eval_tp_degree > per_instance_gpu_count:
+                raise ValueError(
+                    f"TP degree {args.eval_tp_degree} exceeds GPUs per instance "
+                    f"({per_instance_gpu_count}) for family '{family}'"
+                )
+
+            total_layers = solver.config.num_decoder_layers
+            base = total_layers // pp_stages
+            remainder = total_layers % pp_stages
+
+            stages = []
+            start_layer = 1
+            for idx in range(pp_stages):
+                segment_size = base + (1 if idx < remainder else 0)
+                end_layer = start_layer + segment_size - 1
+                stages.append({
+                    "gpu_type": matching_instances[idx],
+                    "tp_degree": args.eval_tp_degree,
+                    "gpu_ids": list(range(args.eval_tp_degree)),
+                    "start_layer": start_layer,
+                    "end_layer": end_layer
+                })
+                start_layer = end_layer + 1
+
+            placement = {
+                "batch_size": args.min_batch_size,
+                "sequence_length": args.sequence_length,
+                "output_length": args.output_length,
+                "workload_phase": args.workload_phase,
+                "stages": stages
+            }
+
+            try:
+                solver.evaluate_manual_placement(placement)
+                solver.print_solution()
+
+                output_file = os.path.join(output_dir, 'placement_metrics.json')
+                solver.save_solution(output_file)
+
+                csv_file = os.path.join(output_dir, 'placement_metrics.csv')
+                solver.save_solution_csv(csv_file)
+            except ValueError as exc:
+                detailed_error = solver._describe_eval_failure(placement, exc)
+                failure_payload = {
+                    "config": {
+                        "model_name": solver.config.model_name,
+                        "num_decoder_layers": solver.config.num_decoder_layers,
+                        "sequence_length": solver.config.sequence_length,
+                        "output_length": solver.config.output_length,
+                        "min_batch_size": solver.config.min_batch_size,
+                        "max_batch_size": solver.config.max_batch_size,
+                        "d_model": solver.config.d_model,
+                        "d_hidden": solver.config.d_hidden,
+                        "max_pipeline_stages": solver.config.max_pipeline_stages,
+                        "min_memory_utilization": solver.config.min_memory_utilization
+                    },
+                    "placement": placement,
+                    "solution": {
+                        "status": "INFEASIBLE",
+                        "error": detailed_error
+                    }
+                }
+                with open(os.path.join(output_dir, "placement_metrics.json"), "w", encoding="utf-8") as f:
+                    json.dump(_json_safe(failure_payload), f, indent=2)
+                logger.error(f"Eval placement infeasible: {detailed_error}")
+            return 0
+
+        if args.evaluate_placement:
+            if not args.output_dir and not args.eval_output_root:
+                raise ValueError("Eval mode requires --output-dir or --eval-output-root")
+            result_dir_name = f"eval_placement-{time.strftime('%Y%m%d_%H%M%S')}"
+            output_dir = _resolve_eval_output_dir(args, args.config_dir, result_dir_name)
+            os.makedirs(output_dir, exist_ok=True)
+            config_src = os.path.join(args.config_dir, "config.csv")
+            if os.path.exists(config_src):
+                shutil.copy2(config_src, os.path.join(output_dir, "config.csv"))
+
+            solver = LLMPlacementSolverWithTP(
+                args.config_dir,
+                tp_configuration=None,
+                **solver_kwargs,
+                skip_gurobi=True
+            )
+            with open(args.evaluate_placement, "r", encoding="utf-8") as f:
+                placement = json.load(f)
+            try:
+                solver.evaluate_manual_placement(placement)
+                solver.print_solution()
+
+                output_file = os.path.join(output_dir, 'placement_metrics.json')
+                solver.save_solution(output_file)
+
+                csv_file = os.path.join(output_dir, 'placement_metrics.csv')
+                solver.save_solution_csv(csv_file)
+            except ValueError as exc:
+                detailed_error = solver._describe_eval_failure(placement, exc)
+                failure_payload = {
+                    "config": {
+                        "model_name": solver.config.model_name,
+                        "num_decoder_layers": solver.config.num_decoder_layers,
+                        "sequence_length": solver.config.sequence_length,
+                        "output_length": solver.config.output_length,
+                        "min_batch_size": solver.config.min_batch_size,
+                        "max_batch_size": solver.config.max_batch_size,
+                        "d_model": solver.config.d_model,
+                        "d_hidden": solver.config.d_hidden,
+                        "max_pipeline_stages": solver.config.max_pipeline_stages,
+                        "min_memory_utilization": solver.config.min_memory_utilization
+                    },
+                    "placement": placement,
+                    "solution": {
+                        "status": "INFEASIBLE",
+                        "error": detailed_error
+                    }
+                }
+                with open(os.path.join(output_dir, "placement_metrics.json"), "w", encoding="utf-8") as f:
+                    json.dump(_json_safe(failure_payload), f, indent=2)
+                logger.error(f"Eval placement infeasible: {detailed_error}")
+            return 0
+
         if args.search_all_tp:
             # Search all TP configurations
             best_solution, best_tp_config = solve_all_tp_configurations(

@@ -1,0 +1,74 @@
+{
+  "config": {
+    "model_name": "llama3-70b",
+    "num_decoder_layers": 80,
+    "sequence_length": 2048,
+    "output_length": 512,
+    "min_batch_size": 32,
+    "max_batch_size": 32,
+    "d_model": 8192,
+    "d_hidden": 28672,
+    "max_pipeline_stages": 8,
+    "min_memory_utilization": 0.5
+  },
+  "placement": {
+    "batch_size": 32,
+    "sequence_length": 2048,
+    "output_length": 512,
+    "workload_phase": "aggregated",
+    "stages": [
+      {
+        "gpu_type": "g5.24xlarge#0",
+        "tp_degree": 4,
+        "gpu_ids": [
+          0,
+          1,
+          2,
+          3
+        ],
+        "start_layer": 1,
+        "end_layer": 20
+      },
+      {
+        "gpu_type": "g5.24xlarge#1",
+        "tp_degree": 4,
+        "gpu_ids": [
+          0,
+          1,
+          2,
+          3
+        ],
+        "start_layer": 21,
+        "end_layer": 40
+      },
+      {
+        "gpu_type": "g5.24xlarge#2",
+        "tp_degree": 4,
+        "gpu_ids": [
+          0,
+          1,
+          2,
+          3
+        ],
+        "start_layer": 41,
+        "end_layer": 60
+      },
+      {
+        "gpu_type": "g5.24xlarge#3",
+        "tp_degree": 4,
+        "gpu_ids": [
+          0,
+          1,
+          2,
+          3
+        ],
+        "start_layer": 61,
+        "end_layer": 80
+      }
+    ]
+  },
+  "solution": {
+    "status": "INFEASIBLE",
+    "error": "INFEASIBLE placement. Context: model_layers=80, phase=aggregated, seq_len=2048, output_len=512, batch=32, pp_stages=4. Reasons: Stage 1 (g5.24xlarge#0, TP=4, layers 1-20, size=20): underutilized GPU: segment uses 20 layers, but the minimum to reach 50% of GPU memory is 21 layers. Target memory=12.00GB (= 50% of 24.0GB), activation=1.51GB, per_layer=0.52GB \u21d2 required_layers=ceil((12.00 - 1.51) / 0.52) = 21 | Stage 2 (g5.24xlarge#1, TP=4, layers 21-40, size=20): underutilized GPU: segment uses 20 layers, but the minimum to reach 50% of GPU memory is 21 layers. Target memory=12.00GB (= 50% of 24.0GB), activation=1.51GB, per_layer=0.52GB \u21d2 required_layers=ceil((12.00 - 1.51) / 0.52) = 21 | Stage 3 (g5.24xlarge#2, TP=4, layers 41-60, size=20): underutilized GPU: segment uses 20 layers, but the minimum to reach 50% of GPU memory is 21 layers. Target memory=12.00GB (= 50% of 24.0GB), activation=1.51GB, per_layer=0.52GB \u21d2 required_layers=ceil((12.00 - 1.51) / 0.52) = 21 | Stage 4 (g5.24xlarge#3, TP=4, layers 61-80, size=20): underutilized GPU: segment uses 20 layers, but the minimum to reach 50% of GPU memory is 21 layers. Target memory=12.00GB (= 50% of 24.0GB), activation=1.51GB, per_layer=0.52GB \u21d2 required_layers=ceil((12.00 - 1.51) / 0.52) = 21"
+  }
+}
