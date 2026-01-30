@@ -1,6 +1,6 @@
 """
 Performance data loader with source trust levels.
-Loads sparse benchmark/simulator/solver data and provides query interface.
+Loads sparse benchmark/simulator/solver data from individual files.
 """
 
 from dataclasses import dataclass
@@ -17,16 +17,39 @@ SOURCE_TRUST = {
         "score": 1.0,
         "description": "Real measurements from actual hardware (AWS). Most reliable.",
     },
+    "dynamo": {
+        "level": "HIGH",
+        "score": 0.9,
+        "description": "Pre-swept results from Dynamo profiler on H100. Real measurements.",
+    },
     "simulator": {
         "level": "MEDIUM",
         "score": 0.7,
         "description": "Vidur simulator predictions. Validated to ~9% error.",
+    },
+    "solver_eval": {
+        "level": "LOW",
+        "score": 0.5,
+        "description": "Solver-based throughput/cost evaluation. Analytical model with memory constraints.",
     },
     "solver": {
         "level": "LOW",
         "score": 0.4,
         "description": "Analytical roofline model. Approximation, may miss real-world effects.",
     },
+}
+
+# Data files mapping (in data/ directory)
+DATA_FILES = {
+    "benchmark": "our_own_benchmark.csv",
+    "solver": "solver_based_number.csv",
+    "simulator": "vidur_based_simulator_number.csv",
+    "dynamo": "dynamo_number.csv",
+}
+
+# Additional data files (relative to project root)
+EXTRA_DATA_FILES = {
+    "solver_eval": "eval_results/eval_results.csv",
 }
 
 
@@ -80,51 +103,300 @@ class PerfEntry:
         }
 
 
+@dataclass
+class InfeasibleEntry:
+    """An infeasible configuration with failure reason."""
+    source: str
+    model_name: str
+    gpu_type: str
+    instance_family: str
+    tp: int
+    pp: int
+    input_length: float
+    output_length: float
+    batch_size: Optional[float]
+    num_gpus: Optional[int]
+    failure_reason: str  # Detailed reason why this config is infeasible
+
+    def to_dict(self) -> dict:
+        return {
+            "source": self.source,
+            "model_name": self.model_name,
+            "gpu_type": self.gpu_type,
+            "instance_family": self.instance_family,
+            "tp": self.tp,
+            "pp": self.pp,
+            "input_length": self.input_length,
+            "output_length": self.output_length,
+            "batch_size": self.batch_size,
+            "num_gpus": self.num_gpus,
+            "failure_reason": self.failure_reason,
+        }
+
+
 class PerfDataLoader:
-    """Load and query sparse performance data."""
+    """Load and query sparse performance data from individual files."""
 
-    def __init__(self, csv_path: str = None):
-        """Initialize with path to unified CSV."""
-        if csv_path is None:
-            csv_path = Path(__file__).parent.parent / "unified_performance_summary.csv"
+    def __init__(self, data_dir: str = None, project_root: str = None):
+        """Initialize with path to data directory."""
+        if data_dir is None:
+            data_dir = Path(__file__).parent.parent / "data"
+        if project_root is None:
+            project_root = Path(__file__).parent.parent
 
-        self.csv_path = Path(csv_path)
-        self.df = None
+        self.data_dir = Path(data_dir)
+        self.project_root = Path(project_root)
         self.entries: List[PerfEntry] = []
-        self._load_data()
+        self.infeasible_entries: List[InfeasibleEntry] = []
+        self._load_all_sources()
 
-    def _load_data(self):
-        """Load CSV and convert to PerfEntry objects."""
-        if not self.csv_path.exists():
-            raise FileNotFoundError(f"Performance data not found: {self.csv_path}")
+    def _load_all_sources(self):
+        """Load data from all source files."""
+        # Load from data/ directory
+        for source, filename in DATA_FILES.items():
+            filepath = self.data_dir / filename
+            if filepath.exists():
+                self._load_source(source, filepath)
+            else:
+                print(f"Warning: Data file not found: {filepath}")
 
-        self.df = pd.read_csv(self.csv_path)
+        # Load from extra locations (relative to project root)
+        for source, relpath in EXTRA_DATA_FILES.items():
+            filepath = self.project_root / relpath
+            if filepath.exists():
+                self._load_source(source, filepath)
+            else:
+                print(f"Warning: Data file not found: {filepath}")
 
-        for _, row in self.df.iterrows():
-            # Skip rows with missing critical data
-            if pd.isna(row.get("total_tokens_per_sec")):
+        print(f"Loaded {len(self.entries)} performance entries, {len(self.infeasible_entries)} infeasible entries")
+
+    def _load_source(self, source: str, filepath: Path):
+        """Load entries from a specific source file."""
+        try:
+            df = pd.read_csv(filepath)
+            count = 0
+            infeasible_count = 0
+
+            if source == "dynamo":
+                count = self._load_dynamo(df)
+            elif source == "solver_eval":
+                count, infeasible_count = self._load_eval_results(df)
+            elif source in ["benchmark", "solver", "simulator"]:
+                count = self._load_standard(source, df)
+
+            msg = f"  Loaded {count} entries from {source} ({filepath.name})"
+            if infeasible_count > 0:
+                msg += f" + {infeasible_count} infeasible"
+            print(msg)
+        except Exception as e:
+            print(f"Error loading {source} from {filepath}: {e}")
+
+    def _load_standard(self, source: str, df: pd.DataFrame) -> int:
+        """Load standard format (benchmark, solver, simulator).
+
+        Supports both unified schema (total_tokens_per_sec) and
+        legacy/compact schema (tokens_per_sec).
+        """
+        count = 0
+        for _, row in df.iterrows():
+            # Skip rows with missing throughput
+            total_tps = row.get("total_tokens_per_sec")
+            if pd.isna(total_tps) or total_tps == 0:
+                total_tps = row.get("tokens_per_sec")
+            if pd.isna(total_tps) or total_tps == 0:
                 continue
 
+            # Get GPU type - handle different formats
+            gpu_type = str(row.get("gpu_type", ""))
+            if gpu_type in ["nan", ""]:
+                # Try to infer from device_type
+                device = str(row.get("device_type", "")).lower()
+                gpu_type = self._infer_gpu_type(device)
+
+            # Normalize GPU type
+            gpu_type = gpu_type.upper() if gpu_type else "UNKNOWN"
+
+            cost_per_hour = row.get("cost_per_hour")
+            if pd.isna(cost_per_hour) or cost_per_hour == 0:
+                # Some compact files store cost in total_cost instead.
+                cost_per_hour = row.get("total_cost")
+
             entry = PerfEntry(
-                source=row.get("source", "unknown"),
+                source=source,
                 model_name=str(row.get("model_name", "")),
-                gpu_type=str(row.get("gpu_type", "")),
+                gpu_type=gpu_type,
                 device_type=str(row.get("device_type", "")),
                 tp=int(row["tp"]) if pd.notna(row.get("tp")) else 1,
-                pp=int(row["pp"]) if pd.notna(row.get("pp")) else 1,
+                pp=int(row.get("pp", row.get("pipeline_stages", 1))) if pd.notna(row.get("pp", row.get("pipeline_stages"))) else 1,
                 input_length=float(row.get("max_input_length", 0)),
                 output_length=float(row.get("max_output_length", 0)),
-                total_tokens_per_sec=float(row.get("total_tokens_per_sec", 0)),
+                total_tokens_per_sec=float(total_tps),
                 input_tokens_per_sec=float(row.get("input_tokens_per_sec", 0)) if pd.notna(row.get("input_tokens_per_sec")) else 0,
                 output_tokens_per_sec=float(row.get("output_tokens_per_sec", 0)) if pd.notna(row.get("output_tokens_per_sec")) else 0,
                 batch_size=float(row["batch_size"]) if pd.notna(row.get("batch_size")) else None,
                 num_gpus=int(row["num_gpus"]) if pd.notna(row.get("num_gpus")) else None,
-                cost_per_hour=float(row["cost_per_hour"]) if pd.notna(row.get("cost_per_hour")) else None,
+                cost_per_hour=float(cost_per_hour) if pd.notna(cost_per_hour) else None,
                 dollar_per_million_token=float(row["dollar_per_million_token"]) if pd.notna(row.get("dollar_per_million_token")) else None,
             )
             self.entries.append(entry)
+            count += 1
 
-        print(f"Loaded {len(self.entries)} performance entries from {self.csv_path}")
+        return count
+
+    def _load_dynamo(self, df: pd.DataFrame) -> int:
+        """Load Dynamo format data (different schema)."""
+        count = 0
+        for _, row in df.iterrows():
+            # Dynamo has throughput_per_gpu - multiply by gpu_count for total
+            tps_per_gpu = row.get("throughput_per_gpu")
+            if pd.isna(tps_per_gpu) or tps_per_gpu == 0:
+                continue
+
+            gpu_count = int(row.get("gpu_count", 8)) if pd.notna(row.get("gpu_count")) else 8
+            total_tps = float(tps_per_gpu) * gpu_count
+
+            # Map gpu_type
+            gpu_type = str(row.get("gpu_type", "")).upper()
+            if "h100" in gpu_type.lower():
+                gpu_type = "H100"
+            elif "a100" in gpu_type.lower():
+                gpu_type = "A100"
+
+            # Extract model name
+            model_name = str(row.get("model", ""))
+
+            entry = PerfEntry(
+                source="dynamo",
+                model_name=model_name,
+                gpu_type=gpu_type,
+                device_type=str(row.get("gpu_type", "")),
+                tp=int(row["tp"]) if pd.notna(row.get("tp")) else 1,
+                pp=int(row["pp"]) if pd.notna(row.get("pp")) else 1,
+                input_length=float(row.get("context_length", row.get("input_sequence_length", 0))) if pd.notna(row.get("context_length", row.get("input_sequence_length"))) else 0,
+                output_length=0,  # Dynamo focuses on decode, output length not directly stored
+                total_tokens_per_sec=total_tps,
+                input_tokens_per_sec=0,
+                output_tokens_per_sec=total_tps,  # Decode throughput
+                batch_size=float(row["max_batch_size"]) if pd.notna(row.get("max_batch_size")) else None,
+                num_gpus=gpu_count,
+            )
+            self.entries.append(entry)
+            count += 1
+
+        return count
+
+    def _load_eval_results(self, df: pd.DataFrame) -> tuple:
+        """Load eval_results format (solver-based throughput/cost evaluation).
+
+        Returns tuple of (success_count, infeasible_count).
+        """
+        success_count = 0
+        infeasible_count = 0
+
+        for _, row in df.iterrows():
+            status = str(row.get("status", "")).upper()
+
+            # Extract common fields
+            gpu_type = str(row.get("device_type", ""))
+            # Normalize GPU type (e.g., "NVIDIA A10G" -> "A10G")
+            if "A10G" in gpu_type:
+                gpu_type = "A10G"
+            elif "L40S" in gpu_type:
+                gpu_type = "L40S"
+            elif "L4" in gpu_type and "L40" not in gpu_type:
+                gpu_type = "L4"
+            elif "A100" in gpu_type:
+                gpu_type = "A100"
+            elif "V100" in gpu_type:
+                gpu_type = "V100"
+            elif "H100" in gpu_type:
+                gpu_type = "H100"
+
+            instance_family = str(row.get("instance_family", ""))
+            model_name = str(row.get("model_name", ""))
+            input_length = float(row.get("input_length", 0)) if pd.notna(row.get("input_length")) else 0
+            output_length = float(row.get("output_length", 0)) if pd.notna(row.get("output_length")) else 0
+            batch_size = float(row.get("batch_size")) if pd.notna(row.get("batch_size")) else None
+            num_gpus = int(row.get("num_gpus")) if pd.notna(row.get("num_gpus")) else None
+
+            # Get TP and PP - handle multiple column names
+            tp = row.get("tp_degree", row.get("tp_degrees"))
+            tp = int(tp) if pd.notna(tp) else 1
+            pp = row.get("pp_stages", row.get("num_pipeline_stages"))
+            pp = int(pp) if pd.notna(pp) else 1
+
+            if status == "SUCCESS":
+                # Load as performance entry
+                total_tps = row.get("throughput_tokens_per_sec")
+                if pd.isna(total_tps) or total_tps == 0:
+                    continue
+
+                entry = PerfEntry(
+                    source="solver_eval",
+                    model_name=model_name,
+                    gpu_type=gpu_type,
+                    device_type=instance_family,
+                    tp=tp,
+                    pp=pp,
+                    input_length=input_length,
+                    output_length=output_length,
+                    total_tokens_per_sec=float(total_tps),
+                    input_tokens_per_sec=0,
+                    output_tokens_per_sec=float(total_tps),  # Assume decode-focused
+                    batch_size=batch_size,
+                    num_gpus=num_gpus,
+                    cost_per_hour=float(row["cost_per_hour"]) if pd.notna(row.get("cost_per_hour")) else None,
+                    dollar_per_million_token=float(row["dollar_per_million_token"]) if pd.notna(row.get("dollar_per_million_token")) else None,
+                )
+                self.entries.append(entry)
+                success_count += 1
+
+            elif status == "INFEASIBLE":
+                # Load as infeasible entry with failure reason
+                error_msg = str(row.get("error", "Unknown reason"))
+
+                infeasible = InfeasibleEntry(
+                    source="solver_eval",
+                    model_name=model_name,
+                    gpu_type=gpu_type,
+                    instance_family=instance_family,
+                    tp=tp,
+                    pp=pp,
+                    input_length=input_length,
+                    output_length=output_length,
+                    batch_size=batch_size,
+                    num_gpus=num_gpus,
+                    failure_reason=error_msg,
+                )
+                self.infeasible_entries.append(infeasible)
+                infeasible_count += 1
+
+            # Skip ERROR status entries (incomplete data)
+
+        return success_count, infeasible_count
+
+    def _infer_gpu_type(self, device: str) -> str:
+        """Infer GPU type from device string."""
+        device = device.lower()
+        if "p4de" in device or "p4d" in device:
+            return "A100"
+        elif "p3dn" in device or "p3" in device:
+            return "V100"
+        elif "g6e" in device:
+            return "L40S"
+        elif "g6" in device:
+            return "L4"
+        elif "g5" in device:
+            return "A10G"
+        elif "p5" in device:
+            return "H100"
+        elif "a100" in device:
+            return "A100"
+        elif "a40" in device:
+            return "A40"
+        elif "h100" in device:
+            return "H100"
+        return ""
 
     def get_summary(self) -> Dict[str, Any]:
         """Get summary statistics of the data."""
@@ -134,16 +406,55 @@ class PerfDataLoader:
 
         for e in self.entries:
             source_counts[e.source] = source_counts.get(e.source, 0) + 1
-            if e.gpu_type and e.gpu_type != "nan":
+            if e.gpu_type and e.gpu_type != "nan" and e.gpu_type != "UNKNOWN":
                 gpu_types.add(e.gpu_type)
             models.add(e.model_name)
 
+        # Count infeasible by GPU type
+        infeasible_by_gpu = {}
+        for e in self.infeasible_entries:
+            infeasible_by_gpu[e.gpu_type] = infeasible_by_gpu.get(e.gpu_type, 0) + 1
+
         return {
             "total_entries": len(self.entries),
+            "total_infeasible": len(self.infeasible_entries),
             "by_source": source_counts,
+            "infeasible_by_gpu": infeasible_by_gpu,
             "gpu_types": sorted(gpu_types),
             "models": sorted(models),
         }
+
+    def find_infeasible_entries(
+        self,
+        model_name: Optional[str] = None,
+        gpu_type: Optional[str] = None,
+        input_length_range: Optional[tuple] = None,
+        max_results: int = 20,
+    ) -> List[InfeasibleEntry]:
+        """Find infeasible configurations matching criteria."""
+        results = []
+
+        for entry in self.infeasible_entries:
+            # Model filter
+            if model_name:
+                if not self._model_matches(model_name.lower(), entry.model_name.lower()):
+                    continue
+
+            # GPU type filter
+            if gpu_type:
+                if gpu_type.upper() not in entry.gpu_type.upper():
+                    continue
+
+            # Input length filter
+            if input_length_range:
+                if entry.input_length < input_length_range[0] * 0.5:
+                    continue
+                if entry.input_length > input_length_range[1] * 2:
+                    continue
+
+            results.append(entry)
+
+        return results[:max_results]
 
     def find_relevant_entries(
         self,
@@ -301,7 +612,36 @@ def format_entries_for_prompt(entries: List[PerfEntry], max_entries: int = 20) -
     return "\n".join(lines)
 
 
+def format_infeasible_for_prompt(entries: List[InfeasibleEntry], max_entries: int = 10) -> str:
+    """Format infeasible entries as a readable string for LLM prompt."""
+    if not entries:
+        return ""
+
+    lines = [f"\n## Known Infeasible Configurations ({len(entries)} entries, showing top {min(len(entries), max_entries)})\n"]
+    lines.append("These configurations are KNOWN to fail - avoid recommending them:\n")
+
+    for i, entry in enumerate(entries[:max_entries]):
+        lines.append(f"### Infeasible {i+1}: {entry.gpu_type} on {entry.instance_family}, TP={entry.tp}, PP={entry.pp}")
+        lines.append(f"- Model: {entry.model_name}")
+        lines.append(f"- Workload: input={int(entry.input_length)}, output={int(entry.output_length)}, batch={entry.batch_size}")
+        # Summarize failure reason (truncate if too long)
+        reason = entry.failure_reason
+        if len(reason) > 200:
+            # Extract key info from the reason
+            if "memory overflow" in reason.lower():
+                lines.append(f"- Reason: Memory overflow - GPU memory insufficient")
+            elif "underutilized" in reason.lower():
+                lines.append(f"- Reason: GPU underutilized - too few layers per stage")
+            else:
+                lines.append(f"- Reason: {reason[:200]}...")
+        else:
+            lines.append(f"- Reason: {reason}")
+        lines.append("")
+
+    return "\n".join(lines)
+
+
 # Convenience function
-def load_perf_data(csv_path: str = None) -> PerfDataLoader:
-    """Load performance data from unified CSV."""
-    return PerfDataLoader(csv_path)
+def load_perf_data(data_dir: str = None) -> PerfDataLoader:
+    """Load performance data from individual files."""
+    return PerfDataLoader(data_dir)

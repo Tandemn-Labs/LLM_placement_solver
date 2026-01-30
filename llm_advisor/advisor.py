@@ -9,7 +9,10 @@ import json
 import os
 
 from .gpu_specs import GPU_SPECS, format_gpu_specs_for_prompt, estimate_model_size
-from .perf_data import PerfDataLoader, PerfEntry, format_entries_for_prompt, SOURCE_TRUST
+from .perf_data import (
+    PerfDataLoader, PerfEntry, InfeasibleEntry,
+    format_entries_for_prompt, format_infeasible_for_prompt, SOURCE_TRUST
+)
 
 
 @dataclass
@@ -157,6 +160,18 @@ class LLMAdvisor:
         # 5. Data coverage info
         context["data_summary"] = self.perf_data.get_summary()
 
+        # 6. Find infeasible configurations (these are important constraints!)
+        infeasible = []
+        for gpu_type in available_gpu_types:
+            entries = self.perf_data.find_infeasible_entries(
+                model_name=model_name,
+                gpu_type=gpu_type,
+                input_length_range=(workload.input_length * 0.5, workload.input_length * 2),
+                max_results=10,
+            )
+            infeasible.extend(entries)
+        context["infeasible_configs"] = infeasible[:20]
+
         return context
 
     def build_prompt(
@@ -253,6 +268,11 @@ Recommend the optimal GPU configuration for:
                 for cfg in configs[:10]:
                     sources = ", ".join(cfg["sources"])
                     prompt_parts.append(f"  - TP={cfg['tp']}, PP={cfg['pp']}: {cfg['data_points']} data points ({sources})")
+
+        # Infeasible configurations (important constraints!)
+        infeasible = context.get("infeasible_configs", [])
+        if infeasible:
+            prompt_parts.append(format_infeasible_for_prompt(infeasible, max_entries=10))
 
         # Output format
         prompt_parts.append("""

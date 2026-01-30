@@ -3,7 +3,7 @@
 Simple CLI for GPU configuration recommendations.
 
 Usage:
-    python -m llm_advisor.cli --model llama-70b --gpu-pool config/gpu_pool.csv --input-len 2048 --output-len 512
+    python -m llm_advisor.cli --model llama-70b --gpu-pool config/gpu_pool.csv --input-len 2048 --output-len 512 --api-key sk-...
 """
 
 import argparse
@@ -46,13 +46,14 @@ def main():
     parser.add_argument("--input-len", "-i", type=int, required=True, help="Input length in tokens")
     parser.add_argument("--output-len", "-o", type=int, required=True, help="Output length in tokens")
     parser.add_argument("--batch-size", "-b", type=int, default=1, help="Batch size (default: 1)")
+    parser.add_argument("--api-key", help="LLM API key (defaults to ANTHROPIC_API_KEY env var)")
     parser.add_argument("--prompt-only", action="store_true", help="Show prompt only, don't call LLM")
     parser.add_argument("--json", action="store_true", help="Output as JSON")
     args = parser.parse_args()
 
     gpu_pool = load_gpu_pool(args.gpu_pool)
     workload = WorkloadSpec(input_length=args.input_len, output_length=args.output_len, batch_size=args.batch_size)
-    advisor = create_advisor()
+    advisor = create_advisor(api_key=args.api_key)
 
     print(f"Model: {args.model}")
     print(f"GPU Pool: {gpu_pool.to_string()}")
