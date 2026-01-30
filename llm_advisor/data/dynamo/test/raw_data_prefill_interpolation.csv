@@ -1,0 +1,18 @@
+prefill_isl,prefill_ttft,prefill_thpt_per_gpu,model,gpu_type,max_context_length,tp_prefill,tp_decode,isl_example,osl_example,ttft_example_ms,itl_example_ms,benchmark_method,metadata_source
+100,19.525209,5121.58410186544,nvidia/Llama-3.1-8B-Instruct-FP8,h200,16384,1,1,3000,150,80,10,AIPerf profiling sweep via profile_sla.py,tests/planner/README.md
+1117,38.494130999999996,29017.410472261345,nvidia/Llama-3.1-8B-Instruct-FP8,h200,16384,1,1,3000,150,80,10,AIPerf profiling sweep via profile_sla.py,tests/planner/README.md
+2134,49.968438,42706.958340382786,nvidia/Llama-3.1-8B-Instruct-FP8,h200,16384,1,1,3000,150,80,10,AIPerf profiling sweep via profile_sla.py,tests/planner/README.md
+3151,63.214755,49845.95764074385,nvidia/Llama-3.1-8B-Instruct-FP8,h200,16384,1,1,3000,150,80,10,AIPerf profiling sweep via profile_sla.py,tests/planner/README.md
+4168,87.34202599999999,47720.44101656172,nvidia/Llama-3.1-8B-Instruct-FP8,h200,16384,1,1,3000,150,80,10,AIPerf profiling sweep via profile_sla.py,tests/planner/README.md
+5185,104.89360099999999,49431.04203277377,nvidia/Llama-3.1-8B-Instruct-FP8,h200,16384,1,1,3000,150,80,10,AIPerf profiling sweep via profile_sla.py,tests/planner/README.md
+6202,123.23749199999999,50325.59409761439,nvidia/Llama-3.1-8B-Instruct-FP8,h200,16384,1,1,3000,150,80,10,AIPerf profiling sweep via profile_sla.py,tests/planner/README.md
+7219,143.294598,50378.730955370695,nvidia/Llama-3.1-8B-Instruct-FP8,h200,16384,1,1,3000,150,80,10,AIPerf profiling sweep via profile_sla.py,tests/planner/README.md
+8236,171.02919,48155.522457891544,nvidia/Llama-3.1-8B-Instruct-FP8,h200,16384,1,1,3000,150,80,10,AIPerf profiling sweep via profile_sla.py,tests/planner/README.md
+9253,194.531656,47565.52321746544,nvidia/Llama-3.1-8B-Instruct-FP8,h200,16384,1,1,3000,150,80,10,AIPerf profiling sweep via profile_sla.py,tests/planner/README.md
+10270,232.072859,44253.34373115988,nvidia/Llama-3.1-8B-Instruct-FP8,h200,16384,1,1,3000,150,80,10,AIPerf profiling sweep via profile_sla.py,tests/planner/README.md
+11287,240.383785,46954.082198181546,nvidia/Llama-3.1-8B-Instruct-FP8,h200,16384,1,1,3000,150,80,10,AIPerf profiling sweep via profile_sla.py,tests/planner/README.md
+12304,262.460011,46879.52253419664,nvidia/Llama-3.1-8B-Instruct-FP8,h200,16384,1,1,3000,150,80,10,AIPerf profiling sweep via profile_sla.py,tests/planner/README.md
+13321,296.154925,44979.83614488262,nvidia/Llama-3.1-8B-Instruct-FP8,h200,16384,1,1,3000,150,80,10,AIPerf profiling sweep via profile_sla.py,tests/planner/README.md
+14338,313.340214,45758.569629367776,nvidia/Llama-3.1-8B-Instruct-FP8,h200,16384,1,1,3000,150,80,10,AIPerf profiling sweep via profile_sla.py,tests/planner/README.md
+15355,354.0895,43364.74252978414,nvidia/Llama-3.1-8B-Instruct-FP8,h200,16384,1,1,3000,150,80,10,AIPerf profiling sweep via profile_sla.py,tests/planner/README.md
+16372,375.482618,43602.55099744724,nvidia/Llama-3.1-8B-Instruct-FP8,h200,16384,1,1,3000,150,80,10,AIPerf profiling sweep via profile_sla.py,tests/planner/README.md

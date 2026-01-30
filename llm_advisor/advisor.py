@@ -10,7 +10,7 @@ import os
 
 from .gpu_specs import GPU_SPECS, format_gpu_specs_for_prompt, estimate_model_size
 from .perf_data import (
-    PerfDataLoader, PerfEntry, InfeasibleEntry,
+    PerfDataLoader, PerfEntry, InfeasibleEntry, DataSourceContext,
     format_entries_for_prompt, format_infeasible_for_prompt, SOURCE_TRUST
 )
 
@@ -172,6 +172,9 @@ class LLMAdvisor:
             infeasible.extend(entries)
         context["infeasible_configs"] = infeasible[:20]
 
+        # 7. Get source contexts (methodology, limitations) - CRITICAL for skeptical reasoning
+        context["source_contexts"] = self.perf_data.get_all_contexts()
+
         return context
 
     def build_prompt(
@@ -194,31 +197,39 @@ class LLMAdvisor:
         prompt_parts = []
 
         # System context
-        prompt_parts.append("""# GPU Configuration Advisor
+        prompt_parts.append("""# GPU Configuration Advisor - Critical Analysis Required
 
 You are an expert system for selecting optimal GPU configurations for LLM inference.
 Your task is to recommend the best (gpu_type, tensor_parallelism, pipeline_parallelism, replicas) configuration.
 
-## Your Knowledge Sources
+## CRITICAL: Be Skeptical About Data Applicability
 
-You have access to SPARSE performance data from THREE sources with different trust levels:
+The performance data you have access to is SPARSE and comes from DIFFERENT contexts. You MUST think critically about whether each data point actually applies to the user's scenario.
 
-1. **BENCHMARK (HIGH trust)**: Real measurements from AWS hardware. Most reliable but limited coverage.
-2. **SIMULATOR (MEDIUM trust)**: Vidur simulator predictions. Validated to ~9% error. Good coverage.
-3. **SOLVER (LOW trust)**: Analytical roofline model estimates. Approximation that may miss real-world effects.
+### Model Equivalence WARNING
 
-IMPORTANT: The data is SPARSE - not all (model, gpu, tp, pp, workload) combinations have measurements.
-You must reason carefully when extrapolating from available data.
+DO NOT assume models with similar parameter counts are equivalent:
+- `DeepSeek-R1-Distill-Llama-70B` is a DISTILLED model - different architecture and behavior
+- `Llama-2-70b` vs `Llama-3-70b` have different architectures
+- `FP8` vs `FP16` precision dramatically affects memory (~50% less for FP8) and compute characteristics
+- Different serving engines (vLLM, TGI, TensorRT-LLM) have very different performance profiles
+- A benchmark on model X does NOT automatically apply to model Y, even if both are "70B"
 
 ## Key Principles
 
-1. **Prefer configurations with HIGH trust data** when available
-2. **Memory constraints are hard**: Model must fit in GPU memory with KV cache
-3. **Tensor Parallelism (TP)**: Splits model across GPUs. Higher TP = more communication overhead.
-4. **Pipeline Parallelism (PP)**: Splits layers across GPUs. Has pipeline bubble overhead.
-5. **Consider the workload**: Long sequences need more memory. Batch size affects throughput.
-6. **Cost matters**: More GPUs = higher cost. Find the efficient frontier.
+1. **ONLY claim HIGH confidence if you have an EXACT match**: same model, same GPU, same workload, real benchmark
+2. **Memory constraints are hard**: Model must fit in GPU memory with KV cache. Trust INFEASIBLE results.
+3. **Tensor Parallelism (TP)**: Higher TP = more inter-GPU communication. Without NVLink, TP>4 often degrades.
+4. **Pipeline Parallelism (PP)**: Has bubble overhead. Higher PP = more latency, but enables larger models.
+5. **Extrapolation is RISKY**: If you're extrapolating from different models/GPUs/workloads, say so explicitly.
+6. **Quantify uncertainty**: Give ranges, not point estimates, when data is sparse.
+7. **Think critically**: Don't just pattern match - reason about WHY a data point does or doesn't apply.
 """)
+
+        # Add dynamically loaded source contexts
+        source_contexts = context.get("source_contexts", {})
+        if source_contexts:
+            prompt_parts.append(self.perf_data.format_contexts_for_prompt())
 
         # Query section
         prompt_parts.append(f"""
@@ -279,7 +290,7 @@ Recommend the optimal GPU configuration for:
 
 ## Required Output Format
 
-Provide your recommendation in the following JSON format, followed by your reasoning:
+Provide your recommendation in the following JSON format, followed by your CRITICAL ANALYSIS:
 
 ```json
 {
@@ -291,19 +302,44 @@ Provide your recommendation in the following JSON format, followed by your reaso
     "replicas": <number of model replicas>
   },
   "confidence": "<HIGH|MEDIUM|LOW>",
-  "predicted_throughput_tok_s": <estimated total throughput or null>,
-  "warnings": ["<any caveats or risks>"]
+  "confidence_reasoning": "<why this confidence level - be honest about data gaps>",
+  "predicted_throughput_range": {
+    "low": <pessimistic estimate>,
+    "mid": <expected>,
+    "high": <optimistic estimate>
+  },
+  "key_assumptions": ["<list assumptions you're making that could be wrong>"],
+  "warnings": ["<caveats, risks, things that could go wrong>"],
+  "what_would_reduce_uncertainty": ["<what benchmarks or data would help>"]
 }
 ```
 
-Then explain your reasoning, including:
-1. Why you chose this GPU type
-2. Why this TP/PP configuration
-3. What data you based this on (cite specific entries if relevant)
-4. Any extrapolations or assumptions you made
-5. Alternative configurations to consider
+Then provide CRITICAL ANALYSIS covering:
 
-Be explicit about uncertainty. If data is sparse, say so.
+1. **Data Applicability Assessment**
+   - For each data point you used: Is this actually applicable? Why or why not?
+   - What's the model mismatch? (architecture, precision, version)
+   - What's the setup mismatch? (serving engine, config, hardware)
+
+2. **Reasoning Chain**
+   - Why this GPU type? What are you assuming about performance scaling?
+   - Why this TP/PP? What communication/memory tradeoffs are you considering?
+   - What could go wrong with this recommendation?
+
+3. **Uncertainty Quantification**
+   - Where is your estimate most uncertain?
+   - What's the worst case if your assumptions are wrong?
+
+4. **Alternative Configurations**
+   - What else should the user consider?
+   - Under what conditions would a different config be better?
+
+**CONFIDENCE GUIDELINES:**
+- HIGH: ONLY if you have exact match (same model, same GPU, same workload) from real benchmark
+- MEDIUM: Similar model/GPU with real data, or exact match from simulator
+- LOW: Extrapolating from different models/GPUs, or using solver-only data
+
+Be honest about what you don't know. A thoughtful "I'm uncertain because X" is more valuable than a confident wrong answer.
 """)
 
         return "\n".join(prompt_parts)
