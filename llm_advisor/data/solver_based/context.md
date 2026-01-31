@@ -190,3 +190,4 @@ The solver outputs do **not** capture:
 
 If you need those details, they must be recorded outside this solver-based pipeline.
 
+

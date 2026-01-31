@@ -464,10 +464,17 @@ class PerfDataLoader:
 
         ctx.limitations = [
             "Real measurements but specific to AWS instance types and network topology",
-            "Model deployment uses specific serving engine configuration (check data for details)",
+            "Model deployment uses specific serving engine configuration (vLLM 0.7.3 for A100, 0.10.0 for others)",
             "Cost calculated based on AWS on-demand pricing, may not reflect spot/reserved pricing",
             "Benchmark conditions may differ from production workloads",
         ]
+
+        # Important clarification about distilled models
+        ctx.reliability_notes = (
+            "DeepSeek-R1-Distill-Llama-70B uses the SAME Llama-3 architecture as base llama-3-70b. "
+            "Distillation only affects model weights/output quality, NOT compute or memory characteristics. "
+            "Performance benchmarks SHOULD transfer to other Llama-3-70B variants."
+        )
 
         ctx.what_is_not_captured = [
             "Specific serving engine version used for each benchmark",
@@ -526,9 +533,27 @@ class PerfDataLoader:
             device = str(row.get("device_type", "")).lower()
             gpu_type = self._infer_gpu_type(device)
 
+            # Determine vLLM version based on GPU type (from script.py)
+            # A100: vLLM 0.7.3, L40S/L4/others: vLLM 0.10.0
+            if gpu_type == "A100":
+                engine_version = "0.7.3"
+            else:
+                engine_version = "0.10.0"
+
+            # Extract model family for better notes
+            model_name = str(row.get("model_name", ""))
+            model_family = self._extract_model_family(model_name)
+            is_distilled = "distill" in model_name.lower()
+
+            notes = f"Real hardware benchmark on AWS {device.upper()} using vLLM {engine_version}."
+            if is_distilled:
+                # Distilled models like DeepSeek-R1-Distill-Llama use the SAME architecture as base model
+                # Distillation affects weights/output quality, NOT compute characteristics
+                notes += " Note: Distilled variant - SAME architecture as base Llama, performance should be equivalent."
+
             entry = PerfEntry(
                 source="benchmark",
-                model_name=str(row.get("model_name", "")),
+                model_name=model_name,
                 gpu_type=gpu_type,
                 device_type=str(row.get("device_type", "")),
                 tp=int(row["tp"]) if pd.notna(row.get("tp")) else 1,
@@ -541,8 +566,10 @@ class PerfDataLoader:
                 batch_size=float(row["batch_size"]) if pd.notna(row.get("batch_size")) else None,
                 cost_per_hour=float(row["total_cost"]) if pd.notna(row.get("total_cost")) else None,
                 dollar_per_million_token=float(row["dollar_per_million_token"]) if pd.notna(row.get("dollar_per_million_token")) else None,
-                precision="FP16",  # Assuming FP16 for benchmarks unless noted
-                notes="Real hardware benchmark - verify model/config match your scenario",
+                serving_engine="vLLM",
+                engine_version=engine_version,
+                precision="FP16",  # Benchmark script uses FP16
+                notes=notes,
             )
             self.entries.append(entry)
             count += 1
@@ -558,13 +585,23 @@ class PerfDataLoader:
         for _, row in df.iterrows():
             status = str(row.get("status", "SUCCESS")).upper()
 
-            # Parse GPU type from device_type column
+            # Parse GPU type - prefer gpu_type column, fallback to device_type
+            gpu_type_raw = str(row.get("gpu_type", ""))
             device_type_str = str(row.get("device_type", ""))
-            gpu_types = []
-            for gpu in ["A100", "V100", "H100", "L40S", "L4", "A10G"]:
-                if gpu in device_type_str.upper():
-                    gpu_types.append(gpu)
-            gpu_type = ",".join(gpu_types) if gpu_types else "UNKNOWN"
+
+            # First try the gpu_type column directly
+            if gpu_type_raw and gpu_type_raw != "nan":
+                gpu_type = gpu_type_raw.upper()
+            else:
+                # Fallback: infer from device_type (instance names)
+                gpu_types = []
+                for gpu in ["A100", "V100", "H100", "L40S", "L4", "A10G"]:
+                    if gpu in device_type_str.upper():
+                        gpu_types.append(gpu)
+                gpu_type = ",".join(gpu_types) if gpu_types else self._infer_gpu_type(device_type_str)
+
+            if not gpu_type or gpu_type == "UNKNOWN":
+                gpu_type = self._infer_gpu_type(device_type_str)
 
             model_name = str(row.get("model_name", ""))
             input_length = float(row.get("max_input_length", 0)) if pd.notna(row.get("max_input_length")) else 0
@@ -580,6 +617,12 @@ class PerfDataLoader:
                 total_tps = row.get("total_tokens_per_sec")
                 if pd.isna(total_tps) or total_tps == 0:
                     continue
+
+                # Build descriptive notes
+                model_family = self._extract_model_family(model_name)
+                notes = f"ANALYTICAL MODEL (roofline) for {model_name}. "
+                notes += "NOT a real measurement - may overestimate by 2-3x. "
+                notes += "Useful for ruling out infeasible configs, not for accurate throughput prediction."
 
                 entry = PerfEntry(
                     source="solver",
@@ -598,7 +641,7 @@ class PerfDataLoader:
                     cost_per_hour=float(row["cost_per_hour"]) if pd.notna(row.get("cost_per_hour")) else None,
                     dollar_per_million_token=float(row["dollar_per_million_token"]) if pd.notna(row.get("dollar_per_million_token")) else None,
                     precision="FP16",
-                    notes="Analytical roofline model estimate - NOT a real measurement. May significantly overestimate throughput.",
+                    notes=notes,
                 )
                 self.entries.append(entry)
                 success_count += 1
@@ -635,10 +678,15 @@ class PerfDataLoader:
 
             gpu_type = str(row.get("gpu_type", "")).upper()
             device_type = str(row.get("device_type", ""))
+            model_name = str(row.get("model_name", ""))
+
+            # Build descriptive notes
+            notes = f"SIMULATION (Vidur) for {model_name} on {gpu_type}. "
+            notes += "NOT a real measurement. ~9% error on validated workloads, may be worse for edge cases."
 
             entry = PerfEntry(
                 source="vidur",
-                model_name=str(row.get("model_name", "")),
+                model_name=model_name,
                 gpu_type=gpu_type,
                 device_type=device_type,
                 tp=int(row["tp"]) if pd.notna(row.get("tp")) else 1,
@@ -651,7 +699,7 @@ class PerfDataLoader:
                 batch_size=float(row["batch_size"]) if pd.notna(row.get("batch_size")) else None,
                 num_gpus=int(row.get("num_gpus", row.get("num_replicas"))) if pd.notna(row.get("num_gpus", row.get("num_replicas"))) else None,
                 precision="FP16",
-                notes="Vidur simulator prediction - validated to ~9% error on some workloads. NOT a real measurement.",
+                notes=notes,
             )
             self.entries.append(entry)
             count += 1
@@ -925,6 +973,21 @@ class PerfDataLoader:
         query_size = self._extract_model_size(query)
         entry_size = self._extract_model_size(entry_model)
 
+        # Size must match if both specified
+        if query_size and entry_size and query_size != entry_size:
+            return False
+
+        # Check model family match
+        query_family = self._extract_model_family(query)
+        entry_family = self._extract_model_family(entry_model)
+
+        # If query specifies a family, entry should match
+        if query_family:
+            if entry_family and query_family != entry_family:
+                # Mismatched families (e.g., llama vs deepseek)
+                return False
+
+        # If sizes match and families don't conflict, consider it a match
         if query_size and entry_size:
             return query_size == entry_size
 
@@ -935,6 +998,21 @@ class PerfDataLoader:
         match = re.search(r'(\d+)b', model_name.lower())
         if match:
             return match.group(1) + "b"
+        return None
+
+    def _extract_model_family(self, model_name: str) -> Optional[str]:
+        """Extract model family from name (llama, deepseek, etc.)."""
+        name_lower = model_name.lower()
+        if 'llama' in name_lower:
+            return 'llama'
+        elif 'deepseek' in name_lower:
+            return 'deepseek'
+        elif 'mistral' in name_lower:
+            return 'mistral'
+        elif 'qwen' in name_lower:
+            return 'qwen'
+        elif 'phi' in name_lower:
+            return 'phi'
         return None
 
     def find_by_gpu_type(self, gpu_type: str) -> List[PerfEntry]:

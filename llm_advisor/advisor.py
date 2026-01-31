@@ -13,6 +13,9 @@ from .perf_data import (
     PerfDataLoader, PerfEntry, InfeasibleEntry, DataSourceContext,
     format_entries_for_prompt, format_infeasible_for_prompt, SOURCE_TRUST
 )
+from .model_arch import (
+    get_architecture_for_model, format_architecture_context, compare_models
+)
 
 
 @dataclass
@@ -175,6 +178,32 @@ class LLMAdvisor:
         # 7. Get source contexts (methodology, limitations) - CRITICAL for skeptical reasoning
         context["source_contexts"] = self.perf_data.get_all_contexts()
 
+        # 8. Get model architecture info from HuggingFace
+        # Get target model architecture first
+        target_arch = get_architecture_for_model(model_name)
+        if target_arch:
+            context["target_architecture"] = target_arch
+
+        # Collect unique model names from relevant entries
+        models_to_check = []
+        if target_arch:
+            models_to_check.append(target_arch.model_id)  # Use normalized model ID
+
+        for entry in all_relevant[:15]:
+            if entry.model_name and entry.model_name not in models_to_check:
+                models_to_check.append(entry.model_name)
+
+        # Also check vidur/solver model names which might be different
+        unique_models = set()
+        for entry in self.perf_data.entries:
+            if entry.model_name and "70b" in entry.model_name.lower():
+                unique_models.add(entry.model_name)
+        for m in list(unique_models)[:5]:  # Add up to 5 more unique models
+            if m not in models_to_check:
+                models_to_check.append(m)
+
+        context["model_architectures"] = format_architecture_context(models_to_check[:8])  # Limit to 8 models
+
         return context
 
     def build_prompt(
@@ -206,14 +235,18 @@ Your task is to recommend the best (gpu_type, tensor_parallelism, pipeline_paral
 
 The performance data you have access to is SPARSE and comes from DIFFERENT contexts. You MUST think critically about whether each data point actually applies to the user's scenario.
 
-### Model Equivalence WARNING
+### Model Equivalence Notes
 
-DO NOT assume models with similar parameter counts are equivalent:
-- `DeepSeek-R1-Distill-Llama-70B` is a DISTILLED model - different architecture and behavior
-- `Llama-2-70b` vs `Llama-3-70b` have different architectures
-- `FP8` vs `FP16` precision dramatically affects memory (~50% less for FP8) and compute characteristics
+**When models ARE performance-equivalent:**
+- `DeepSeek-R1-Distill-Llama-70B` uses the SAME Llama-3 architecture as base `llama-3-70b`
+- Distillation affects weights/output quality, NOT compute characteristics or memory requirements
+- Benchmarks on distilled variants SHOULD transfer to base models of same architecture
+
+**When models are NOT equivalent:**
+- `Llama-2-70b` vs `Llama-3-70b` have different architectures (different layer dims, attention heads)
+- `FP8` vs `FP16` precision dramatically affects memory (~50% less for FP8) and throughput
 - Different serving engines (vLLM, TGI, TensorRT-LLM) have very different performance profiles
-- A benchmark on model X does NOT automatically apply to model Y, even if both are "70B"
+- Different model families (Llama vs Mistral vs Qwen) even at same param count
 
 ## Key Principles
 
@@ -225,6 +258,11 @@ DO NOT assume models with similar parameter counts are equivalent:
 6. **Quantify uncertainty**: Give ranges, not point estimates, when data is sparse.
 7. **Think critically**: Don't just pattern match - reason about WHY a data point does or doesn't apply.
 """)
+
+        # Add model architecture context (from HuggingFace)
+        model_arch_context = context.get("model_architectures", "")
+        if model_arch_context:
+            prompt_parts.append(model_arch_context)
 
         # Add dynamically loaded source contexts
         source_contexts = context.get("source_contexts", {})
@@ -255,11 +293,24 @@ Recommend the optimal GPU configuration for:
         # GPU Specs
         prompt_parts.append("\n" + format_gpu_specs_for_prompt(gpu_pool.get_gpu_types()))
 
-        # Model info
+        # Model info - use real architecture if available
+        target_arch = context.get("target_architecture")
         model_info = context.get("model_info", {})
-        if model_info:
+
+        if target_arch:
             prompt_parts.append(f"""
-## Model Size Estimates
+## Target Model Size (from HuggingFace config)
+
+- Parameters: ~{target_arch.params_billions:.1f}B (computed from architecture)
+- FP16 model size: ~{target_arch.fp16_memory_gb:.1f} GB
+- Layers: {target_arch.num_hidden_layers}
+- Hidden size: {target_arch.hidden_size}
+- Attention heads: {target_arch.num_attention_heads} (KV heads: {target_arch.num_key_value_heads or target_arch.num_attention_heads})
+- Max context: {target_arch.max_position_embeddings} tokens
+""")
+        elif model_info:
+            prompt_parts.append(f"""
+## Model Size Estimates (heuristic - no HuggingFace config found)
 
 - Parameters: ~{model_info.get('params_billions', 'unknown')}B
 - FP16 model size: ~{model_info.get('fp16_size_gb', 'unknown')} GB
