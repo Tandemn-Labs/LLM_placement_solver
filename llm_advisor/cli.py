@@ -3,7 +3,7 @@
 Simple CLI for GPU configuration recommendations.
 
 Usage:
-    python -m llm_advisor.cli --model llama-70b --gpu-pool config/gpu_pool.csv --input-len 2048 --output-len 512 --api-key sk-...
+    python -m llm_advisor.cli --model llama-70b --gpu-pool config/gpu_pool.csv --input-len 2048 --output-len 512 --provider openai --llm-model gpt-4o-mini --api-key sk-...
 """
 
 import argparse
@@ -41,19 +41,21 @@ def load_gpu_pool(csv_path: str) -> GPUPool:
 
 def main():
     parser = argparse.ArgumentParser(description="Get GPU config recommendations for LLM deployment")
-    parser.add_argument("--model", "-m", required=True, help="Model name (e.g., llama-70b)")
+    parser.add_argument("--model", "-m", required=True, help="Model name to deploy (e.g., llama-70b)")
     parser.add_argument("--gpu-pool", "-g", required=True, help="Path to gpu_pool.csv")
     parser.add_argument("--input-len", "-i", type=int, required=True, help="Input length in tokens")
     parser.add_argument("--output-len", "-o", type=int, required=True, help="Output length in tokens")
     parser.add_argument("--batch-size", "-b", type=int, default=1, help="Batch size (default: 1)")
-    parser.add_argument("--api-key", help="LLM API key (defaults to ANTHROPIC_API_KEY env var)")
+    parser.add_argument("--provider",choices=["anthropic", "openai"],default="anthropic",help="Advisor LLM provider (default: anthropic)")
+    parser.add_argument("--llm-model", help="Advisor LLM model name (default depends on provider)")
+    parser.add_argument("--api-key",help="LLM API key (defaults to provider env var: ANTHROPIC_API_KEY or OPENAI_API_KEY)")
     parser.add_argument("--prompt-only", action="store_true", help="Show prompt only, don't call LLM")
     parser.add_argument("--json", action="store_true", help="Output as JSON")
     args = parser.parse_args()
 
     gpu_pool = load_gpu_pool(args.gpu_pool)
     workload = WorkloadSpec(input_length=args.input_len, output_length=args.output_len, batch_size=args.batch_size)
-    advisor = create_advisor(api_key=args.api_key)
+    advisor = create_advisor(api_key=args.api_key, provider=args.provider, llm_model=args.llm_model)
 
     print(f"Model: {args.model}")
     print(f"GPU Pool: {gpu_pool.to_string()}")

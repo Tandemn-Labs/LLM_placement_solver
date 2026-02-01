@@ -8,6 +8,20 @@ from typing import List, Optional, Dict, Any
 import json
 import os
 
+DEFAULT_LLM_PROVIDER = "anthropic"
+DEFAULT_LLM_MODELS = {
+    "anthropic": "claude-sonnet-4-20250514",
+    "openai": "gpt-4o-mini",
+}
+PROVIDER_API_KEY_ENV = {
+    "anthropic": "ANTHROPIC_API_KEY",
+    "openai": "OPENAI_API_KEY",
+}
+
+
+def _normalize_provider(provider: Optional[str]) -> str:
+    return (provider or DEFAULT_LLM_PROVIDER).strip().lower()
+
 from .gpu_specs import GPU_SPECS, format_gpu_specs_for_prompt, estimate_model_size
 from .perf_data import (
     PerfDataLoader, PerfEntry, InfeasibleEntry, DataSourceContext,
@@ -87,22 +101,26 @@ class LLMAdvisor:
         self,
         perf_data: PerfDataLoader = None,
         api_key: str = None,
-        model: str = "claude-sonnet-4-20250514",
+        provider: str = DEFAULT_LLM_PROVIDER,
+        model: Optional[str] = None,
     ):
         """
         Initialize the advisor.
 
         Args:
             perf_data: Performance data loader (will create default if None)
-            api_key: API key for LLM (defaults to ANTHROPIC_API_KEY env var)
-            model: LLM model to use
+            api_key: API key for LLM (defaults to provider env var)
+            provider: LLM provider ("anthropic" or "openai")
+            model: LLM model to use (provider-specific default if None)
         """
         self.perf_data = perf_data or PerfDataLoader()
-        self.api_key = api_key or os.environ.get("ANTHROPIC_API_KEY")
-        self.model = model
+        self.provider = _normalize_provider(provider)
+        env_var = PROVIDER_API_KEY_ENV[self.provider]
+        self.api_key = api_key or os.environ.get(env_var)
+        self.model = model or DEFAULT_LLM_MODELS.get(self.provider, DEFAULT_LLM_MODELS[DEFAULT_LLM_PROVIDER])
 
         if not self.api_key:
-            print("Warning: No API key provided. Set ANTHROPIC_API_KEY or pass api_key.")
+            print(f"Warning: No API key provided. Set {env_var} or pass api_key.")
 
     def build_context(
         self,
@@ -431,30 +449,56 @@ Be honest about what you don't know. A thoughtful "I'm uncertain because X" is m
         if not self.api_key:
             return self._mock_response(prompt)
 
-        try:
-            import anthropic
+        if self.provider == "anthropic":
+            try:
+                import anthropic
 
-            client = anthropic.Anthropic(api_key=self.api_key)
+                client = anthropic.Anthropic(api_key=self.api_key)
 
-            message = client.messages.create(
-                model=self.model,
-                max_tokens=2000,
-                messages=[
-                    {"role": "user", "content": prompt}
-                ]
-            )
+                message = client.messages.create(
+                    model=self.model,
+                    max_tokens=2000,
+                    messages=[
+                        {"role": "user", "content": prompt}
+                    ]
+                )
 
-            return message.content[0].text
+                return message.content[0].text
 
-        except ImportError:
-            print("Warning: anthropic package not installed. Using mock response.")
-            return self._mock_response(prompt)
-        except Exception as e:
-            print(f"Error calling LLM: {e}")
-            return self._mock_response(prompt)
+            except ImportError:
+                print("Warning: anthropic package not installed. Using mock response.")
+                return self._mock_response(prompt)
+            except Exception as e:
+                print(f"Error calling Anthropic: {e}")
+                return self._mock_response(prompt)
+
+        if self.provider == "openai":
+            try:
+                from openai import OpenAI
+
+                client = OpenAI(api_key=self.api_key)
+                response = client.chat.completions.create(
+                    model=self.model,
+                    max_completion_tokens=3000,
+                    messages=[
+                        {"role": "user", "content": prompt}
+                    ],
+                )
+                return response.choices[0].message.content
+
+            except ImportError:
+                print("Warning: openai package not installed. Using mock response.")
+                return self._mock_response(prompt)
+            except Exception as e:
+                print(f"Error calling OpenAI: {e}")
+                return self._mock_response(prompt)
+
+        print(f"Warning: Unknown provider '{self.provider}'. Using mock response.")
+        return self._mock_response(prompt)
 
     def _mock_response(self, prompt: str) -> str:
         """Generate a mock response for testing without API."""
+        api_hint = PROVIDER_API_KEY_ENV.get(self.provider, "ANTHROPIC_API_KEY")
         return """```json
 {
   "recommendation": {
@@ -471,8 +515,7 @@ Be honest about what you don't know. A thoughtful "I'm uncertain because X" is m
 ```
 
 **Reasoning (MOCK)**:
-This is a placeholder response. To get real recommendations, please set your ANTHROPIC_API_KEY.
-"""
+This is a placeholder response. To get real recommendations, please set your """ + api_hint + "."
 
     def _parse_response(self, response_text: str) -> ConfigRecommendation:
         """Parse LLM response into ConfigRecommendation."""
@@ -545,10 +588,15 @@ This is a placeholder response. To get real recommendations, please set your ANT
 
 
 # Convenience functions
-def create_advisor(csv_path: str = None, api_key: str = None) -> LLMAdvisor:
+def create_advisor(
+    csv_path: str = None,
+    api_key: str = None,
+    provider: str = DEFAULT_LLM_PROVIDER,
+    llm_model: Optional[str] = None,
+) -> LLMAdvisor:
     """Create an LLM advisor with optional custom data path."""
     perf_data = PerfDataLoader(csv_path) if csv_path else PerfDataLoader()
-    return LLMAdvisor(perf_data=perf_data, api_key=api_key)
+    return LLMAdvisor(perf_data=perf_data, api_key=api_key, provider=provider, model=llm_model)
 
 
 def quick_recommend(
@@ -557,6 +605,9 @@ def quick_recommend(
     input_length: int,
     output_length: int,
     batch_size: int = 1,
+    api_key: Optional[str] = None,
+    provider: str = DEFAULT_LLM_PROVIDER,
+    llm_model: Optional[str] = None,
 ) -> ConfigRecommendation:
     """
     Quick recommendation function.
@@ -569,7 +620,7 @@ def quick_recommend(
             output_length=512,
         )
     """
-    advisor = create_advisor()
+    advisor = create_advisor(api_key=api_key, provider=provider, llm_model=llm_model)
     return advisor.get_recommendation(
         model_name=model_name,
         gpu_pool=GPUPool(resources=gpu_pool),

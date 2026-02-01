@@ -122,7 +122,7 @@ def test_recommendation_mock():
 
 
 def test_recommendation_real():
-    """Test recommendation with real API (requires ANTHROPIC_API_KEY)."""
+    """Test recommendation with Anthropic API (requires ANTHROPIC_API_KEY)."""
     print("\n" + "=" * 60)
     print("TEST: Recommendation (Real API)")
     print("=" * 60)
@@ -164,6 +164,49 @@ def test_recommendation_real():
     return True
 
 
+# def test_recommendation_openai_real():
+#     """Test recommendation with OpenAI API (requires OPENAI_API_KEY)."""
+#     print("\n" + "=" * 60)
+#     print("TEST: Recommendation (OpenAI API)")
+#     print("=" * 60)
+
+#     api_key = os.environ.get("OPENAI_API_KEY")
+#     if not api_key:
+#         print("OPENAI_API_KEY not set. Skipping OpenAI API test.")
+#         return True
+
+#     advisor = create_advisor(api_key=api_key, provider="openai")
+
+#     model_name = "llama-70b"
+#     gpu_pool = GPUPool(resources={"L40S": 8, "A100": 4})
+#     workload = WorkloadSpec(
+#         input_length=2048,
+#         output_length=512,
+#         batch_size=8,
+#         target_throughput=1000,  # 1000 tok/s target
+#     )
+
+#     print(f"\nQuerying LLM for recommendation...")
+#     print(f"  Model: {model_name}")
+#     print(f"  GPU Pool: {gpu_pool.to_string()}")
+#     print(f"  Workload: {workload.input_length}in/{workload.output_length}out, batch={workload.batch_size}")
+
+#     rec = advisor.get_recommendation(model_name, gpu_pool, workload)
+
+#     print(f"\n--- RECOMMENDATION ---")
+#     print(f"  GPU: {rec.gpu_type}")
+#     print(f"  TP: {rec.tp}, PP={rec.pp}")
+#     print(f"  Total GPUs: {rec.num_gpus}")
+#     print(f"  Replicas: {rec.replicas}")
+#     print(f"  Confidence: {rec.confidence}")
+#     print(f"  Predicted throughput: {rec.predicted_throughput} tok/s")
+#     print(f"  Warnings: {rec.warnings}")
+#     print(f"\n--- REASONING ---")
+#     print(rec.reasoning[:1500] if len(rec.reasoning) > 1500 else rec.reasoning)
+
+#     return True
+
+
 def main():
     """Run all tests."""
     print("\n" + "=" * 60)
@@ -174,7 +217,8 @@ def main():
         ("Data Loading", test_data_loading),
         ("Prompt Generation", test_prompt_generation),
         ("Recommendation (Mock)", test_recommendation_mock),
-        ("Recommendation (Real)", test_recommendation_real),
+        ("Recommendation (Anthropic API)", test_recommendation_real),
+        ("Recommendation (OpenAI API)", test_recommendation_openai_real),
     ]
 
     results = []
