@@ -3446,3 +3446,448 @@ Root relaxation: objective 4.543339e+03, 1678 iterations, 0.69 seconds (0.39 wor
 2026-01-24 16:59:04,611 - INFO - Root relaxation: objective 4.543339e+03, 1678 iterations, 0.69 seconds (0.39 work units)
 Total elapsed time = 110.95s (DegenMoves)
 2026-01-24 16:59:04,618 - INFO - Total elapsed time = 110.95s (DegenMoves)
+
+2026-01-24 16:59:50,191 - INFO - 
+    Nodes    |    Current Node    |     Objective Bounds      |     Work
+2026-01-24 16:59:50,191 - INFO -     Nodes    |    Current Node    |     Objective Bounds      |     Work
+ Expl Unexpl |  Obj  Depth IntInf | Incumbent    BestBd   Gap | It/Node Time
+2026-01-24 16:59:50,191 - INFO -  Expl Unexpl |  Obj  Depth IntInf | Incumbent    BestBd   Gap | It/Node Time
+
+2026-01-24 16:59:50,191 - INFO - 
+     0     0      -    -    -      445.70322  445.70322  0.00%     -  161s
+2026-01-24 16:59:50,191 - INFO -      0     0      -    -    -      445.70322  445.70322  0.00%     -  161s
+
+2026-01-24 17:00:00,166 - INFO - 
+Instance 1 was solved
+2026-01-24 17:00:00,166 - INFO - Instance 1 was solved
+
+2026-01-24 17:00:00,747 - INFO - 
+Explored 1 nodes (12506 simplex iterations) in 172.55 seconds (51.14 work units)
+2026-01-24 17:00:00,747 - INFO - Explored 1 nodes (12506 simplex iterations) in 172.55 seconds (51.14 work units)
+Thread count was 4 (of 64 available processors)
+2026-01-24 17:00:00,747 - INFO - Thread count was 4 (of 64 available processors)
+
+2026-01-24 17:00:00,758 - INFO - 
+Solution count 3: 445.703 445.703 445.703 
+2026-01-24 17:00:00,758 - INFO - Solution count 3: 445.703 445.703 445.703 
+
+2026-01-24 17:00:00,758 - INFO - 
+Optimal solution found (tolerance 1.00e-02)
+2026-01-24 17:00:00,758 - INFO - Optimal solution found (tolerance 1.00e-02)
+Best objective 4.457032163001e+02, best bound 4.457032163001e+02, gap 0.0000%
+2026-01-24 17:00:00,859 - INFO - Best objective 4.457032163001e+02, best bound 4.457032163001e+02, gap 0.0000%
+2026-01-24 17:00:01,124 - INFO - Optimal solution found in 172.93 seconds
+2026-01-24 17:00:01,124 - INFO -   Nodes explored: 1.0
+2026-01-24 17:00:01,124 - INFO -   Simplex iterations: 12506.0
+2026-01-24 17:00:01,124 - INFO - Optimal throughput: 445.70 tokens/sec
+2026-01-24 17:00:01,126 - INFO - Batch size options: [32]
+2026-01-24 17:00:01,126 - INFO - Throughput Corrections:
+2026-01-24 17:00:01,126 - INFO -   Batch size: 32
+2026-01-24 17:00:01,126 - INFO -   Pipeline stages: 5
+2026-01-24 17:00:01,126 - INFO -   Micro-batches: 4
+2026-01-24 17:00:01,126 - INFO -   Pipeline bubble efficiency: 50.0% (dynamic: 4÷8)
+2026-01-24 17:00:01,126 - INFO -   Real-world efficiency: 30.0%
+2026-01-24 17:00:01,127 - INFO -   Combined efficiency: 15.0%
+2026-01-24 17:00:01,127 - INFO -   Raw throughput: 445.70 tokens/sec
+2026-01-24 17:00:01,127 - INFO -   After pipeline bubbles: 222.85 tokens/sec
+2026-01-24 17:00:01,127 - INFO -   Final throughput: 66.86 tokens/sec
+2026-01-24 17:00:01,127 - INFO - ================================================================================
+2026-01-24 17:00:01,127 - INFO - SOLUTION ANALYSIS - OBJECTIVE BREAKDOWN
+2026-01-24 17:00:01,127 - INFO - ================================================================================
+2026-01-24 17:00:01,127 - INFO - Batch size options: [32]
+2026-01-24 17:00:01,127 - INFO - Core Metrics:
+2026-01-24 17:00:01,127 - INFO -   Batch Size: 32
+2026-01-24 17:00:01,127 - INFO -   Throughput: 66.86 tokens/sec
+2026-01-24 17:00:01,127 - INFO -   Cost: $19.71/hour
+2026-01-24 17:00:01,127 - INFO -   $/M tokens: $81.893059
+2026-01-24 17:00:01,127 - INFO -   Total Runtime: 4.15 hours (0.17 days)
+2026-01-24 17:00:04,679 - INFO - ================================================================================
+2026-01-24 17:00:04,679 - INFO - BATCH SIZE ANALYSIS
+2026-01-24 17:00:04,679 - INFO - ================================================================================
+2026-01-24 17:00:04,679 - INFO - Batch size options: [32]
+2026-01-24 17:00:04,679 - INFO - Batch Size Selection:
+2026-01-24 17:00:04,679 - INFO -   Optimal: 32
+2026-01-24 17:00:04,679 - INFO -   Search range: [32, 32]
+2026-01-24 17:00:04,679 - INFO -   Options considered: [32]
+2026-01-24 17:00:04,679 - INFO - Batch Efficiency Factor: 100.0%
+2026-01-24 17:00:04,679 - INFO -   (Larger batches improve GPU utilization)
+2026-01-24 17:00:04,679 - INFO - Optimal utilization (batch >= 32)
+2026-01-24 17:00:04,680 - INFO - ================================================================================
+2026-01-24 17:00:04,680 - INFO - ROOFLINE MODEL ANALYSIS
+2026-01-24 17:00:04,680 - INFO - ================================================================================
+2026-01-24 17:00:04,680 - INFO - Performance Bottleneck Analysis (Roofline Model):
+2026-01-24 17:00:04,680 - INFO -   Determines if each segment is compute-bound or memory-bound
+2026-01-24 17:00:04,680 - INFO - --------------------------------------------------------------------------------
+2026-01-24 17:00:04,680 - INFO -   GPU Type   TP   Layers  AI           Ridge        Regime          Bottleneck
+2026-01-24 17:00:04,680 - INFO - --------------------------------------------------------------------------------
+2026-01-24 17:00:04,680 - INFO -   g5.48xlarge#2 2    16      26.26        208.33       Memory-bound    Memory Bandwidth
+2026-01-24 17:00:04,680 - INFO -   g5.48xlarge#2 2    16      26.26        208.33       Memory-bound    Memory Bandwidth
+2026-01-24 17:00:04,680 - INFO -   g6e.4xlarge#3 1    16      26.26        418.98       Memory-bound    Memory Bandwidth
+2026-01-24 17:00:04,680 - INFO -   g5.48xlarge#2 2    16      26.26        208.33       Memory-bound    Memory Bandwidth
+2026-01-24 17:00:04,680 - INFO -   g5.48xlarge#2 2    16      26.26        208.33       Memory-bound    Memory Bandwidth
+2026-01-24 17:00:04,680 - INFO - --------------------------------------------------------------------------------
+2026-01-24 17:00:04,680 - INFO - Roofline analysis:
+2026-01-24 17:00:04,680 - INFO - - Arithmetic Intensity (AI) = FLOPs / Byte accessed
+2026-01-24 17:00:04,680 - INFO - - Ridge Point = Peak FLOPS / Peak Memory Bandwidth
+2026-01-24 17:00:04,680 - INFO - - Arithmetic Intensity > Ridge -> Compute-bound (limited by GPU compute)
+2026-01-24 17:00:04,680 - INFO - - Arithmetic Intensity < Ridge -> Memory-bound (limited by memory bandwidth)
+2026-01-24 17:00:04,680 - INFO - - Tensor Parallelism (TP) reduces memory per GPU -> increases AI -> may shift regime
+2026-01-24 17:00:04,680 - INFO - Regime Distribution:
+2026-01-24 17:00:04,680 - INFO - - Compute-bound segments: 0/5 (0%)
+2026-01-24 17:00:04,680 - INFO - - Memory-bound segments:  5/5 (100%)
+2026-01-24 17:00:04,680 - INFO - Most segments are memory-bound.
+2026-01-24 17:00:04,680 - INFO - - Consider GPUs with higher memory bandwidth for better performance.
+2026-01-24 17:00:04,680 - INFO - - Increasing TP degree can help (reduces memory per GPU).
+2026-01-24 17:00:04,681 - INFO - ================================================================================
+2026-01-24 17:00:04,681 - INFO - SOLUTION ANALYSIS - GPU EFFICIENCY & SELECTION
+2026-01-24 17:00:04,681 - INFO - ================================================================================
+2026-01-24 17:00:04,681 - INFO - WARNING WORKLOAD IS MEMORY-BOUND -> Memory Bandwidth/$ is the key metric!
+2026-01-24 17:00:04,681 - INFO - GPU Efficiency Ranking (Memory Bandwidth/$ ratio):
+2026-01-24 17:00:04,681 - INFO - --------------------------------------------------------------------------------
+2026-01-24 17:00:04,681 - INFO -   1. p4de.24xlarge#0  1325.4 GB/s × eff @ $40.96/h =  258.9 GB/s per $
+2026-01-24 17:00:04,681 - INFO -   2. g5.12xlarge#0   270.0 GB/s × eff @ $5.67/h =  190.5 GB/s per $
+2026-01-24 17:00:04,681 - INFO -   3. g5.12xlarge#1   270.0 GB/s × eff @ $5.67/h =  190.5 GB/s per $
+2026-01-24 17:00:04,681 - INFO -   4. g5.12xlarge#2   270.0 GB/s × eff @ $5.67/h =  190.5 GB/s per $
+2026-01-24 17:00:04,681 - INFO -   5. g5.12xlarge#3   270.0 GB/s × eff @ $5.67/h =  190.5 GB/s per $
+2026-01-24 17:00:04,681 - INFO -   6. g5.4xlarge#0   270.0 GB/s × eff @ $1.62/h =  166.7 GB/s per $
+2026-01-24 17:00:04,681 - INFO -   7. g5.4xlarge#1   270.0 GB/s × eff @ $1.62/h =  166.7 GB/s per $
+2026-01-24 17:00:04,681 - INFO -   8. g5.4xlarge#2   270.0 GB/s × eff @ $1.62/h =  166.7 GB/s per $
+2026-01-24 17:00:04,681 - INFO -   9. g5.4xlarge#3   270.0 GB/s × eff @ $1.62/h =  166.7 GB/s per $
+2026-01-24 17:00:04,682 - INFO -   10. g6e.4xlarge#0   501.1 GB/s × eff @ $3.42/h =  146.5 GB/s per $
+2026-01-24 17:00:04,682 - INFO -   11. g6e.4xlarge#1   501.1 GB/s × eff @ $3.42/h =  146.5 GB/s per $
+2026-01-24 17:00:04,682 - INFO -   12. g6e.4xlarge#2   501.1 GB/s × eff @ $3.42/h =  146.5 GB/s per $
+2026-01-24 17:00:04,682 - INFO -   13. g6e.4xlarge#3   501.1 GB/s × eff @ $3.42/h =  146.5 GB/s per $
+2026-01-24 17:00:04,682 - INFO -   14. g6e.48xlarge#0   501.1 GB/s × eff @ $27.39/h =  146.4 GB/s per $
+2026-01-24 17:00:04,682 - INFO -   15. g6e.48xlarge#1   501.1 GB/s × eff @ $27.39/h =  146.4 GB/s per $
+2026-01-24 17:00:04,682 - INFO -   16. g6e.48xlarge#2   501.1 GB/s × eff @ $27.39/h =  146.4 GB/s per $
+2026-01-24 17:00:04,682 - INFO -   17. g6e.48xlarge#3   501.1 GB/s × eff @ $27.39/h =  146.4 GB/s per $
+2026-01-24 17:00:04,682 - INFO -   18. g6e.24xlarge#0   501.1 GB/s × eff @ $13.70/h =  146.3 GB/s per $
+2026-01-24 17:00:04,682 - INFO -   19. g6e.24xlarge#1   501.1 GB/s × eff @ $13.70/h =  146.3 GB/s per $
+2026-01-24 17:00:04,682 - INFO -   20. g6e.24xlarge#2   501.1 GB/s × eff @ $13.70/h =  146.3 GB/s per $
+2026-01-24 17:00:04,682 - INFO -   21. g6e.24xlarge#3   501.1 GB/s × eff @ $13.70/h =  146.3 GB/s per $
+2026-01-24 17:00:04,682 - INFO -   22. g6e.12xlarge#0   501.1 GB/s × eff @ $6.85/h =  146.3 GB/s per $
+2026-01-24 17:00:04,682 - INFO -   23. g6e.12xlarge#1   501.1 GB/s × eff @ $6.85/h =  146.3 GB/s per $
+2026-01-24 17:00:04,682 - INFO -   24. g6e.12xlarge#2   501.1 GB/s × eff @ $6.85/h =  146.3 GB/s per $
+2026-01-24 17:00:04,682 - INFO -   25. g6e.12xlarge#3   501.1 GB/s × eff @ $6.85/h =  146.3 GB/s per $
+2026-01-24 17:00:04,682 - INFO -   26. g5.24xlarge#0   270.0 GB/s × eff @ $8.14/h =  132.7 GB/s per $
+2026-01-24 17:00:04,682 - INFO -   27. g5.24xlarge#1   270.0 GB/s × eff @ $8.14/h =  132.7 GB/s per $
+2026-01-24 17:00:04,682 - INFO -   28. g5.24xlarge#2   270.0 GB/s × eff @ $8.14/h =  132.7 GB/s per $
+2026-01-24 17:00:04,682 - INFO -   29. g5.24xlarge#3   270.0 GB/s × eff @ $8.14/h =  132.7 GB/s per $
+2026-01-24 17:00:04,682 - INFO -   30. g5.48xlarge#0   270.0 GB/s × eff @ $16.29/h =  132.6 GB/s per $
+2026-01-24 17:00:04,682 - INFO -   31. g5.48xlarge#1   270.0 GB/s × eff @ $16.29/h =  132.6 GB/s per $
+2026-01-24 17:00:04,682 - INFO -   32. g5.48xlarge#2   270.0 GB/s × eff @ $16.29/h =  132.6 GB/s per $
+2026-01-24 17:00:04,682 - INFO -   33. g5.48xlarge#3   270.0 GB/s × eff @ $16.29/h =  132.6 GB/s per $
+2026-01-24 17:00:04,682 - INFO -   34. p3dn.24xlarge#0   378.0 GB/s × eff @ $31.21/h =   96.9 GB/s per $
+2026-01-24 17:00:04,682 - INFO -   35. p3dn.24xlarge#1   378.0 GB/s × eff @ $31.21/h =   96.9 GB/s per $
+2026-01-24 17:00:04,682 - INFO -   36. p3dn.24xlarge#2   378.0 GB/s × eff @ $31.21/h =   96.9 GB/s per $
+2026-01-24 17:00:04,682 - INFO -   37. p3dn.24xlarge#3   378.0 GB/s × eff @ $31.21/h =   96.9 GB/s per $
+2026-01-24 17:00:04,682 - INFO - Actual GPU Usage in Solution:
+2026-01-24 17:00:04,683 - INFO - --------------------------------------------------------------------------------
+2026-01-24 17:00:04,683 - INFO -   g5.48xlarge#2 4 segments, 8 GPUs, 64 layers, $16.29/h (Efficiency rank: #32)
+2026-01-24 17:00:04,683 - INFO -   g6e.4xlarge#3 1 segments, 1 GPUs, 16 layers, $3.42/h (Efficiency rank: #13)
+2026-01-24 17:00:04,683 - INFO -   TOTAL COST: $19.71/hour
+2026-01-24 17:00:04,683 - INFO - Unused GPUs (and why they might not be chosen):
+2026-01-24 17:00:04,683 - INFO - --------------------------------------------------------------------------------
+2026-01-24 17:00:04,683 - INFO -   g5.12xlarge#0 count=4, $5.67/h, efficiency rank #2
+2026-01-24 17:00:04,683 - INFO -              Max segment size (TP=4): 34 layers
+2026-01-24 17:00:04,683 - INFO -              Hypothetical (5 layers, TP=4): 2735 tokens/s, $5.67/h
+2026-01-24 17:00:04,683 - INFO -   g5.12xlarge#1 count=4, $5.67/h, efficiency rank #3
+2026-01-24 17:00:04,683 - INFO -              Max segment size (TP=4): 34 layers
+2026-01-24 17:00:04,683 - INFO -              Hypothetical (5 layers, TP=4): 2735 tokens/s, $5.67/h
+2026-01-24 17:00:04,683 - INFO -   g5.12xlarge#2 count=4, $5.67/h, efficiency rank #4
+2026-01-24 17:00:04,683 - INFO -              Max segment size (TP=4): 34 layers
+2026-01-24 17:00:04,683 - INFO -              Hypothetical (5 layers, TP=4): 2735 tokens/s, $5.67/h
+2026-01-24 17:00:04,683 - INFO -   g5.12xlarge#3 count=4, $5.67/h, efficiency rank #5
+2026-01-24 17:00:04,683 - INFO -              Max segment size (TP=4): 34 layers
+2026-01-24 17:00:04,684 - INFO -              Hypothetical (5 layers, TP=4): 2735 tokens/s, $5.67/h
+2026-01-24 17:00:04,684 - INFO -   g5.24xlarge#0 count=4, $8.14/h, efficiency rank #26
+2026-01-24 17:00:04,684 - INFO -              Max segment size (TP=4): 34 layers
+2026-01-24 17:00:04,684 - INFO -              Hypothetical (5 layers, TP=4): 2735 tokens/s, $8.14/h
+2026-01-24 17:00:04,684 - INFO -   g5.24xlarge#1 count=4, $8.14/h, efficiency rank #27
+2026-01-24 17:00:04,684 - INFO -              Max segment size (TP=4): 34 layers
+2026-01-24 17:00:04,684 - INFO -              Hypothetical (5 layers, TP=4): 2735 tokens/s, $8.14/h
+2026-01-24 17:00:04,684 - INFO -   g5.24xlarge#2 count=4, $8.14/h, efficiency rank #28
+2026-01-24 17:00:04,684 - INFO -              Max segment size (TP=4): 34 layers
+2026-01-24 17:00:04,684 - INFO -              Hypothetical (5 layers, TP=4): 2735 tokens/s, $8.14/h
+2026-01-24 17:00:04,684 - INFO -   g5.24xlarge#3 count=4, $8.14/h, efficiency rank #29
+2026-01-24 17:00:04,684 - INFO -              Max segment size (TP=4): 34 layers
+2026-01-24 17:00:04,684 - INFO -              Hypothetical (5 layers, TP=4): 2735 tokens/s, $8.14/h
+2026-01-24 17:00:04,684 - INFO -   g5.48xlarge#0 count=8, $16.29/h, efficiency rank #30
+2026-01-24 17:00:04,684 - INFO -              Max segment size (TP=8): 69 layers
+2026-01-24 17:00:04,684 - INFO -              Hypothetical (5 layers, TP=4): 2735 tokens/s, $16.29/h
+2026-01-24 17:00:04,684 - INFO -   g5.48xlarge#1 count=8, $16.29/h, efficiency rank #31
+2026-01-24 17:00:04,684 - INFO -              Max segment size (TP=8): 69 layers
+2026-01-24 17:00:04,685 - INFO -              Hypothetical (5 layers, TP=4): 2735 tokens/s, $16.29/h
+2026-01-24 17:00:04,685 - INFO -   g5.48xlarge#3 count=8, $16.29/h, efficiency rank #33
+2026-01-24 17:00:04,685 - INFO -              Max segment size (TP=8): 69 layers
+2026-01-24 17:00:04,685 - INFO -              Hypothetical (5 layers, TP=4): 2735 tokens/s, $16.29/h
+2026-01-24 17:00:04,685 - INFO -   g5.4xlarge#0 count=1, $1.62/h, efficiency rank #6
+2026-01-24 17:00:04,685 - INFO -              Max segment size (TP=1): 8 layers
+2026-01-24 17:00:04,685 - INFO -              Excluded by min pipeline segment size: 10 layers
+2026-01-24 17:00:04,685 - INFO -   g5.4xlarge#1 count=1, $1.62/h, efficiency rank #7
+2026-01-24 17:00:04,685 - INFO -              Max segment size (TP=1): 8 layers
+2026-01-24 17:00:04,685 - INFO -              Excluded by min pipeline segment size: 10 layers
+2026-01-24 17:00:04,685 - INFO -   g5.4xlarge#2 count=1, $1.62/h, efficiency rank #8
+2026-01-24 17:00:04,685 - INFO -              Max segment size (TP=1): 8 layers
+2026-01-24 17:00:04,685 - INFO -              Excluded by min pipeline segment size: 10 layers
+2026-01-24 17:00:04,685 - INFO -   g5.4xlarge#3 count=1, $1.62/h, efficiency rank #9
+2026-01-24 17:00:04,685 - INFO -              Max segment size (TP=1): 8 layers
+2026-01-24 17:00:04,685 - INFO -              Excluded by min pipeline segment size: 10 layers
+2026-01-24 17:00:04,685 - INFO -   g6e.12xlarge#0 count=2, $6.85/h, efficiency rank #22
+2026-01-24 17:00:04,685 - INFO -              Max segment size (TP=2): 34 layers
+2026-01-24 17:00:04,685 - INFO -              Hypothetical (5 layers, TP=2): 2691 tokens/s, $6.85/h
+2026-01-24 17:00:04,685 - INFO -   g6e.12xlarge#1 count=2, $6.85/h, efficiency rank #23
+2026-01-24 17:00:04,685 - INFO -              Max segment size (TP=2): 34 layers
+2026-01-24 17:00:04,685 - INFO -              Hypothetical (5 layers, TP=2): 2691 tokens/s, $6.85/h
+2026-01-24 17:00:04,686 - INFO -   g6e.12xlarge#2 count=2, $6.85/h, efficiency rank #24
+2026-01-24 17:00:04,686 - INFO -              Max segment size (TP=2): 34 layers
+2026-01-24 17:00:04,686 - INFO -              Hypothetical (5 layers, TP=2): 2691 tokens/s, $6.85/h
+2026-01-24 17:00:04,686 - INFO -   g6e.12xlarge#3 count=2, $6.85/h, efficiency rank #25
+2026-01-24 17:00:04,686 - INFO -              Max segment size (TP=2): 34 layers
+2026-01-24 17:00:04,686 - INFO -              Hypothetical (5 layers, TP=2): 2691 tokens/s, $6.85/h
+2026-01-24 17:00:04,686 - INFO -   g6e.24xlarge#0 count=4, $13.70/h, efficiency rank #18
+2026-01-24 17:00:04,686 - INFO -              Max segment size (TP=4): 69 layers
+2026-01-24 17:00:04,686 - INFO -              Hypothetical (5 layers, TP=4): 5032 tokens/s, $13.70/h
+2026-01-24 17:00:04,686 - INFO -   g6e.24xlarge#1 count=4, $13.70/h, efficiency rank #19
+2026-01-24 17:00:04,686 - INFO -              Max segment size (TP=4): 69 layers
+2026-01-24 17:00:04,686 - INFO -              Hypothetical (5 layers, TP=4): 5032 tokens/s, $13.70/h
+2026-01-24 17:00:04,686 - INFO -   g6e.24xlarge#2 count=4, $13.70/h, efficiency rank #20
+2026-01-24 17:00:04,686 - INFO -              Max segment size (TP=4): 69 layers
+2026-01-24 17:00:04,686 - INFO -              Hypothetical (5 layers, TP=4): 5032 tokens/s, $13.70/h
+2026-01-24 17:00:04,686 - INFO -   g6e.24xlarge#3 count=4, $13.70/h, efficiency rank #21
+2026-01-24 17:00:04,686 - INFO -              Max segment size (TP=4): 69 layers
+2026-01-24 17:00:04,686 - INFO -              Hypothetical (5 layers, TP=4): 5032 tokens/s, $13.70/h
+2026-01-24 17:00:04,686 - INFO -   g6e.48xlarge#0 count=8, $27.39/h, efficiency rank #14
+2026-01-24 17:00:04,686 - INFO -              Max segment size (TP=8): 80 layers
+2026-01-24 17:00:04,687 - INFO -              Hypothetical (5 layers, TP=4): 5032 tokens/s, $27.39/h
+2026-01-24 17:00:04,687 - INFO -   g6e.48xlarge#1 count=8, $27.39/h, efficiency rank #15
+2026-01-24 17:00:04,687 - INFO -              Max segment size (TP=8): 80 layers
+2026-01-24 17:00:04,687 - INFO -              Hypothetical (5 layers, TP=4): 5032 tokens/s, $27.39/h
+2026-01-24 17:00:04,687 - INFO -   g6e.48xlarge#2 count=8, $27.39/h, efficiency rank #16
+2026-01-24 17:00:04,687 - INFO -              Max segment size (TP=8): 80 layers
+2026-01-24 17:00:04,687 - INFO -              Hypothetical (5 layers, TP=4): 5032 tokens/s, $27.39/h
+2026-01-24 17:00:04,687 - INFO -   g6e.48xlarge#3 count=8, $27.39/h, efficiency rank #17
+2026-01-24 17:00:04,687 - INFO -              Max segment size (TP=8): 80 layers
+2026-01-24 17:00:04,687 - INFO -              Hypothetical (5 layers, TP=4): 5032 tokens/s, $27.39/h
+2026-01-24 17:00:04,687 - INFO -   g6e.4xlarge#0 count=1, $3.42/h, efficiency rank #10
+2026-01-24 17:00:04,687 - INFO -              Max segment size (TP=1): 17 layers
+2026-01-24 17:00:04,687 - INFO -              Hypothetical (5 layers, TP=1): 1426 tokens/s, $3.42/h
+2026-01-24 17:00:04,687 - INFO -   g6e.4xlarge#1 count=1, $3.42/h, efficiency rank #11
+2026-01-24 17:00:04,687 - INFO -              Max segment size (TP=1): 17 layers
+2026-01-24 17:00:04,687 - INFO -              Hypothetical (5 layers, TP=1): 1426 tokens/s, $3.42/h
+2026-01-24 17:00:04,687 - INFO -   g6e.4xlarge#2 count=1, $3.42/h, efficiency rank #12
+2026-01-24 17:00:04,687 - INFO -              Max segment size (TP=1): 17 layers
+2026-01-24 17:00:04,687 - INFO -              Hypothetical (5 layers, TP=1): 1426 tokens/s, $3.42/h
+2026-01-24 17:00:04,687 - INFO -   p3dn.24xlarge#0 count=8, $31.21/h, efficiency rank #34
+2026-01-24 17:00:04,688 - INFO -              Max segment size (TP=8): 80 layers
+2026-01-24 17:00:04,688 - INFO -              Hypothetical (5 layers, TP=4): 3864 tokens/s, $31.21/h
+2026-01-24 17:00:04,688 - INFO -   p3dn.24xlarge#1 count=8, $31.21/h, efficiency rank #35
+2026-01-24 17:00:04,688 - INFO -              Max segment size (TP=8): 80 layers
+2026-01-24 17:00:04,688 - INFO -              Hypothetical (5 layers, TP=4): 3864 tokens/s, $31.21/h
+2026-01-24 17:00:04,688 - INFO -   p3dn.24xlarge#2 count=8, $31.21/h, efficiency rank #36
+2026-01-24 17:00:04,688 - INFO -              Max segment size (TP=8): 80 layers
+2026-01-24 17:00:04,688 - INFO -              Hypothetical (5 layers, TP=4): 3864 tokens/s, $31.21/h
+2026-01-24 17:00:04,688 - INFO -   p3dn.24xlarge#3 count=8, $31.21/h, efficiency rank #37
+2026-01-24 17:00:04,688 - INFO -              Max segment size (TP=8): 80 layers
+2026-01-24 17:00:04,688 - INFO -              Hypothetical (5 layers, TP=4): 3864 tokens/s, $31.21/h
+2026-01-24 17:00:04,688 - INFO -   p4de.24xlarge#0 count=8, $40.96/h, efficiency rank #1
+2026-01-24 17:00:04,688 - INFO -              Max segment size (TP=8): 80 layers
+2026-01-24 17:00:04,688 - INFO -              Hypothetical (5 layers, TP=4): 13533 tokens/s, $40.96/h
+2026-01-24 17:00:04,688 - INFO - ================================================================================
+2026-01-24 17:00:04,688 - INFO - SEGMENT-LEVEL ANALYSIS
+2026-01-24 17:00:04,688 - INFO - ================================================================================
+2026-01-24 17:00:04,688 - INFO - Bottleneck Throughput: 445.70 tokens/sec
+2026-01-24 17:00:04,688 - INFO - Bottleneck Segments:
+2026-01-24 17:00:04,688 - INFO -   g6e.4xlarge#3 TP=1, layers 33-48, $3.42/h, 446 tokens/s
+2026-01-24 17:00:04,688 - INFO - ================================================================================
+2026-01-24 17:00:04,689 - INFO - ALTERNATIVE SCENARIO: Single segment with p4de.24xlarge#0 (best efficiency)
+2026-01-24 17:00:04,689 - INFO - ================================================================================
+2026-01-24 17:00:04,689 - INFO - p4de.24xlarge#0 specs:
+2026-01-24 17:00:04,689 - INFO -   Available: 8 GPUs
+2026-01-24 17:00:04,689 - INFO -   Cost: $40.96/hour (instance)
+2026-01-24 17:00:04,689 - INFO -   Max segment size (TP=8): 80 layers
+2026-01-24 17:00:04,689 - INFO -   Model needs: 80 layers
+2026-01-24 17:00:04,689 - INFO - CAN FIT Single segment with TP=8:
+2026-01-24 17:00:04,689 - INFO -   Throughput: 1591 tokens/sec
+2026-01-24 17:00:04,689 - INFO -   Cost: $40.96/hour
+2026-01-24 17:00:04,689 - INFO -   $/M tokens: $7.152229
+2026-01-24 17:00:04,689 - INFO - Comparison with current multi-segment solution:
+2026-01-24 17:00:04,689 - INFO -   Current solution $/M tokens: $81.893059
+2026-01-24 17:00:04,689 - INFO -   Single-segment $/M tokens:   $7.152229
+2026-01-24 17:00:04,689 - WARNING -   SINGLE-SEGMENT is 1045.0% BETTER in $/M tokens!
+2026-01-24 17:00:04,689 - WARNING -   The solver found a suboptimal solution!
+2026-01-24 17:00:04,689 - INFO - ================================================================================
+2026-01-24 17:00:04,689 - INFO - OBJECTIVE FUNCTION VERIFICATION
+2026-01-24 17:00:04,689 - INFO - ================================================================================
+2026-01-24 17:00:04,689 - INFO -   Result: 67 tokens/s, $19.71/h, $81.893059/M tokens
+2026-01-24 17:00:04,689 - INFO -   Timing: solve=176.5s, total iteration=176.5s
+2026-01-24 17:00:04,689 - INFO - Total enumeration time: 825.1s (model build: 226.9s, solving: 598.2s)
+2026-01-24 17:00:04,690 - INFO - ================================================================================
+2026-01-24 17:00:04,690 - INFO - ENUMERATION COVERAGE SUMMARY
+2026-01-24 17:00:04,690 - INFO - ================================================================================
+2026-01-24 17:00:04,690 - INFO - Budget points tested: 9
+2026-01-24 17:00:04,690 - INFO - Budget range: $1.30 - $393.22/hour
+2026-01-24 17:00:04,690 - INFO - ✓ Explored: 104/104 configurations
+2026-01-24 17:00:04,690 - INFO -   p4de.24xlarge#0 TP=1 $40.96/h
+2026-01-24 17:00:04,690 - INFO -   p4de.24xlarge#0 TP=2 $40.96/h
+2026-01-24 17:00:04,690 - INFO -   p4de.24xlarge#0 TP=4 $40.96/h
+2026-01-24 17:00:04,690 - INFO -   p4de.24xlarge#0 TP=8 $40.96/h
+2026-01-24 17:00:04,690 - INFO -   p3dn.24xlarge#0 TP=1 $31.21/h
+2026-01-24 17:00:04,690 - INFO -   p3dn.24xlarge#0 TP=2 $31.21/h
+2026-01-24 17:00:04,690 - INFO -   p3dn.24xlarge#0 TP=4 $31.21/h
+2026-01-24 17:00:04,690 - INFO -   p3dn.24xlarge#0 TP=8 $31.21/h
+2026-01-24 17:00:04,690 - INFO -   p3dn.24xlarge#1 TP=1 $31.21/h
+2026-01-24 17:00:04,690 - INFO -   p3dn.24xlarge#1 TP=2 $31.21/h
+2026-01-24 17:00:04,690 - INFO -   p3dn.24xlarge#1 TP=4 $31.21/h
+2026-01-24 17:00:04,690 - INFO -   p3dn.24xlarge#1 TP=8 $31.21/h
+2026-01-24 17:00:04,690 - INFO -   p3dn.24xlarge#2 TP=1 $31.21/h
+2026-01-24 17:00:04,690 - INFO -   p3dn.24xlarge#2 TP=2 $31.21/h
+2026-01-24 17:00:04,690 - INFO -   p3dn.24xlarge#2 TP=4 $31.21/h
+2026-01-24 17:00:04,690 - INFO -   p3dn.24xlarge#2 TP=8 $31.21/h
+2026-01-24 17:00:04,690 - INFO -   p3dn.24xlarge#3 TP=1 $31.21/h
+2026-01-24 17:00:04,690 - INFO -   p3dn.24xlarge#3 TP=2 $31.21/h
+2026-01-24 17:00:04,690 - INFO -   p3dn.24xlarge#3 TP=4 $31.21/h
+2026-01-24 17:00:04,691 - INFO -   p3dn.24xlarge#3 TP=8 $31.21/h
+2026-01-24 17:00:04,691 - INFO -   g6e.48xlarge#0 TP=1  $27.39/h
+2026-01-24 17:00:04,691 - INFO -   g6e.48xlarge#0 TP=2  $27.39/h
+2026-01-24 17:00:04,691 - INFO -   g6e.48xlarge#0 TP=4  $27.39/h
+2026-01-24 17:00:04,691 - INFO -   g6e.48xlarge#0 TP=8  $27.39/h
+2026-01-24 17:00:04,691 - INFO -   g6e.48xlarge#1 TP=1  $27.39/h
+2026-01-24 17:00:04,691 - INFO -   g6e.48xlarge#1 TP=2  $27.39/h
+2026-01-24 17:00:04,691 - INFO -   g6e.48xlarge#1 TP=4  $27.39/h
+2026-01-24 17:00:04,691 - INFO -   g6e.48xlarge#1 TP=8  $27.39/h
+2026-01-24 17:00:04,691 - INFO -   g6e.48xlarge#2 TP=1  $27.39/h
+2026-01-24 17:00:04,691 - INFO -   g6e.48xlarge#2 TP=2  $27.39/h
+2026-01-24 17:00:04,691 - INFO -   g6e.48xlarge#2 TP=4  $27.39/h
+2026-01-24 17:00:04,691 - INFO -   g6e.48xlarge#2 TP=8  $27.39/h
+2026-01-24 17:00:04,691 - INFO -   g6e.48xlarge#3 TP=1  $27.39/h
+2026-01-24 17:00:04,691 - INFO -   g6e.48xlarge#3 TP=2  $27.39/h
+2026-01-24 17:00:04,691 - INFO -   g6e.48xlarge#3 TP=4  $27.39/h
+2026-01-24 17:00:04,691 - INFO -   g6e.48xlarge#3 TP=8  $27.39/h
+2026-01-24 17:00:04,691 - INFO -   g6e.24xlarge#0 TP=1  $13.70/h
+2026-01-24 17:00:04,691 - INFO -   g6e.24xlarge#0 TP=2  $13.70/h
+2026-01-24 17:00:04,691 - INFO -   g6e.24xlarge#0 TP=4  $13.70/h
+2026-01-24 17:00:04,691 - INFO -   g6e.24xlarge#1 TP=1  $13.70/h
+2026-01-24 17:00:04,691 - INFO -   g6e.24xlarge#1 TP=2  $13.70/h
+2026-01-24 17:00:04,691 - INFO -   g6e.24xlarge#1 TP=4  $13.70/h
+2026-01-24 17:00:04,691 - INFO -   g6e.24xlarge#2 TP=1  $13.70/h
+2026-01-24 17:00:04,691 - INFO -   g6e.24xlarge#2 TP=2  $13.70/h
+2026-01-24 17:00:04,691 - INFO -   g6e.24xlarge#2 TP=4  $13.70/h
+2026-01-24 17:00:04,691 - INFO -   g6e.24xlarge#3 TP=1  $13.70/h
+2026-01-24 17:00:04,691 - INFO -   g6e.24xlarge#3 TP=2  $13.70/h
+2026-01-24 17:00:04,691 - INFO -   g6e.24xlarge#3 TP=4  $13.70/h
+2026-01-24 17:00:04,692 - INFO -   g6e.12xlarge#0 TP=1  $6.85/h
+2026-01-24 17:00:04,692 - INFO -   g6e.12xlarge#0 TP=2  $6.85/h
+2026-01-24 17:00:04,692 - INFO -   g6e.12xlarge#1 TP=1  $6.85/h
+2026-01-24 17:00:04,692 - INFO -   g6e.12xlarge#1 TP=2  $6.85/h
+2026-01-24 17:00:04,692 - INFO -   g6e.12xlarge#2 TP=1  $6.85/h
+2026-01-24 17:00:04,692 - INFO -   g6e.12xlarge#2 TP=2  $6.85/h
+2026-01-24 17:00:04,692 - INFO -   g6e.12xlarge#3 TP=1  $6.85/h
+2026-01-24 17:00:04,692 - INFO -   g6e.12xlarge#3 TP=2  $6.85/h
+2026-01-24 17:00:04,692 - INFO -   g6e.4xlarge#0 TP=1   $3.42/h
+2026-01-24 17:00:04,692 - INFO -   g6e.4xlarge#1 TP=1   $3.42/h
+2026-01-24 17:00:04,692 - INFO -   g6e.4xlarge#2 TP=1   $3.42/h
+2026-01-24 17:00:04,692 - INFO -   g6e.4xlarge#3 TP=1   $3.42/h
+2026-01-24 17:00:04,692 - INFO -   g5.48xlarge#0 TP=1   $16.29/h
+2026-01-24 17:00:04,692 - INFO -   g5.48xlarge#0 TP=2   $16.29/h
+2026-01-24 17:00:04,692 - INFO -   g5.48xlarge#0 TP=4   $16.29/h
+2026-01-24 17:00:04,692 - INFO -   g5.48xlarge#0 TP=8   $16.29/h
+2026-01-24 17:00:04,692 - INFO -   g5.48xlarge#1 TP=1   $16.29/h
+2026-01-24 17:00:04,692 - INFO -   g5.48xlarge#1 TP=2   $16.29/h
+2026-01-24 17:00:04,692 - INFO -   g5.48xlarge#1 TP=4   $16.29/h
+2026-01-24 17:00:04,692 - INFO -   g5.48xlarge#1 TP=8   $16.29/h
+2026-01-24 17:00:04,692 - INFO -   g5.48xlarge#2 TP=1   $16.29/h
+2026-01-24 17:00:04,692 - INFO -   g5.48xlarge#2 TP=2   $16.29/h
+2026-01-24 17:00:04,692 - INFO -   g5.48xlarge#2 TP=4   $16.29/h
+2026-01-24 17:00:04,692 - INFO -   g5.48xlarge#2 TP=8   $16.29/h
+2026-01-24 17:00:04,692 - INFO -   g5.48xlarge#3 TP=1   $16.29/h
+2026-01-24 17:00:04,692 - INFO -   g5.48xlarge#3 TP=2   $16.29/h
+2026-01-24 17:00:04,692 - INFO -   g5.48xlarge#3 TP=4   $16.29/h
+2026-01-24 17:00:04,692 - INFO -   g5.48xlarge#3 TP=8   $16.29/h
+2026-01-24 17:00:04,692 - INFO -   g5.24xlarge#0 TP=1   $8.14/h
+2026-01-24 17:00:04,692 - INFO -   g5.24xlarge#0 TP=2   $8.14/h
+2026-01-24 17:00:04,693 - INFO -   g5.24xlarge#0 TP=4   $8.14/h
+2026-01-24 17:00:04,693 - INFO -   g5.24xlarge#1 TP=1   $8.14/h
+2026-01-24 17:00:04,693 - INFO -   g5.24xlarge#1 TP=2   $8.14/h
+2026-01-24 17:00:04,693 - INFO -   g5.24xlarge#1 TP=4   $8.14/h
+2026-01-24 17:00:04,693 - INFO -   g5.24xlarge#2 TP=1   $8.14/h
+2026-01-24 17:00:04,693 - INFO -   g5.24xlarge#2 TP=2   $8.14/h
+2026-01-24 17:00:04,693 - INFO -   g5.24xlarge#2 TP=4   $8.14/h
+2026-01-24 17:00:04,693 - INFO -   g5.24xlarge#3 TP=1   $8.14/h
+2026-01-24 17:00:04,693 - INFO -   g5.24xlarge#3 TP=2   $8.14/h
+2026-01-24 17:00:04,693 - INFO -   g5.24xlarge#3 TP=4   $8.14/h
+2026-01-24 17:00:04,693 - INFO -   g5.12xlarge#0 TP=1   $5.67/h
+2026-01-24 17:00:04,693 - INFO -   g5.12xlarge#0 TP=2   $5.67/h
+2026-01-24 17:00:04,693 - INFO -   g5.12xlarge#0 TP=4   $5.67/h
+2026-01-24 17:00:04,693 - INFO -   g5.12xlarge#1 TP=1   $5.67/h
+2026-01-24 17:00:04,693 - INFO -   g5.12xlarge#1 TP=2   $5.67/h
+2026-01-24 17:00:04,693 - INFO -   g5.12xlarge#1 TP=4   $5.67/h
+2026-01-24 17:00:04,693 - INFO -   g5.12xlarge#2 TP=1   $5.67/h
+2026-01-24 17:00:04,693 - INFO -   g5.12xlarge#2 TP=2   $5.67/h
+2026-01-24 17:00:04,693 - INFO -   g5.12xlarge#2 TP=4   $5.67/h
+2026-01-24 17:00:04,693 - INFO -   g5.12xlarge#3 TP=1   $5.67/h
+2026-01-24 17:00:04,693 - INFO -   g5.12xlarge#3 TP=2   $5.67/h
+2026-01-24 17:00:04,693 - INFO -   g5.12xlarge#3 TP=4   $5.67/h
+2026-01-24 17:00:04,693 - INFO -   g5.4xlarge#0 TP=1    $1.62/h
+2026-01-24 17:00:04,693 - INFO -   g5.4xlarge#1 TP=1    $1.62/h
+2026-01-24 17:00:04,693 - INFO -   g5.4xlarge#2 TP=1    $1.62/h
+2026-01-24 17:00:04,693 - INFO -   g5.4xlarge#3 TP=1    $1.62/h
+2026-01-24 17:00:04,693 - INFO - ================================================================================
+2026-01-24 17:00:04,693 - INFO - OPTIMAL $/M TOKENS FOUND
+2026-01-24 17:00:04,693 - INFO - ================================================================================
+2026-01-24 17:00:04,694 - INFO - Best $/M tokens: $61.326309
+2026-01-24 17:00:04,694 - INFO -   Throughput: 67 tokens/sec
+2026-01-24 17:00:04,694 - INFO -   Cost: $14.76/hour
+2026-01-24 17:00:04,694 - INFO -   Pipeline stages: 5
+2026-01-24 17:00:04,694 - INFO - MEETS TARGET: $61.326309 <= $100.000000
+2026-01-24 17:00:04,694 - INFO -    38.7% better than target!
+2026-01-24 17:00:04,694 - INFO - Pareto Frontier (all solutions):
+2026-01-24 17:00:04,694 - INFO -   * $61.326309/M tokens: 67 tokens/s, $14.76/h
+2026-01-24 17:00:04,694 - INFO -   * $71.131871/M tokens: 67 tokens/s, $17.12/h
+2026-01-24 17:00:04,694 - INFO -   * $81.893059/M tokens: 67 tokens/s, $19.71/h
+2026-01-24 17:00:04,694 - INFO -   * $81.893059/M tokens: 67 tokens/s, $19.71/h
+2026-01-24 17:00:04,694 - INFO -   * $81.893059/M tokens: 67 tokens/s, $19.71/h
+2026-01-24 17:00:04,694 - INFO - ====================================================================================================
+2026-01-24 17:00:04,694 - INFO - LLM PLACEMENT OPTIMIZATION RESULTS (COST-AWARE)
+2026-01-24 17:00:04,694 - INFO - ====================================================================================================
+2026-01-24 17:00:04,694 - INFO - Model: llama3-70b-decode (80 layers)
+2026-01-24 17:00:04,694 - INFO - Batch Size: 32 (optimal), Sequence Length: 4096
+2026-01-24 17:00:04,694 - INFO -   Available batch sizes: [32...32]
+2026-01-24 17:00:04,694 - INFO - TP Configuration: {'p4de.24xlarge#0': 8, 'p3dn.24xlarge#0': 8, 'p3dn.24xlarge#1': 8, 'p3dn.24xlarge#2': 8, 'p3dn.24xlarge#3': 8, 'g6e.48xlarge#0': 8, 'g6e.48xlarge#1': 8, 'g6e.48xlarge#2': 8, 'g6e.48xlarge#3': 8, 'g6e.24xlarge#0': 4, 'g6e.24xlarge#1': 4, 'g6e.24xlarge#2': 4, 'g6e.24xlarge#3': 4, 'g6e.12xlarge#0': 2, 'g6e.12xlarge#1': 2, 'g6e.12xlarge#2': 2, 'g6e.12xlarge#3': 2, 'g6e.4xlarge#0': 1, 'g6e.4xlarge#1': 1, 'g6e.4xlarge#2': 1, 'g6e.4xlarge#3': 1, 'g5.48xlarge#0': 8, 'g5.48xlarge#1': 8, 'g5.48xlarge#2': 8, 'g5.48xlarge#3': 8, 'g5.24xlarge#0': 4, 'g5.24xlarge#1': 4, 'g5.24xlarge#2': 4, 'g5.24xlarge#3': 4, 'g5.12xlarge#0': 4, 'g5.12xlarge#1': 4, 'g5.12xlarge#2': 4, 'g5.12xlarge#3': 4, 'g5.4xlarge#0': 1, 'g5.4xlarge#1': 1, 'g5.4xlarge#2': 1, 'g5.4xlarge#3': 1}
+2026-01-24 17:00:04,694 - INFO - Pipeline Stages: 5 (max: 8)
+2026-01-24 17:00:04,694 - INFO - PERFORMANCE & COST METRICS:
+2026-01-24 17:00:04,694 - INFO - ----------------------------------------------------------------------------------------------------
+2026-01-24 17:00:04,694 - INFO -   Throughput:        66.86 tokens/sec
+2026-01-24 17:00:04,694 - INFO -   Cost:              $14.76/hour
+2026-01-24 17:00:04,694 - INFO -   $/M tokens:        $61.326309
+2026-01-24 17:00:04,694 - INFO -   Total Runtime:     4.15 hours (0.17 days)
+2026-01-24 17:00:04,694 - INFO -   Objective Value:   445.7032
+2026-01-24 17:00:04,695 - INFO - COST COMPARISON vs COMPETITOR:
+2026-01-24 17:00:04,695 - INFO - ----------------------------------------------------------------------------------------------------
+2026-01-24 17:00:04,695 - INFO -   Competitor $/M tokens:  $100.000000
+2026-01-24 17:00:04,695 - INFO -   Our $/M tokens:         $61.326309
+2026-01-24 17:00:04,695 - INFO -   Improvement:            OK 38.7% BETTER
+2026-01-24 17:00:04,695 - INFO - GPU ASSIGNMENTS (WITH TP):
+2026-01-24 17:00:04,695 - INFO - ----------------------------------------------------------------------------------------------------
+2026-01-24 17:00:04,695 - INFO - GPU Type     TP   GPU IDs              Layers          Size   Throughput   Cost/h    
+2026-01-24 17:00:04,695 - INFO - ----------------------------------------------------------------------------------------------------
+2026-01-24 17:00:04,695 - INFO - g6e.4xlarge#2 1    [0]                  1-16            16     445.70       $3.42     
+2026-01-24 17:00:04,695 - INFO - g5.12xlarge#0 2    [2, 3]               17-32           16     454.46       $5.67     
+2026-01-24 17:00:04,695 - INFO - g5.12xlarge#2 2    [0, 1]               33-48           16     454.46       $5.67     
+2026-01-24 17:00:04,695 - INFO - g5.12xlarge#2 2    [2, 3]               49-64           16     454.46       $5.67     
+2026-01-24 17:00:04,695 - INFO - g5.12xlarge#0 2    [0, 1]               65-80           16     454.46       $5.67     
+2026-01-24 17:00:04,695 - INFO - NETWORK CONNECTIONS:
+2026-01-24 17:00:04,695 - INFO - --------------------------------------------------------------------------------
+2026-01-24 17:00:04,695 - INFO - Connection 1: g6e.4xlarge#2 partition 0 (layers 1-16) -> g5.12xlarge#0 partition 5 (layers 17-32) [Throughput: 102400.00]
+2026-01-24 17:00:04,695 - INFO - Connection 2: g5.12xlarge#0 partition 5 (layers 17-32) -> g5.12xlarge#2 partition 4 (layers 33-48) [Throughput: 102400.00]
+2026-01-24 17:00:04,695 - INFO - Connection 3: g5.12xlarge#2 partition 4 (layers 33-48) -> g5.12xlarge#2 partition 5 (layers 49-64) [Throughput: 1048576.00]
+2026-01-24 17:00:04,695 - INFO - Connection 4: g5.12xlarge#2 partition 5 (layers 49-64) -> g5.12xlarge#0 partition 4 (layers 65-80) [Throughput: 102400.00]
+2026-01-24 17:00:04,695 - INFO - ====================================================================================================
+2026-01-24 17:00:04,696 - INFO - Solution saved to config/large-decode/method_enumeration-wrk_decode-in4096-out4096-bs32_32-20260124_163326/solution_with_tp.json
+2026-01-24 17:00:04,697 - INFO - Solution CSV saved with 5 enumeration results to config/large-decode/method_enumeration-wrk_decode-in4096-out4096-bs32_32-20260124_163326/solution_summary.csv
+2026-01-24 17:00:04,697 - INFO - Total time: 1597 seconds
+2026-01-24 17:00:09,069 - INFO - Total solver runtime: 1601 seconds
+
+
+
+

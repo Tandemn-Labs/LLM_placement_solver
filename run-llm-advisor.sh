@@ -10,3 +10,6 @@ if [ -n "$LLM_MODEL" ]; then
 fi
 
 python -m llm_advisor.cli "${ARGS[@]}"
+
+
+# python -m llm_advisor.cli --model llama-70b --gpu-pool config/gpu_pool.csv --input-len 512 --output-len 8192 --api-key "$1"

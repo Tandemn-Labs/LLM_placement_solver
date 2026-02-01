@@ -1,3 +1,9 @@
+#!/usr/bin/env python
+# coding: utf-8
+
+# In[1]:
+
+
 from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Tuple, Any
@@ -12,6 +18,10 @@ from huggingface_hub import InferenceClient
 
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 print("Using device:", DEVICE)
+
+
+# In[2]:
+
 
 @dataclass
 class Node:
@@ -74,6 +84,9 @@ class Fabric:
             return None
 
         return allocations
+
+
+# In[9]:
 
 
 @dataclass
@@ -140,8 +153,12 @@ class PerfDB:
         return None
 
 
+# In[18]:
+
+
 # Load your perfdb_l40s.csv
-perf_df = pd.read_csv("perfdb_l40s.csv")
+# perf_df = pd.read_csv("perfdb_l40s.csv")
+perf_df = pd.read_csv("gangmuk_perfdb.csv")
 print("Perf DB head:")
 display(perf_df.head())
 
@@ -163,6 +180,9 @@ perf_db = PerfDB(entries)
 # Deduce device type from DB
 default_device_type = perf_df["device_type"].iloc[0]
 print("Default device_type from perfdb:", default_device_type)
+
+
+# In[19]:
 
 
 def llm_choose_config_from_candidates(
@@ -266,6 +286,9 @@ def llm_choose_config_from_candidates(
     return None
 
 
+# In[20]:
+
+
 def load_c_pmi_model(model_name: str = "microsoft/DialoGPT-large"):
     tokenizer = AutoTokenizer.from_pretrained(model_name)
     model = AutoModelWithLMHead.from_pretrained(model_name)
@@ -323,6 +346,8 @@ def c_pmi_rank_plans(
 # Load the C-PMI scorer model
 c_pmi_model, c_pmi_tokenizer = load_c_pmi_model()
 
+
+# In[21]:
 
 
 class OrcaOrchestrator:
@@ -525,6 +550,9 @@ class OrcaOrchestrator:
         return configs
 
 
+# In[22]:
+
+
 # ----- Build a small L40S fabric -----
 # We’ll use 4 nodes * 4 GPUs each for demo (16 GPUs total)
 nodes = [
@@ -585,3 +613,10 @@ print(job2_state)
 print("\n--- Fabric usage ---")
 for n in fabric.nodes:
     print(n.name, "used/free:", n.used_devices, "/", n.device_count)
+
+
+# In[ ]:
+
+
+
+
