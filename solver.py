@@ -4130,6 +4130,7 @@ class LLMPlacementSolverWithTP:
                 'model_name': self.config.model_name,
                 'num_decoder_layers': self.config.num_decoder_layers,
                 'sequence_length': self.config.sequence_length,
+                'output_length': self.config.output_length,
                 'min_batch_size': self.config.min_batch_size,
                 'max_batch_size': self.config.max_batch_size,
                 'optimal_batch_size': self.solution.get('batch_size', None),
@@ -4663,13 +4664,16 @@ def main():
             if not args.eval_pp_stages or args.eval_pp_stages <= 0:
                 raise ValueError("--eval-pp-stages must be a positive integer")
 
-            result_dir_name = (
-                f"eval_family-{args.eval_instance_family}-pp{args.eval_pp_stages}-"
-                f"tp{args.eval_tp_degree}-in{args.sequence_length}-out{args.output_length}-"
-                f"bs{args.min_batch_size}_{args.max_batch_size}-"
-                f"{time.strftime('%Y%m%d_%H%M%S')}"
-            )
-            output_dir = _resolve_eval_output_dir(args, args.config_dir, result_dir_name)
+            if args.output_dir:
+                output_dir = args.output_dir
+            else:
+                result_dir_name = (
+                    f"eval_family-{args.eval_instance_family}-pp{args.eval_pp_stages}-"
+                    f"tp{args.eval_tp_degree}-in{args.sequence_length}-out{args.output_length}-"
+                    f"bs{args.min_batch_size}_{args.max_batch_size}-"
+                    f"{time.strftime('%Y%m%d_%H%M%S')}"
+                )
+                output_dir = _resolve_eval_output_dir(args, args.config_dir, result_dir_name)
             os.makedirs(output_dir, exist_ok=True)
             config_src = os.path.join(args.config_dir, "config.csv")
             if os.path.exists(config_src):
@@ -4769,8 +4773,11 @@ def main():
         if args.evaluate_placement:
             if not args.output_dir and not args.eval_output_root:
                 raise ValueError("Eval mode requires --output-dir or --eval-output-root")
-            result_dir_name = f"eval_placement-{time.strftime('%Y%m%d_%H%M%S')}"
-            output_dir = _resolve_eval_output_dir(args, args.config_dir, result_dir_name)
+            if args.output_dir:
+                output_dir = args.output_dir
+            else:
+                result_dir_name = f"eval_placement-{time.strftime('%Y%m%d_%H%M%S')}"
+                output_dir = _resolve_eval_output_dir(args, args.config_dir, result_dir_name)
             os.makedirs(output_dir, exist_ok=True)
             config_src = os.path.join(args.config_dir, "config.csv")
             if os.path.exists(config_src):

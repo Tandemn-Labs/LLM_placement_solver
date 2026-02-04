@@ -14,10 +14,15 @@ import os
 import re
 from typing import Any, Dict, List, Optional
 
+import matplotlib.pyplot as plt
+import numpy as np
 
-DIR_PATTERN = re.compile(
-    r"eval_family-(?P<family>[^-]+)-pp(?P<pp>\d+)-tp(?P<tp>\d+)-"
-    r"in(?P<input>\d+)-out(?P<output>\d+)-bs(?P<min>\d+)_(?P<max>\d+)"
+
+EVAL_FAMILY_PATTERN = re.compile(
+    r"eval_family-(?P<family>[^-]+(?:\.[^-]+)*)-pp(?P<pp>\d+)-tp(?P<tp>\d+)"
+)
+IO_BS_PATTERN = re.compile(
+    r"in(?P<input>\d+)-out(?P<output>\d+)-bs(?P<min>\d+)(?:_(?P<max>\d+))?"
 )
 
 
@@ -61,18 +66,17 @@ def parse_dir_metadata(dir_path: str) -> Dict[str, Optional[str]]:
         "min_batch_size": None,
         "max_batch_size": None,
     }
-    match = DIR_PATTERN.search(dir_path)
-    if not match:
-        return data
-    data.update({
-        "instance_family": match.group("family"),
-        "pp_stages": match.group("pp"),
-        "tp_degree": match.group("tp"),
-        "input_length": match.group("input"),
-        "output_length": match.group("output"),
-        "min_batch_size": match.group("min"),
-        "max_batch_size": match.group("max"),
-    })
+    fam_match = EVAL_FAMILY_PATTERN.search(dir_path)
+    if fam_match:
+        data["instance_family"] = fam_match.group("family")
+        data["pp_stages"] = fam_match.group("pp")
+        data["tp_degree"] = fam_match.group("tp")
+    io_match = IO_BS_PATTERN.search(dir_path)
+    if io_match:
+        data["input_length"] = io_match.group("input")
+        data["output_length"] = io_match.group("output")
+        data["min_batch_size"] = io_match.group("min")
+        data["max_batch_size"] = io_match.group("max")  # None if not present
     return data
 
 
@@ -192,6 +196,108 @@ def summarize_from_csv(row: Dict[str, str]) -> Dict[str, Any]:
     }
 
 
+def plot_results(records: List[Dict[str, Any]], input_dir: str) -> None:
+    """Generate a vertically stacked bar chart (one subplot per instance family)."""
+    # Include all rows that have an instance_family (SUCCESS or not)
+    rows = [r for r in records if r.get("instance_family")]
+    if not rows:
+        print("No rows with instance_family — skipping chart.")
+        return
+
+    # Group by instance_family
+    families: Dict[str, List[Dict[str, Any]]] = {}
+    for r in rows:
+        fam = r["instance_family"]
+        families.setdefault(fam, []).append(r)
+
+    family_names = sorted(families.keys())
+
+    # Sort configs by (pp, tp) numerically
+    def sort_key(r: Dict[str, Any]):
+        pp = int(r.get("pp_stages") or 0)
+        tp = int(r.get("tp_degree") or 0)
+        return (pp, tp)
+
+    fig, axes = plt.subplots(
+        nrows=len(family_names), ncols=1,
+        figsize=(max(10, 1.2 * max(len(families[f]) for f in family_names)), 4 * len(family_names)),
+        squeeze=False,
+    )
+
+    bar_width = 0.35
+
+    for idx, fam in enumerate(family_names):
+        ax_left = axes[idx, 0]
+        fam_rows = sorted(families[fam], key=sort_key)
+
+        labels = [f"PP{r.get('pp_stages')}-TP{r.get('tp_degree')}" for r in fam_rows]
+        is_success = [
+            r.get("status") == "SUCCESS"
+            and r.get("throughput_tokens_per_sec") is not None
+            and r.get("dollar_per_million_token") is not None
+            for r in fam_rows
+        ]
+        throughputs = [r["throughput_tokens_per_sec"] if ok else 0 for r, ok in zip(fam_rows, is_success)]
+        costs = [r["dollar_per_million_token"] if ok else 0 for r, ok in zip(fam_rows, is_success)]
+
+        x = np.arange(len(labels))
+
+        # Left axis — throughput (blue)
+        bars1 = ax_left.bar(x - bar_width / 2, throughputs, bar_width,
+                            label="Throughput (tok/s)", color="steelblue")
+        ax_left.set_ylabel("Throughput (tokens/sec)", color="steelblue")
+        ax_left.tick_params(axis="y", labelcolor="steelblue")
+
+        # Right axis — cost (red)
+        ax_right = ax_left.twinx()
+        bars2 = ax_right.bar(x + bar_width / 2, costs, bar_width,
+                             label="Cost ($/Mtok)", color="indianred")
+        ax_right.set_ylabel("Cost ($/Mtok)", color="indianred")
+        ax_right.tick_params(axis="y", labelcolor="indianred")
+
+        # Bar value labels (only for successful configs)
+        for bar, ok in zip(bars1, is_success):
+            if not ok:
+                continue
+            h = bar.get_height()
+            ax_left.text(bar.get_x() + bar.get_width() / 2, h,
+                         f"{h:,.0f}", ha="center", va="bottom", fontsize=7, color="steelblue")
+        for bar, ok in zip(bars2, is_success):
+            if not ok:
+                continue
+            h = bar.get_height()
+            ax_right.text(bar.get_x() + bar.get_width() / 2, h,
+                          f"{h:,.2f}", ha="center", va="bottom", fontsize=7, color="indianred")
+
+        # Mark failed configs with red "FAIL" text at the baseline
+        for i, ok in enumerate(is_success):
+            if not ok:
+                ax_left.text(x[i], 0, "FAIL", ha="center", va="bottom",
+                             fontsize=7, color="red", fontweight="bold")
+
+        ax_left.set_xticks(x)
+        ax_left.set_xticklabels(labels, rotation=45, ha="right", fontsize=8)
+        # Color failed tick labels red
+        for tick_label, ok in zip(ax_left.get_xticklabels(), is_success):
+            if not ok:
+                tick_label.set_color("red")
+        ax_left.set_title(fam, fontweight="bold")
+
+        # Legend only on first subplot
+        if idx == 0:
+            lines1, labels1 = ax_left.get_legend_handles_labels()
+            lines2, labels2 = ax_right.get_legend_handles_labels()
+            ax_left.legend(lines1 + lines2, labels1 + labels2, loc="upper left", fontsize=8)
+
+    fig.suptitle("Eval Results by Instance Family", fontsize=14, fontweight="bold")
+    fig.tight_layout()
+
+    out_path = os.path.join(input_dir, "eval_results_chart.png")
+    fig.savefig(out_path, dpi=150)
+    plt.close(fig)
+    print(f"Saved chart to {out_path}")
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Collect eval results into one CSV.")
     parser.add_argument("--input-dir", required=True, help="Parent directory to search")
@@ -302,6 +408,8 @@ def main() -> int:
         writer.writerows(records)
 
     print(f"Wrote {len(records)} rows to {output_path}")
+
+    plot_results(records, args.input_dir)
     return 0
 
 
