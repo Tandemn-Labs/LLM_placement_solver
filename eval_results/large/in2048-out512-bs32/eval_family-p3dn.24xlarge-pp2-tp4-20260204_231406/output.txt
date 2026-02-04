@@ -1,0 +1,212 @@
+2026-02-04 23:14:08,479 - INFO -   Instance p4de.24xlarge#0: 8×A100, 80GB, $40.96/instance-hour (from cloud (AWS))
+2026-02-04 23:14:08,479 - INFO -   Instance p3dn.24xlarge#0: 8×V100, 32GB, $31.21/instance-hour (from cloud (AWS))
+2026-02-04 23:14:08,479 - INFO -   Instance p3dn.24xlarge#1: 8×V100, 32GB, $31.21/instance-hour (from cloud (AWS))
+2026-02-04 23:14:08,479 - INFO -   Instance p3dn.24xlarge#2: 8×V100, 32GB, $31.21/instance-hour (from cloud (AWS))
+2026-02-04 23:14:08,479 - INFO -   Instance p3dn.24xlarge#3: 8×V100, 32GB, $31.21/instance-hour (from cloud (AWS))
+2026-02-04 23:14:08,479 - INFO -   Instance g6e.48xlarge#0: 8×L40S, 48GB, $27.39/instance-hour (from cloud (AWS))
+2026-02-04 23:14:08,479 - INFO -   Instance g6e.48xlarge#1: 8×L40S, 48GB, $27.39/instance-hour (from cloud (AWS))
+2026-02-04 23:14:08,479 - INFO -   Instance g6e.48xlarge#2: 8×L40S, 48GB, $27.39/instance-hour (from cloud (AWS))
+2026-02-04 23:14:08,479 - INFO -   Instance g6e.48xlarge#3: 8×L40S, 48GB, $27.39/instance-hour (from cloud (AWS))
+2026-02-04 23:14:08,480 - INFO -   Instance g6e.24xlarge#0: 4×L40S, 48GB, $13.70/instance-hour (from cloud (AWS))
+2026-02-04 23:14:08,480 - INFO -   Instance g6e.24xlarge#1: 4×L40S, 48GB, $13.70/instance-hour (from cloud (AWS))
+2026-02-04 23:14:08,480 - INFO -   Instance g6e.24xlarge#2: 4×L40S, 48GB, $13.70/instance-hour (from cloud (AWS))
+2026-02-04 23:14:08,480 - INFO -   Instance g6e.24xlarge#3: 4×L40S, 48GB, $13.70/instance-hour (from cloud (AWS))
+2026-02-04 23:14:08,480 - INFO -   Instance g6e.12xlarge#0: 2×L40S, 48GB, $6.85/instance-hour (from cloud (AWS))
+2026-02-04 23:14:08,480 - INFO -   Instance g6e.12xlarge#1: 2×L40S, 48GB, $6.85/instance-hour (from cloud (AWS))
+2026-02-04 23:14:08,480 - INFO -   Instance g6e.12xlarge#2: 2×L40S, 48GB, $6.85/instance-hour (from cloud (AWS))
+2026-02-04 23:14:08,480 - INFO -   Instance g6e.12xlarge#3: 2×L40S, 48GB, $6.85/instance-hour (from cloud (AWS))
+2026-02-04 23:14:08,480 - INFO -   Instance g6e.4xlarge#0: 1×L40S, 48GB, $3.42/instance-hour (from cloud (AWS))
+2026-02-04 23:14:08,480 - INFO -   Instance g6e.4xlarge#1: 1×L40S, 48GB, $3.42/instance-hour (from cloud (AWS))
+2026-02-04 23:14:08,480 - INFO -   Instance g6e.4xlarge#2: 1×L40S, 48GB, $3.42/instance-hour (from cloud (AWS))
+2026-02-04 23:14:08,480 - INFO -   Instance g6e.4xlarge#3: 1×L40S, 48GB, $3.42/instance-hour (from cloud (AWS))
+2026-02-04 23:14:08,481 - INFO -   Instance g5.48xlarge#0: 8×A10, 24GB, $16.29/instance-hour (from cloud (AWS))
+2026-02-04 23:14:08,481 - INFO -   Instance g5.48xlarge#1: 8×A10, 24GB, $16.29/instance-hour (from cloud (AWS))
+2026-02-04 23:14:08,481 - INFO -   Instance g5.48xlarge#2: 8×A10, 24GB, $16.29/instance-hour (from cloud (AWS))
+2026-02-04 23:14:08,481 - INFO -   Instance g5.48xlarge#3: 8×A10, 24GB, $16.29/instance-hour (from cloud (AWS))
+2026-02-04 23:14:08,481 - INFO -   Instance g5.24xlarge#0: 4×A10, 24GB, $8.14/instance-hour (from cloud (AWS))
+2026-02-04 23:14:08,481 - INFO -   Instance g5.24xlarge#1: 4×A10, 24GB, $8.14/instance-hour (from cloud (AWS))
+2026-02-04 23:14:08,481 - INFO -   Instance g5.24xlarge#2: 4×A10, 24GB, $8.14/instance-hour (from cloud (AWS))
+2026-02-04 23:14:08,481 - INFO -   Instance g5.24xlarge#3: 4×A10, 24GB, $8.14/instance-hour (from cloud (AWS))
+2026-02-04 23:14:08,481 - INFO -   Instance g5.12xlarge#0: 4×A10, 24GB, $5.67/instance-hour (from cloud (AWS))
+2026-02-04 23:14:08,481 - INFO -   Instance g5.12xlarge#1: 4×A10, 24GB, $5.67/instance-hour (from cloud (AWS))
+2026-02-04 23:14:08,481 - INFO -   Instance g5.12xlarge#2: 4×A10, 24GB, $5.67/instance-hour (from cloud (AWS))
+2026-02-04 23:14:08,481 - INFO -   Instance g5.12xlarge#3: 4×A10, 24GB, $5.67/instance-hour (from cloud (AWS))
+2026-02-04 23:14:08,482 - INFO -   Instance g5.4xlarge#0: 1×A10, 24GB, $1.62/instance-hour (from cloud (AWS))
+2026-02-04 23:14:08,482 - INFO -   Instance g5.4xlarge#1: 1×A10, 24GB, $1.62/instance-hour (from cloud (AWS))
+2026-02-04 23:14:08,482 - INFO -   Instance g5.4xlarge#2: 1×A10, 24GB, $1.62/instance-hour (from cloud (AWS))
+2026-02-04 23:14:08,482 - INFO -   Instance g5.4xlarge#3: 1×A10, 24GB, $1.62/instance-hour (from cloud (AWS))
+2026-02-04 23:14:08,497 - INFO - Loaded network bandwidth from /mnt/projects/LLM_placement_solver/config/network_bandwidth.csv
+2026-02-04 23:14:08,498 - INFO - Optimization priority: cost_first (weight=0.90)
+2026-02-04 23:14:08,498 - INFO - Workload phase: aggregated
+2026-02-04 23:14:08,498 - INFO - GPU p4de.24xlarge#0: max_tp=8, generated 15 allocations with unique partition IDs
+2026-02-04 23:14:08,498 - INFO - GPU p3dn.24xlarge#0: max_tp=8, generated 15 allocations with unique partition IDs
+2026-02-04 23:14:08,499 - INFO - GPU p3dn.24xlarge#1: max_tp=8, generated 15 allocations with unique partition IDs
+2026-02-04 23:14:08,499 - INFO - GPU p3dn.24xlarge#2: max_tp=8, generated 15 allocations with unique partition IDs
+2026-02-04 23:14:08,499 - INFO - GPU p3dn.24xlarge#3: max_tp=8, generated 15 allocations with unique partition IDs
+2026-02-04 23:14:08,499 - INFO - GPU g6e.48xlarge#0: max_tp=8, generated 15 allocations with unique partition IDs
+2026-02-04 23:14:08,499 - INFO - GPU g6e.48xlarge#1: max_tp=8, generated 15 allocations with unique partition IDs
+2026-02-04 23:14:08,499 - INFO - GPU g6e.48xlarge#2: max_tp=8, generated 15 allocations with unique partition IDs
+2026-02-04 23:14:08,499 - INFO - GPU g6e.48xlarge#3: max_tp=8, generated 15 allocations with unique partition IDs
+2026-02-04 23:14:08,499 - INFO - GPU g6e.24xlarge#0: max_tp=4, generated 7 allocations with unique partition IDs
+2026-02-04 23:14:08,499 - INFO - GPU g6e.24xlarge#1: max_tp=4, generated 7 allocations with unique partition IDs
+2026-02-04 23:14:08,499 - INFO - GPU g6e.24xlarge#2: max_tp=4, generated 7 allocations with unique partition IDs
+2026-02-04 23:14:08,499 - INFO - GPU g6e.24xlarge#3: max_tp=4, generated 7 allocations with unique partition IDs
+2026-02-04 23:14:08,499 - INFO - GPU g6e.12xlarge#0: max_tp=2, generated 3 allocations with unique partition IDs
+2026-02-04 23:14:08,499 - INFO - GPU g6e.12xlarge#1: max_tp=2, generated 3 allocations with unique partition IDs
+2026-02-04 23:14:08,499 - INFO - GPU g6e.12xlarge#2: max_tp=2, generated 3 allocations with unique partition IDs
+2026-02-04 23:14:08,499 - INFO - GPU g6e.12xlarge#3: max_tp=2, generated 3 allocations with unique partition IDs
+2026-02-04 23:14:08,499 - INFO - GPU g6e.4xlarge#0: max_tp=1, generated 1 allocations with unique partition IDs
+2026-02-04 23:14:08,499 - INFO - GPU g6e.4xlarge#1: max_tp=1, generated 1 allocations with unique partition IDs
+2026-02-04 23:14:08,499 - INFO - GPU g6e.4xlarge#2: max_tp=1, generated 1 allocations with unique partition IDs
+2026-02-04 23:14:08,499 - INFO - GPU g6e.4xlarge#3: max_tp=1, generated 1 allocations with unique partition IDs
+2026-02-04 23:14:08,499 - INFO - GPU g5.48xlarge#0: max_tp=8, generated 15 allocations with unique partition IDs
+2026-02-04 23:14:08,499 - INFO - GPU g5.48xlarge#1: max_tp=8, generated 15 allocations with unique partition IDs
+2026-02-04 23:14:08,499 - INFO - GPU g5.48xlarge#2: max_tp=8, generated 15 allocations with unique partition IDs
+2026-02-04 23:14:08,500 - INFO - GPU g5.48xlarge#3: max_tp=8, generated 15 allocations with unique partition IDs
+2026-02-04 23:14:08,500 - INFO - GPU g5.24xlarge#0: max_tp=4, generated 7 allocations with unique partition IDs
+2026-02-04 23:14:08,500 - INFO - GPU g5.24xlarge#1: max_tp=4, generated 7 allocations with unique partition IDs
+2026-02-04 23:14:08,500 - INFO - GPU g5.24xlarge#2: max_tp=4, generated 7 allocations with unique partition IDs
+2026-02-04 23:14:08,500 - INFO - GPU g5.24xlarge#3: max_tp=4, generated 7 allocations with unique partition IDs
+2026-02-04 23:14:08,500 - INFO - GPU g5.12xlarge#0: max_tp=4, generated 7 allocations with unique partition IDs
+2026-02-04 23:14:08,500 - INFO - GPU g5.12xlarge#1: max_tp=4, generated 7 allocations with unique partition IDs
+2026-02-04 23:14:08,500 - INFO - GPU g5.12xlarge#2: max_tp=4, generated 7 allocations with unique partition IDs
+2026-02-04 23:14:08,500 - INFO - GPU g5.12xlarge#3: max_tp=4, generated 7 allocations with unique partition IDs
+2026-02-04 23:14:08,500 - INFO - GPU g5.4xlarge#0: max_tp=1, generated 1 allocations with unique partition IDs
+2026-02-04 23:14:08,500 - INFO - GPU g5.4xlarge#1: max_tp=1, generated 1 allocations with unique partition IDs
+2026-02-04 23:14:08,500 - INFO - GPU g5.4xlarge#2: max_tp=1, generated 1 allocations with unique partition IDs
+2026-02-04 23:14:08,500 - INFO - GPU g5.4xlarge#3: max_tp=1, generated 1 allocations with unique partition IDs
+2026-02-04 23:14:08,500 - INFO - GPU p4de.24xlarge#0 with TP=8: max 80 layers
+2026-02-04 23:14:08,500 - INFO - GPU p3dn.24xlarge#0 with TP=8: max 80 layers
+2026-02-04 23:14:08,500 - INFO - GPU p3dn.24xlarge#1 with TP=8: max 80 layers
+2026-02-04 23:14:08,500 - INFO - GPU p3dn.24xlarge#2 with TP=8: max 80 layers
+2026-02-04 23:14:08,500 - INFO - GPU p3dn.24xlarge#3 with TP=8: max 80 layers
+2026-02-04 23:14:08,500 - INFO - GPU g6e.48xlarge#0 with TP=8: max 80 layers
+2026-02-04 23:14:08,500 - INFO - GPU g6e.48xlarge#1 with TP=8: max 80 layers
+2026-02-04 23:14:08,500 - INFO - GPU g6e.48xlarge#2 with TP=8: max 80 layers
+2026-02-04 23:14:08,501 - INFO - GPU g6e.48xlarge#3 with TP=8: max 80 layers
+2026-02-04 23:14:08,501 - INFO - GPU g6e.24xlarge#0 with TP=4: max 80 layers
+2026-02-04 23:14:08,501 - INFO - GPU g6e.24xlarge#1 with TP=4: max 80 layers
+2026-02-04 23:14:08,501 - INFO - GPU g6e.24xlarge#2 with TP=4: max 80 layers
+2026-02-04 23:14:08,501 - INFO - GPU g6e.24xlarge#3 with TP=4: max 80 layers
+2026-02-04 23:14:08,501 - INFO - GPU g6e.12xlarge#0 with TP=2: max 43 layers
+2026-02-04 23:14:08,501 - INFO - GPU g6e.12xlarge#1 with TP=2: max 43 layers
+2026-02-04 23:14:08,501 - INFO - GPU g6e.12xlarge#2 with TP=2: max 43 layers
+2026-02-04 23:14:08,501 - INFO - GPU g6e.12xlarge#3 with TP=2: max 43 layers
+2026-02-04 23:14:08,501 - INFO - GPU g6e.4xlarge#0 with TP=1: max 20 layers
+2026-02-04 23:14:08,501 - INFO - GPU g6e.4xlarge#1 with TP=1: max 20 layers
+2026-02-04 23:14:08,501 - INFO - GPU g6e.4xlarge#2 with TP=1: max 20 layers
+2026-02-04 23:14:08,501 - INFO - GPU g6e.4xlarge#3 with TP=1: max 20 layers
+2026-02-04 23:14:08,501 - INFO - GPU g5.48xlarge#0 with TP=8: max 80 layers
+2026-02-04 23:14:08,501 - INFO - GPU g5.48xlarge#1 with TP=8: max 80 layers
+2026-02-04 23:14:08,501 - INFO - GPU g5.48xlarge#2 with TP=8: max 80 layers
+2026-02-04 23:14:08,501 - INFO - GPU g5.48xlarge#3 with TP=8: max 80 layers
+2026-02-04 23:14:08,501 - INFO - GPU g5.24xlarge#0 with TP=4: max 43 layers
+2026-02-04 23:14:08,501 - INFO - GPU g5.24xlarge#1 with TP=4: max 43 layers
+2026-02-04 23:14:08,501 - INFO - GPU g5.24xlarge#2 with TP=4: max 43 layers
+2026-02-04 23:14:08,501 - INFO - GPU g5.24xlarge#3 with TP=4: max 43 layers
+2026-02-04 23:14:08,502 - INFO - GPU g5.12xlarge#0 with TP=4: max 43 layers
+2026-02-04 23:14:08,502 - INFO - GPU g5.12xlarge#1 with TP=4: max 43 layers
+2026-02-04 23:14:08,502 - INFO - GPU g5.12xlarge#2 with TP=4: max 43 layers
+2026-02-04 23:14:08,502 - INFO - GPU g5.12xlarge#3 with TP=4: max 43 layers
+2026-02-04 23:14:08,502 - INFO - GPU g5.4xlarge#0 with TP=1: max 8 layers
+2026-02-04 23:14:08,502 - INFO - GPU g5.4xlarge#1 with TP=1: max 8 layers
+2026-02-04 23:14:08,502 - INFO - GPU g5.4xlarge#2 with TP=1: max 8 layers
+2026-02-04 23:14:08,502 - INFO - GPU g5.4xlarge#3 with TP=1: max 8 layers
+2026-02-04 23:14:08,502 - INFO - GPU p4de.24xlarge#0 with TP=8: min 27 layers (for 10% utilization)
+2026-02-04 23:14:08,502 - INFO - GPU p3dn.24xlarge#0 with TP=8: min 8 layers (for 10% utilization)
+2026-02-04 23:14:08,502 - INFO - GPU p3dn.24xlarge#1 with TP=8: min 8 layers (for 10% utilization)
+2026-02-04 23:14:08,502 - INFO - GPU p3dn.24xlarge#2 with TP=8: min 8 layers (for 10% utilization)
+2026-02-04 23:14:08,502 - INFO - GPU p3dn.24xlarge#3 with TP=8: min 8 layers (for 10% utilization)
+2026-02-04 23:14:08,502 - INFO - GPU g6e.48xlarge#0 with TP=8: min 15 layers (for 10% utilization)
+2026-02-04 23:14:08,502 - INFO - GPU g6e.48xlarge#1 with TP=8: min 15 layers (for 10% utilization)
+2026-02-04 23:14:08,502 - INFO - GPU g6e.48xlarge#2 with TP=8: min 15 layers (for 10% utilization)
+2026-02-04 23:14:08,502 - INFO - GPU g6e.48xlarge#3 with TP=8: min 15 layers (for 10% utilization)
+2026-02-04 23:14:08,502 - INFO - GPU g6e.24xlarge#0 with TP=4: min 7 layers (for 10% utilization)
+2026-02-04 23:14:08,502 - INFO - GPU g6e.24xlarge#1 with TP=4: min 7 layers (for 10% utilization)
+2026-02-04 23:14:08,502 - INFO - GPU g6e.24xlarge#2 with TP=4: min 7 layers (for 10% utilization)
+2026-02-04 23:14:08,502 - INFO - GPU g6e.24xlarge#3 with TP=4: min 7 layers (for 10% utilization)
+2026-02-04 23:14:08,503 - INFO - GPU g6e.12xlarge#0 with TP=2: min 2 layers (for 10% utilization)
+2026-02-04 23:14:08,503 - INFO - GPU g6e.12xlarge#1 with TP=2: min 2 layers (for 10% utilization)
+2026-02-04 23:14:08,503 - INFO - GPU g6e.12xlarge#2 with TP=2: min 2 layers (for 10% utilization)
+2026-02-04 23:14:08,503 - INFO - GPU g6e.12xlarge#3 with TP=2: min 2 layers (for 10% utilization)
+2026-02-04 23:14:08,503 - INFO - GPU g6e.4xlarge#0 with TP=1: min 1 layers (for 10% utilization)
+2026-02-04 23:14:08,503 - INFO - GPU g6e.4xlarge#1 with TP=1: min 1 layers (for 10% utilization)
+2026-02-04 23:14:08,503 - INFO - GPU g6e.4xlarge#2 with TP=1: min 1 layers (for 10% utilization)
+2026-02-04 23:14:08,503 - INFO - GPU g6e.4xlarge#3 with TP=1: min 1 layers (for 10% utilization)
+2026-02-04 23:14:08,503 - INFO - GPU g5.48xlarge#0 with TP=8: min 5 layers (for 10% utilization)
+2026-02-04 23:14:08,503 - INFO - GPU g5.48xlarge#1 with TP=8: min 5 layers (for 10% utilization)
+2026-02-04 23:14:08,503 - INFO - GPU g5.48xlarge#2 with TP=8: min 5 layers (for 10% utilization)
+2026-02-04 23:14:08,503 - INFO - GPU g5.48xlarge#3 with TP=8: min 5 layers (for 10% utilization)
+2026-02-04 23:14:08,503 - INFO - GPU g5.24xlarge#0 with TP=4: min 2 layers (for 10% utilization)
+2026-02-04 23:14:08,503 - INFO - GPU g5.24xlarge#1 with TP=4: min 2 layers (for 10% utilization)
+2026-02-04 23:14:08,503 - INFO - GPU g5.24xlarge#2 with TP=4: min 2 layers (for 10% utilization)
+2026-02-04 23:14:08,503 - INFO - GPU g5.24xlarge#3 with TP=4: min 2 layers (for 10% utilization)
+2026-02-04 23:14:08,503 - INFO - GPU g5.12xlarge#0 with TP=4: min 2 layers (for 10% utilization)
+2026-02-04 23:14:08,503 - INFO - GPU g5.12xlarge#1 with TP=4: min 2 layers (for 10% utilization)
+2026-02-04 23:14:08,503 - INFO - GPU g5.12xlarge#2 with TP=4: min 2 layers (for 10% utilization)
+2026-02-04 23:14:08,503 - INFO - GPU g5.12xlarge#3 with TP=4: min 2 layers (for 10% utilization)
+2026-02-04 23:14:08,503 - INFO - GPU g5.4xlarge#0 with TP=1: min 1 layers (for 10% utilization)
+2026-02-04 23:14:08,503 - INFO - GPU g5.4xlarge#1 with TP=1: min 1 layers (for 10% utilization)
+2026-02-04 23:14:08,503 - INFO - GPU g5.4xlarge#2 with TP=1: min 1 layers (for 10% utilization)
+2026-02-04 23:14:08,504 - INFO - GPU g5.4xlarge#3 with TP=1: min 1 layers (for 10% utilization)
+2026-02-04 23:14:08,504 - INFO - Quantized segment sizes (divisors + powers of two): [1, 2, 4, 5, 8, 10, 16, 20, 32, 40, 64, 80]
+2026-02-04 23:14:08,504 - INFO -   Using 12 sizes for performance
+2026-02-04 23:14:08,504 - INFO - Batch size options: [32]
+2026-02-04 23:14:08,504 - INFO - Batch size options: [32]
+2026-02-04 23:14:10,579 - INFO - Generated 49268 segments with variable TP and batch size
+2026-02-04 23:14:10,579 - INFO -   Batch size options: [32]
+2026-02-04 23:14:10,579 - INFO -   Segments per config increased by 1x
+2026-02-04 23:14:10,580 - INFO -   Pre-computed throughput for 49268 segments
+2026-02-04 23:14:10,580 - INFO -   ✓ Verified 10 random segments - all match!
+2026-02-04 23:14:37,590 - INFO - Generated 14412992 connections (before bandwidth filter)
+2026-02-04 23:17:20,141 - INFO - Network bandwidth filter (bottom 10%): 14412992 -> 14412992 connections
+2026-02-04 23:20:39,251 - INFO - Problem size validation:
+2026-02-04 23:20:39,251 - INFO -   - Segments: 49268
+2026-02-04 23:20:39,251 - INFO -   - Connections: 14412992
+2026-02-04 23:20:39,251 - INFO -   - Binary variables: ~14462260
+2026-02-04 23:20:39,251 - WARNING - Large problem (14462260 binary variables)
+2026-02-04 23:20:39,251 - INFO - Initialized solver with TP and practical constraints:
+2026-02-04 23:20:39,251 - INFO -   - GPU types: 37, Total GPUs: 168
+2026-02-04 23:20:39,251 - INFO -   - TP Configuration: {'p4de.24xlarge#0': 8, 'p3dn.24xlarge#0': 8, 'p3dn.24xlarge#1': 8, 'p3dn.24xlarge#2': 8, 'p3dn.24xlarge#3': 8, 'g6e.48xlarge#0': 8, 'g6e.48xlarge#1': 8, 'g6e.48xlarge#2': 8, 'g6e.48xlarge#3': 8, 'g6e.24xlarge#0': 4, 'g6e.24xlarge#1': 4, 'g6e.24xlarge#2': 4, 'g6e.24xlarge#3': 4, 'g6e.12xlarge#0': 2, 'g6e.12xlarge#1': 2, 'g6e.12xlarge#2': 2, 'g6e.12xlarge#3': 2, 'g6e.4xlarge#0': 1, 'g6e.4xlarge#1': 1, 'g6e.4xlarge#2': 1, 'g6e.4xlarge#3': 1, 'g5.48xlarge#0': 8, 'g5.48xlarge#1': 8, 'g5.48xlarge#2': 8, 'g5.48xlarge#3': 8, 'g5.24xlarge#0': 4, 'g5.24xlarge#1': 4, 'g5.24xlarge#2': 4, 'g5.24xlarge#3': 4, 'g5.12xlarge#0': 4, 'g5.12xlarge#1': 4, 'g5.12xlarge#2': 4, 'g5.12xlarge#3': 4, 'g5.4xlarge#0': 1, 'g5.4xlarge#1': 1, 'g5.4xlarge#2': 1, 'g5.4xlarge#3': 1}
+2026-02-04 23:20:39,251 - INFO -   - Max pipeline stages: 8
+2026-02-04 23:20:39,251 - INFO -   - Min memory utilization: 0.1
+2026-02-04 23:20:39,251 - INFO -   - Segment quantization: True
+2026-02-04 23:20:39,252 - INFO -   - Model: 80 layers
+2026-02-04 23:20:39,252 - INFO -   - Problem size: 49268 segments, 14412992 connections
+2026-02-04 23:20:39,252 - INFO - ====================================================================================================
+2026-02-04 23:20:39,252 - INFO - LLM PLACEMENT OPTIMIZATION RESULTS (COST-AWARE)
+2026-02-04 23:20:39,252 - INFO - ====================================================================================================
+2026-02-04 23:20:39,252 - INFO - Model: llama3-70b (80 layers)
+2026-02-04 23:20:39,252 - INFO - Batch Size: 32 (optimal), Sequence Length: 2048
+2026-02-04 23:20:39,252 - INFO -   Available batch sizes: [32...32]
+2026-02-04 23:20:39,252 - INFO - TP Configuration: {'p3dn.24xlarge#0': 4, 'p3dn.24xlarge#1': 4}
+2026-02-04 23:20:39,252 - INFO - Pipeline Stages: 2 (max: 8)
+2026-02-04 23:20:39,253 - INFO - PERFORMANCE & COST METRICS:
+2026-02-04 23:20:39,253 - INFO - ----------------------------------------------------------------------------------------------------
+2026-02-04 23:20:39,253 - INFO -   Throughput:        256.14 tokens/sec
+2026-02-04 23:20:39,253 - INFO -   Cost:              $62.42/hour
+2026-02-04 23:20:39,253 - INFO -   $/M tokens:        $67.691937
+2026-02-04 23:20:39,253 - INFO -   Total Runtime:     1.08 hours (0.05 days)
+2026-02-04 23:20:39,253 - INFO -   Objective Value:   0.0000
+2026-02-04 23:20:39,253 - INFO - COST COMPARISON vs COMPETITOR:
+2026-02-04 23:20:39,253 - INFO - ----------------------------------------------------------------------------------------------------
+2026-02-04 23:20:39,253 - INFO -   Competitor $/M tokens:  $100.000000
+2026-02-04 23:20:39,253 - INFO -   Our $/M tokens:         $67.691937
+2026-02-04 23:20:39,253 - INFO -   Improvement:            OK 32.3% BETTER
+2026-02-04 23:20:39,253 - INFO - GPU ASSIGNMENTS (WITH TP):
+2026-02-04 23:20:39,253 - INFO - ----------------------------------------------------------------------------------------------------
+2026-02-04 23:20:39,253 - INFO - GPU Type     TP   GPU IDs              Layers          Size   Throughput   Cost/h    
+2026-02-04 23:20:39,253 - INFO - ----------------------------------------------------------------------------------------------------
+2026-02-04 23:20:39,253 - INFO - p3dn.24xlarge#0 4    [0, 1, 2, 3]         1-40            40     1185.85      $31.21    
+2026-02-04 23:20:39,253 - INFO - p3dn.24xlarge#1 4    [0, 1, 2, 3]         41-80           40     1185.85      $31.21    
+2026-02-04 23:20:39,253 - INFO - NETWORK CONNECTIONS:
+2026-02-04 23:20:39,253 - INFO - --------------------------------------------------------------------------------
+2026-02-04 23:20:39,253 - INFO - Connection 1: p3dn.24xlarge#0 partition 0 (layers 1-40) -> p3dn.24xlarge#1 partition 1 (layers 41-80) [Throughput: 102400.00]
+2026-02-04 23:20:39,253 - INFO - ====================================================================================================
+2026-02-04 23:20:39,254 - INFO - Solution saved to /mnt/projects/LLM_placement_solver/eval_results/large/in2048-out512-bs32/eval_family-p3dn.24xlarge-pp2-tp4-20260204_231406/placement_metrics.json
+2026-02-04 23:20:39,255 - INFO - Solution CSV saved to /mnt/projects/LLM_placement_solver/eval_results/large/in2048-out512-bs32/eval_family-p3dn.24xlarge-pp2-tp4-20260204_231406/placement_metrics.csv
+2026-02-04 23:20:41,791 - INFO - Total solver runtime: 393 seconds
+
+
+
+
