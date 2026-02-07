@@ -1442,17 +1442,24 @@ class LLMPlacementSolverWithTP:
         
         sizes = set()
 
-        # Include all exact divisors (good for even splits like 8+8+8+8 for 32, 10+10+10 for 30)
-        for d in range(1, int(math.sqrt(total_layers)) + 1):
-            if total_layers % d == 0:
-                sizes.add(d)
-                sizes.add(total_layers // d)
+        # # Include all exact divisors (good for even splits like 8+8+8+8 for 32, 10+10+10 for 30)
+        # for d in range(1, int(math.sqrt(total_layers)) + 1):
+        #     if total_layers % d == 0:
+        #         sizes.add(d)
+        #         sizes.add(total_layers // d)
 
-        # Also include powers of two for non-divisible totals
-        power = 4
-        while power <= total_layers:
-            sizes.add(power)
-            power *= 2
+        # # Also include powers of two for non-divisible totals
+        # power = 4
+        # while power <= total_layers:
+        #     sizes.add(power)
+        #     power *= 2
+        
+        size = total_layers
+        while True:
+            sizes.add(size)
+            size = size // 2
+            if size < 8:
+                break
 
         sizes = sorted(sizes)
         
@@ -3407,7 +3414,145 @@ class LLMPlacementSolverWithTP:
         except Exception as e:
             logger.error(f"Optimization failed: {e}")
             return False
-    
+
+    def set_warm_start_from_homogeneous(self, homogeneous_solution: dict) -> bool:
+        """
+        Set MIP warm start values from a homogeneous solution.
+
+        This provides Gurobi with a known feasible solution to start from,
+        which can significantly accelerate the branch-and-bound search and
+        help prune inferior branches early.
+
+        Args:
+            homogeneous_solution: Solution dict from solve_homogeneous() containing
+                                  gpu_assignments, batch_size, cost_per_token, etc.
+
+        Returns:
+            bool: True if warm start was successfully set, False otherwise
+        """
+        if not hasattr(self, 'model') or self.model is None:
+            logger.error("Cannot set warm start: model not built yet")
+            return False
+
+        if not homogeneous_solution:
+            logger.warning("Empty homogeneous solution, skipping warm start")
+            return False
+
+        logger.info("="*80)
+        logger.info("SETTING MIP WARM START FROM HOMOGENEOUS SOLUTION")
+        logger.info("="*80)
+
+        gpu_assignments = homogeneous_solution.get('gpu_assignments', [])
+        batch_size = homogeneous_solution.get('batch_size')
+        cost_per_token = homogeneous_solution.get('cost_per_token', float('inf'))
+        cost_per_hour = homogeneous_solution.get('cost_per_hour', 0)
+        throughput = homogeneous_solution.get('throughput_tokens_per_sec', 0)
+
+        if not gpu_assignments or batch_size is None:
+            logger.warning("Homogeneous solution missing gpu_assignments or batch_size")
+            return False
+
+        logger.info(f"Homogeneous solution: {len(gpu_assignments)} stages, "
+                   f"batch_size={batch_size}, $/M tokens=${cost_per_token*1e6:.6f}")
+
+        # Initialize all variables to 0
+        for seg in self.x:
+            self.x[seg].Start = 0.0
+        for key in self.z:
+            self.z[key].Start = 0.0
+        for gpu_type in self.y:
+            self.y[gpu_type].Start = 0.0
+        for conn in self.e:
+            self.e[conn].Start = 0.0
+        for bs in self._get_batch_size_options():
+            self.b[bs].Start = 0.0
+
+        # Set batch size
+        if batch_size in self.b:
+            self.b[batch_size].Start = 1.0
+            logger.info(f"  Set batch_size={batch_size}")
+
+        # Match homogeneous assignments to MILP segments
+        # Segment tuple: (gpu_type, gpu_set, tp_degree, partition_id, start_layer, segment_size, batch_size)
+        matched_segments = []
+        used_instances = set()
+        used_partitions = set()
+
+        for assignment in gpu_assignments:
+            gpu_type = assignment['gpu_type']
+            partition_id = assignment.get('partition_id', 0)
+            tp_degree = assignment['tp_degree']
+            start_layer = assignment['start_layer']
+            segment_size = assignment['segment_size']
+            gpu_ids = tuple(sorted(assignment.get('gpu_ids', [])))
+
+            # Find matching segment in valid_segments
+            found = False
+            for seg in self.valid_segments:
+                seg_gpu_type, seg_gpu_set, seg_tp, seg_part, seg_start, seg_size, seg_bs = seg
+
+                # Match all components
+                if (seg_gpu_type == gpu_type and
+                    seg_tp == tp_degree and
+                    seg_part == partition_id and
+                    seg_start == start_layer and
+                    seg_size == segment_size and
+                    seg_bs == batch_size and
+                    tuple(sorted(seg_gpu_set)) == gpu_ids):
+
+                    # Set this segment as active
+                    self.x[seg].Start = 1.0
+                    matched_segments.append(seg)
+                    used_instances.add(gpu_type)
+                    used_partitions.add((gpu_type, tp_degree, partition_id))
+                    found = True
+                    logger.info(f"  Matched segment: {gpu_type} partition={partition_id} "
+                               f"layers={start_layer}-{start_layer+segment_size-1} tp={tp_degree}")
+                    break
+
+            if not found:
+                logger.warning(f"  Could not match assignment: {gpu_type} partition={partition_id} "
+                             f"layers={start_layer}-{start_layer+segment_size-1} tp={tp_degree}")
+
+        # Set partition usage (z variables)
+        for gpu_type, tp_degree, partition_id in used_partitions:
+            if (gpu_type, tp_degree, partition_id) in self.z:
+                self.z[gpu_type, tp_degree, partition_id].Start = 1.0
+
+        # Set instance usage (y variables)
+        for gpu_type in used_instances:
+            if gpu_type in self.y:
+                self.y[gpu_type].Start = 1.0
+
+        # Set network connections (e variables)
+        # Find connections between consecutive segments
+        for i in range(len(matched_segments) - 1):
+            seg1 = matched_segments[i]
+            seg2 = matched_segments[i + 1]
+            if (seg1, seg2) in self.e:
+                self.e[seg1, seg2].Start = 1.0
+                logger.info(f"  Set connection: stage {i} -> stage {i+1}")
+
+        # Set throughput and cost start values
+        if throughput > 0:
+            self.t.Start = throughput
+        if cost_per_hour > 0:
+            self.cost.Start = cost_per_hour
+
+        # Set cutoff to prune branches worse than homogeneous solution
+        # The objective is cost_per_token (minimization), so set upper bound
+        # We add a small margin to ensure the homogeneous solution is accepted
+        if cost_per_token < float('inf') and cost_per_token > 0:
+            cutoff_margin = 1.001  # Allow 0.1% margin
+            cutoff_value = cost_per_token * cutoff_margin
+            self.model.setParam('Cutoff', cutoff_value)
+            logger.info(f"  Set Cutoff={cutoff_value:.10f} (homogeneous={cost_per_token:.10f})")
+
+        logger.info(f"Warm start set: {len(matched_segments)}/{len(gpu_assignments)} segments matched")
+        logger.info("="*80)
+
+        return len(matched_segments) == len(gpu_assignments)
+
     def _extract_solution(self):
         """Extract solution from solved model"""
         # Compute metrics
@@ -4374,6 +4519,347 @@ class LLMPlacementSolverWithTP:
             
             logger.info(f"Solution CSV saved to {output_file}")
 
+    @staticmethod
+    def _get_instance_family(instance_name: str) -> str:
+        """Extract instance family from instance name (e.g., 'g6e.48xlarge#0' -> 'g6e.48xlarge')"""
+        if '#' in instance_name:
+            return instance_name.split('#')[0]
+        return instance_name
+
+    def solve_homogeneous(self) -> bool:
+        """
+        Solve for optimal homogeneous placement using fast enumeration.
+
+        Homogeneous placement constraints:
+        1. All PP stages use the same instance family (e.g., all g6e.48xlarge)
+        2. All PP stages have the same number of layers
+        3. All PP stages use the same TP degree
+
+        This method bypasses MILP and directly enumerates all valid configurations,
+        which is much faster than the full heterogeneous solver.
+
+        Returns:
+            bool: True if a valid solution was found, False otherwise
+        """
+        logger.info("="*80)
+        logger.info("HOMOGENEOUS PLACEMENT SOLVER")
+        logger.info("="*80)
+        logger.info("Constraints: same instance family, same layers/stage, same TP degree")
+
+        total_layers = self.config.num_decoder_layers
+        max_pp_stages = self.config.max_pipeline_stages
+        batch_size_options = self._get_batch_size_options()
+
+        # Group instances by family
+        instance_families: Dict[str, List[str]] = {}
+        for instance_name in self.gpu_types.keys():
+            family = self._get_instance_family(instance_name)
+            if family not in instance_families:
+                instance_families[family] = []
+            instance_families[family].append(instance_name)
+
+        logger.info(f"Instance families found: {list(instance_families.keys())}")
+        logger.info(f"Total layers: {total_layers}, Max PP stages: {max_pp_stages}")
+        logger.info(f"Batch size options: {batch_size_options}")
+
+        best_solution = None
+        best_cost_per_token = float('inf')
+        all_valid_configs = []
+
+        # Enumerate all valid homogeneous configurations
+        for family, instances in instance_families.items():
+            # Get instance properties (all instances in family have same specs)
+            sample_instance = instances[0]
+            gpu_obj = self.gpu_types[sample_instance]
+            gpus_per_instance = gpu_obj.count
+            instance_cost = gpu_obj.cost_per_hour
+            gpu_model = gpu_obj.gpu_model
+            num_instances_available = len(instances)
+
+            # Valid TP degrees for this instance type
+            valid_tp_degrees = [d for d in [1, 2, 4, 8]
+                               if d <= gpus_per_instance and gpus_per_instance % d == 0]
+
+            for tp_degree in valid_tp_degrees:
+                # Calculate number of TP partitions per instance
+                partitions_per_instance = gpus_per_instance // tp_degree
+
+                for pp_stages in range(1, max_pp_stages + 1):
+                    # Check if layers divide evenly
+                    if total_layers % pp_stages != 0:
+                        continue
+                    layers_per_stage = total_layers // pp_stages
+
+                    # Calculate how many instances we need
+                    # Each instance can host (partitions_per_instance) PP stages
+                    # We need ceil(pp_stages / partitions_per_instance) instances
+                    instances_needed = math.ceil(pp_stages / partitions_per_instance)
+
+                    if instances_needed > num_instances_available:
+                        continue  # Not enough instances of this family
+
+                    # Check memory constraints for each batch size
+                    for batch_size in batch_size_options:
+                        # Check if segment fits in memory
+                        max_seg_for_tp = self._compute_max_segment_size_for_tp(
+                            sample_instance, tp_degree, batch_size
+                        )
+                        if layers_per_stage > max_seg_for_tp:
+                            continue  # Doesn't fit in memory
+
+                        # Check minimum memory utilization
+                        min_seg_for_tp = self._compute_min_segment_size_for_tp(
+                            sample_instance, tp_degree, batch_size
+                        )
+                        if layers_per_stage < min_seg_for_tp:
+                            continue  # Below minimum utilization threshold
+
+                        # Get NVLink bandwidth for this instance type
+                        nvlink_bw = self._get_representative_tp_bandwidth(sample_instance, tp_degree)
+
+                        # Calculate per-stage throughput
+                        stage_throughput = ThroughputFunctions.gpu_throughput_with_tp(
+                            gpu_model, self.config.sequence_length, batch_size,
+                            layers_per_stage, self.config.d_model,
+                            self.config.bytes_per_element, tp_degree,
+                            self.config.d_hidden, nvlink_bw,
+                            debug=False, phase=self.config.workload_phase,
+                            num_attention_heads=self.config.num_attention_heads,
+                            num_kv_heads=self.config.num_kv_heads
+                        )
+
+                        if stage_throughput <= 0:
+                            continue
+
+                        # Apply pipeline bubble efficiency
+                        num_micro_batches = max(1, batch_size // self.config.micro_batch_size)
+                        pipeline_efficiency = num_micro_batches / (num_micro_batches + pp_stages - 1)
+
+                        # Apply real-world efficiency factor
+                        real_world_efficiency = self.config.real_world_efficiency
+
+                        effective_throughput = stage_throughput * pipeline_efficiency * real_world_efficiency
+
+                        # Calculate cost
+                        # Cost = instances_needed * instance_cost_per_hour
+                        total_cost_per_hour = instances_needed * instance_cost
+
+                        # Calculate $/token
+                        cost_per_token = total_cost_per_hour / (effective_throughput * 3600)
+                        cost_per_million = cost_per_token * 1_000_000
+
+                        config_info = {
+                            'family': family,
+                            'instances_used': instances[:instances_needed],
+                            'num_instances': instances_needed,
+                            'tp_degree': tp_degree,
+                            'pp_stages': pp_stages,
+                            'layers_per_stage': layers_per_stage,
+                            'batch_size': batch_size,
+                            'stage_throughput': stage_throughput,
+                            'pipeline_efficiency': pipeline_efficiency,
+                            'effective_throughput': effective_throughput,
+                            'cost_per_hour': total_cost_per_hour,
+                            'cost_per_token': cost_per_token,
+                            'cost_per_million': cost_per_million,
+                            'gpu_model': gpu_model,
+                            'gpus_per_instance': gpus_per_instance,
+                        }
+
+                        all_valid_configs.append(config_info)
+
+                        if cost_per_token < best_cost_per_token:
+                            best_cost_per_token = cost_per_token
+                            best_solution = config_info
+
+        logger.info(f"Enumerated {len(all_valid_configs)} valid homogeneous configurations")
+
+        if not best_solution:
+            logger.error("No valid homogeneous placement found!")
+            return False
+
+        # Sort all configs by cost_per_token for reporting
+        all_valid_configs.sort(key=lambda x: x['cost_per_token'])
+
+        # Log top 10 configurations
+        logger.info("="*80)
+        logger.info("TOP 10 HOMOGENEOUS CONFIGURATIONS (by $/M tokens)")
+        logger.info("="*80)
+        logger.info(f"{'Rank':<5} {'Family':<20} {'PP':<4} {'TP':<4} {'Layers/Stage':<13} {'BS':<5} "
+                   f"{'Throughput':<12} {'$/hour':<10} {'$/M tokens':<12}")
+        logger.info("-"*100)
+
+        for i, cfg in enumerate(all_valid_configs[:10], 1):
+            logger.info(f"{i:<5} {cfg['family']:<20} {cfg['pp_stages']:<4} {cfg['tp_degree']:<4} "
+                       f"{cfg['layers_per_stage']:<13} {cfg['batch_size']:<5} "
+                       f"{cfg['effective_throughput']:<12.0f} ${cfg['cost_per_hour']:<9.2f} "
+                       f"${cfg['cost_per_million']:<11.6f}")
+
+        # Build solution in the standard format
+        best = best_solution
+
+        # Create GPU assignments
+        gpu_assignments = []
+        start_layer = 1
+        instances_to_use = best['instances_used']
+        stages_assigned = 0
+
+        for inst_idx, instance_name in enumerate(instances_to_use):
+            gpu_obj = self.gpu_types[instance_name]
+            partitions_per_instance = gpu_obj.count // best['tp_degree']
+
+            for partition_idx in range(partitions_per_instance):
+                if stages_assigned >= best['pp_stages']:
+                    break
+
+                # GPU IDs for this partition
+                start_gpu = partition_idx * best['tp_degree']
+                gpu_ids = list(range(start_gpu, start_gpu + best['tp_degree']))
+                global_gpu_ids = [self._get_global_gpu_id(instance_name, gid) for gid in gpu_ids]
+
+                end_layer = start_layer + best['layers_per_stage'] - 1
+
+                assignment = {
+                    'gpu_type': instance_name,
+                    'partition_id': partition_idx,
+                    'gpu_ids': gpu_ids,
+                    'global_gpu_ids': global_gpu_ids,
+                    'tp_degree': best['tp_degree'],
+                    'start_layer': start_layer,
+                    'end_layer': end_layer,
+                    'segment_size': best['layers_per_stage'],
+                    'throughput': best['stage_throughput']
+                }
+                gpu_assignments.append(assignment)
+
+                start_layer = end_layer + 1
+                stages_assigned += 1
+
+            if stages_assigned >= best['pp_stages']:
+                break
+
+        # Create network connections
+        network_connections = []
+        for i in range(len(gpu_assignments) - 1):
+            from_seg = gpu_assignments[i]
+            to_seg = gpu_assignments[i + 1]
+
+            # Calculate network throughput between stages
+            from_gpu = from_seg['global_gpu_ids'][0]
+            to_gpu = to_seg['global_gpu_ids'][0]
+
+            # Use pre-computed or estimate
+            tensor_size_gb = (best['batch_size'] * self.config.d_model *
+                             self.config.bytes_per_element) / (1024**3)
+            bw = self.network_bandwidth[from_gpu, to_gpu]
+            net_throughput = (bw / tensor_size_gb) * best['batch_size'] if tensor_size_gb > 0 else float('inf')
+
+            connection = {
+                'from_segment': {
+                    'gpu_type': from_seg['gpu_type'],
+                    'partition_id': from_seg['partition_id'],
+                    'start_layer': from_seg['start_layer'],
+                    'end_layer': from_seg['end_layer']
+                },
+                'to_segment': {
+                    'gpu_type': to_seg['gpu_type'],
+                    'partition_id': to_seg['partition_id'],
+                    'start_layer': to_seg['start_layer'],
+                    'end_layer': to_seg['end_layer']
+                },
+                'throughput': net_throughput
+            }
+            network_connections.append(connection)
+
+        # Calculate total runtime
+        total_runtime_hours = self.config.total_tokens_to_process / best['effective_throughput'] / 3600
+
+        # Build the solution object
+        self.solution = {
+            'objective_value': best['stage_throughput'],
+            'batch_size': best['batch_size'],
+            'throughput_tokens_per_sec': best['effective_throughput'],
+            'cost_per_hour': best['cost_per_hour'],
+            'cost_per_token': best['cost_per_token'],
+            'total_runtime_hours': total_runtime_hours,
+            'meets_cost_threshold': best['cost_per_token'] <= self.config.max_cost_per_token,
+            'tp_configuration': {inst: best['tp_degree'] for inst in best['instances_used']},
+            'gpu_assignments': gpu_assignments,
+            'network_connections': network_connections,
+            'solve_status': 2,  # Optimal
+            'num_pipeline_stages': best['pp_stages'],
+            'homogeneous_config': {
+                'family': best['family'],
+                'tp_degree': best['tp_degree'],
+                'pp_stages': best['pp_stages'],
+                'layers_per_stage': best['layers_per_stage'],
+                'instances_used': best['num_instances'],
+                'pipeline_efficiency': best['pipeline_efficiency'],
+            }
+        }
+
+        # Store all enumeration results for CSV export
+        # Build proper gpu_assignments with full instance names
+        def build_gpu_assignments_for_config(cfg):
+            assignments = []
+            instances_to_use = cfg['instances_used']
+            start_layer = 1
+            stages_assigned = 0
+            gpus_per_inst = cfg['gpus_per_instance']
+            partitions_per_inst = gpus_per_inst // cfg['tp_degree']
+
+            for inst_name in instances_to_use:
+                for part_idx in range(partitions_per_inst):
+                    if stages_assigned >= cfg['pp_stages']:
+                        break
+                    end_layer = start_layer + cfg['layers_per_stage'] - 1
+                    assignments.append({
+                        'gpu_type': inst_name,
+                        'tp_degree': cfg['tp_degree'],
+                        'start_layer': start_layer,
+                        'end_layer': end_layer,
+                        'segment_size': cfg['layers_per_stage'],
+                        'gpu_ids': list(range(part_idx * cfg['tp_degree'],
+                                              (part_idx + 1) * cfg['tp_degree'])),
+                    })
+                    start_layer = end_layer + 1
+                    stages_assigned += 1
+                if stages_assigned >= cfg['pp_stages']:
+                    break
+            return assignments
+
+        self.all_enumeration_results = [
+            {
+                'budget': cfg['cost_per_hour'],
+                'throughput': cfg['effective_throughput'],
+                'cost': cfg['cost_per_hour'],
+                'cost_per_token': cfg['cost_per_token'],
+                'solution': {
+                    'batch_size': cfg['batch_size'],
+                    'num_pipeline_stages': cfg['pp_stages'],
+                    'gpu_assignments': build_gpu_assignments_for_config(cfg)
+                }
+            }
+            for cfg in all_valid_configs
+        ]
+
+        logger.info("="*80)
+        logger.info("OPTIMAL HOMOGENEOUS SOLUTION")
+        logger.info("="*80)
+        logger.info(f"Instance Family: {best['family']}")
+        logger.info(f"Instances Used: {best['num_instances']}")
+        logger.info(f"TP Degree: {best['tp_degree']}")
+        logger.info(f"PP Stages: {best['pp_stages']}")
+        logger.info(f"Layers per Stage: {best['layers_per_stage']}")
+        logger.info(f"Batch Size: {best['batch_size']}")
+        logger.info(f"Stage Throughput: {best['stage_throughput']:.0f} tokens/sec")
+        logger.info(f"Pipeline Efficiency: {best['pipeline_efficiency']:.1%}")
+        logger.info(f"Effective Throughput: {best['effective_throughput']:.0f} tokens/sec")
+        logger.info(f"Cost: ${best['cost_per_hour']:.2f}/hour")
+        logger.info(f"$/M tokens: ${best['cost_per_million']:.6f}")
+
+        return True
+
 
 def filter_tp_configurations_by_hierarchy(gpu_types: Dict[str, GPUType], 
                                           tp_configs: List[Dict[str, int]]) -> List[Dict[str, int]]:
@@ -4619,7 +5105,19 @@ def main():
                        help='TP degree to use for all PP stages in eval mode')
     parser.add_argument('--eval-pp-stages', type=int,
                        help='Number of PP stages in eval mode')
-    
+
+    # Homogeneous placement mode
+    parser.add_argument('--homogeneous', type=int, default=0, choices=[0, 1],
+                       help='Restrict to homogeneous placement: same instance family, '
+                            'same layer count per stage, and same TP degree across all PP stages. '
+                            'This bypasses MILP and uses fast enumeration.')
+
+    # Warm start heterogeneous MILP with homogeneous solution
+    parser.add_argument('--warm-start-homogeneous', type=int, default=0, choices=[0, 1],
+                       help='Run homogeneous solver first and use its solution as MIP warm start '
+                            'for heterogeneous MILP. This provides a known good starting point and '
+                            'sets a cutoff bound to prune inferior branches. Only used when --homogeneous=0.')
+
     args = parser.parse_args()
     
     if args.verbose:
@@ -4653,6 +5151,10 @@ def main():
 
         if not (args.evaluate_throughput or args.evaluate_placement) and not args.output_dir:
             raise ValueError("Solver mode requires --output-dir")
+
+        # Create output directory if it doesn't exist
+        if args.output_dir:
+            os.makedirs(args.output_dir, exist_ok=True)
         
         if args.evaluate_throughput:
             if not args.output_dir and not args.eval_output_root:
@@ -4826,6 +5328,36 @@ def main():
                 logger.error(f"Eval placement infeasible: {detailed_error}")
             return 0
 
+        if args.homogeneous == 1:
+            # Homogeneous placement mode - bypasses MILP, uses fast enumeration
+            logger.info("Using HOMOGENEOUS mode (fast enumeration, no MILP)")
+
+            # Create solver with skip_gurobi=True since we don't need MILP
+            solver = LLMPlacementSolverWithTP(
+                args.config_dir,
+                tp_configuration=None,
+                **solver_kwargs,
+                skip_gurobi=True
+            )
+
+            success = solver.solve_homogeneous()
+
+            if success:
+                solver.print_solution()
+                output_file = os.path.join(args.output_dir, 'solution_homogeneous.json')
+                solver.save_solution(output_file)
+
+                # Also save CSV summary
+                csv_file = os.path.join(args.output_dir, 'solution_summary.csv')
+                solver.save_solution_csv(csv_file)
+            else:
+                logger.error("Failed to find valid homogeneous placement")
+                return 1
+
+            end_time = time.time()
+            logger.info(f"Total time: {end_time - start_time:.0f} seconds")
+            return 0
+
         if args.search_all_tp:
             # Search all TP configurations
             best_solution, best_tp_config = solve_all_tp_configurations(
@@ -4855,24 +5387,63 @@ def main():
                 return 1
         
         else:
-            # Single TP configuration
+            # Single TP configuration (heterogeneous MILP)
             tp_config = None
             if args.tp_config:
                 tp_config = json.loads(args.tp_config)
-            
+
+            # Optionally run homogeneous solver first for warm start
+            homogeneous_solution = None
+            if args.warm_start_homogeneous == 1:
+                logger.info("="*80)
+                logger.info("PHASE 1: Running homogeneous solver for MIP warm start")
+                logger.info("="*80)
+
+                # Create a separate solver for homogeneous (with skip_gurobi=True)
+                homogeneous_solver = LLMPlacementSolverWithTP(
+                    args.config_dir,
+                    tp_configuration=None,
+                    **solver_kwargs,
+                    skip_gurobi=True
+                )
+
+                if homogeneous_solver.solve_homogeneous():
+                    homogeneous_solution = homogeneous_solver.solution
+                    logger.info(f"Homogeneous baseline: ${homogeneous_solution['cost_per_token']*1e6:.6f}/M tokens, "
+                               f"{homogeneous_solution['throughput_tokens_per_sec']:.0f} tokens/sec")
+
+                    # Save homogeneous solution for reference
+                    homo_output = os.path.join(args.output_dir, 'solution_homogeneous_warmstart.json')
+                    homogeneous_solver.save_solution(homo_output)
+                    logger.info(f"Homogeneous baseline saved to {homo_output}")
+                else:
+                    logger.warning("Homogeneous solver failed, proceeding without warm start")
+
+                logger.info("="*80)
+                logger.info("PHASE 2: Running heterogeneous MILP with warm start")
+                logger.info("="*80)
+
             solver = LLMPlacementSolverWithTP(
                 args.config_dir,
                 tp_configuration=tp_config,
                 **solver_kwargs
             )
-            
+
             # Override cost weight if specified
             if args.cost_weight is not None:
                 logger.info(f"Overriding cost_throughput_weight: {solver.config.cost_throughput_weight} -> {args.cost_weight}")
                 solver.config.cost_throughput_weight = args.cost_weight
-            
+
             solver.build_model()
-            
+
+            # Set warm start from homogeneous solution if available
+            if homogeneous_solution is not None:
+                warm_start_success = solver.set_warm_start_from_homogeneous(homogeneous_solution)
+                if warm_start_success:
+                    logger.info("MIP warm start successfully set from homogeneous solution")
+                else:
+                    logger.warning("Could not fully set MIP warm start (some segments not matched)")
+
             # Choose optimization method
             if args.method == 'weighted':
                 logger.info("Using WEIGHTED method (fast, approximate)")
@@ -4880,15 +5451,33 @@ def main():
             elif args.method == 'enumeration':
                 logger.info("Using ENUMERATION method (slow, guaranteed optimal)")
                 success = solver.solve_optimal_cost_per_token()
-            
+
             if success:
                 solver.print_solution()
                 output_file = os.path.join(args.output_dir, 'solution_with_tp.json')
                 solver.save_solution(output_file)
-                
+
                 # Also save CSV summary
                 csv_file = os.path.join(args.output_dir, 'solution_summary.csv')
                 solver.save_solution_csv(csv_file)
+
+                # Log comparison with homogeneous baseline if available
+                if homogeneous_solution is not None:
+                    homo_cost = homogeneous_solution['cost_per_token'] * 1e6
+                    hetero_cost = solver.solution['cost_per_token'] * 1e6
+                    improvement = (homo_cost - hetero_cost) / homo_cost * 100 if homo_cost > 0 else 0
+
+                    logger.info("="*80)
+                    logger.info("COMPARISON: Homogeneous vs Heterogeneous")
+                    logger.info("="*80)
+                    logger.info(f"Homogeneous: ${homo_cost:.6f}/M tokens, "
+                               f"{homogeneous_solution['throughput_tokens_per_sec']:.0f} tokens/sec")
+                    logger.info(f"Heterogeneous: ${hetero_cost:.6f}/M tokens, "
+                               f"{solver.solution['throughput_tokens_per_sec']:.0f} tokens/sec")
+                    logger.info(f"Improvement: {improvement:.2f}% cost reduction")
+                    if improvement < 0:
+                        logger.warning("Heterogeneous solver found WORSE solution than homogeneous baseline!")
+                    logger.info("="*80)
             else:
                 logger.error("Failed to find optimal solution")
                 return 1

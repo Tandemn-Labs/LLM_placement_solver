@@ -77,16 +77,32 @@ def parse_pcie_bw_gbps(value: str) -> float | None:
 def parse_external_bw_gbps(value: str) -> float:
     """
     Parse external network bandwidth.
-    Returns Gbps. Requires a concrete numeric value.
+    Returns Gbps. Handles numeric values and qualitative descriptions.
     """
-    value = str(value)
+    value = str(value).strip()
     if not value or value == "nan":
         raise ValueError("Missing External Network Bandwidth")
 
+    # Try to parse numeric format like "400 Gbps"
     match = re.search(r"([\d.]+)\s*Gbps", value)
-    if not match:
-        raise ValueError(f"Unrecognized external bandwidth format: {value}")
-    return float(match.group(1))
+    if match:
+        return float(match.group(1))
+
+    # Handle qualitative descriptions with reasonable defaults
+    qualitative_defaults = {
+        "high": 25.0,      # Older instances like p2
+        "low": 5.0,
+        "moderate": 10.0,
+        "up to 10": 10.0,
+        "up to 25": 25.0,
+    }
+
+    value_lower = value.lower()
+    for key, default_bw in qualitative_defaults.items():
+        if key in value_lower:
+            return default_bw
+
+    raise ValueError(f"Unrecognized external bandwidth format: {value}")
 
 
 def main() -> int:

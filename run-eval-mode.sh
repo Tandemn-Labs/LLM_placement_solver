@@ -23,7 +23,7 @@ workload_phase_list=("aggregated")
 
 # Input/output token length pairs: "input output"
 # io_length_pairs=("1024 256" "2048 512" "4096 1024" "8192 2048" "16384 4096")
-io_length_pairs=("2048 512")
+io_length_pairs=("8192 2048")
 
 # Batch size pairs: "min max" (use min=max for fixed batch)
 batch_size_pairs=("32 32")

@@ -1,0 +1,504 @@
+2026-02-06 20:41:59,393 - INFO - Using HOMOGENEOUS mode (fast enumeration, no MILP)
+2026-02-06 20:41:59,406 - INFO -   Instance p4de.24xlarge#0: 8×A100, 80GB, $40.96/instance-hour (from cloud (AWS))
+2026-02-06 20:41:59,406 - INFO -   Instance p3dn.24xlarge#0: 8×V100, 32GB, $31.21/instance-hour (from cloud (AWS))
+2026-02-06 20:41:59,406 - INFO -   Instance p3dn.24xlarge#1: 8×V100, 32GB, $31.21/instance-hour (from cloud (AWS))
+2026-02-06 20:41:59,406 - INFO -   Instance p3dn.24xlarge#2: 8×V100, 32GB, $31.21/instance-hour (from cloud (AWS))
+2026-02-06 20:41:59,406 - INFO -   Instance p3dn.24xlarge#3: 8×V100, 32GB, $31.21/instance-hour (from cloud (AWS))
+2026-02-06 20:41:59,406 - INFO -   Instance g6e.48xlarge#0: 8×L40S, 48GB, $27.39/instance-hour (from cloud (AWS))
+2026-02-06 20:41:59,406 - INFO -   Instance g6e.48xlarge#1: 8×L40S, 48GB, $27.39/instance-hour (from cloud (AWS))
+2026-02-06 20:41:59,406 - INFO -   Instance g6e.48xlarge#2: 8×L40S, 48GB, $27.39/instance-hour (from cloud (AWS))
+2026-02-06 20:41:59,407 - INFO -   Instance g6e.48xlarge#3: 8×L40S, 48GB, $27.39/instance-hour (from cloud (AWS))
+2026-02-06 20:41:59,407 - INFO -   Instance g6e.24xlarge#0: 4×L40S, 48GB, $13.70/instance-hour (from cloud (AWS))
+2026-02-06 20:41:59,407 - INFO -   Instance g6e.24xlarge#1: 4×L40S, 48GB, $13.70/instance-hour (from cloud (AWS))
+2026-02-06 20:41:59,407 - INFO -   Instance g6e.24xlarge#2: 4×L40S, 48GB, $13.70/instance-hour (from cloud (AWS))
+2026-02-06 20:41:59,407 - INFO -   Instance g6e.24xlarge#3: 4×L40S, 48GB, $13.70/instance-hour (from cloud (AWS))
+2026-02-06 20:41:59,407 - INFO -   Instance g6e.12xlarge#0: 2×L40S, 48GB, $6.85/instance-hour (from cloud (AWS))
+2026-02-06 20:41:59,407 - INFO -   Instance g6e.12xlarge#1: 2×L40S, 48GB, $6.85/instance-hour (from cloud (AWS))
+2026-02-06 20:41:59,407 - INFO -   Instance g6e.12xlarge#2: 2×L40S, 48GB, $6.85/instance-hour (from cloud (AWS))
+2026-02-06 20:41:59,407 - INFO -   Instance g6e.12xlarge#3: 2×L40S, 48GB, $6.85/instance-hour (from cloud (AWS))
+2026-02-06 20:41:59,407 - INFO -   Instance g6e.4xlarge#0: 1×L40S, 48GB, $3.42/instance-hour (from cloud (AWS))
+2026-02-06 20:41:59,407 - INFO -   Instance g6e.4xlarge#1: 1×L40S, 48GB, $3.42/instance-hour (from cloud (AWS))
+2026-02-06 20:41:59,407 - INFO -   Instance g6e.4xlarge#2: 1×L40S, 48GB, $3.42/instance-hour (from cloud (AWS))
+2026-02-06 20:41:59,407 - INFO -   Instance g6e.4xlarge#3: 1×L40S, 48GB, $3.42/instance-hour (from cloud (AWS))
+2026-02-06 20:41:59,407 - INFO -   Instance g5.48xlarge#0: 8×A10, 24GB, $16.29/instance-hour (from cloud (AWS))
+2026-02-06 20:41:59,407 - INFO -   Instance g5.48xlarge#1: 8×A10, 24GB, $16.29/instance-hour (from cloud (AWS))
+2026-02-06 20:41:59,407 - INFO -   Instance g5.48xlarge#2: 8×A10, 24GB, $16.29/instance-hour (from cloud (AWS))
+2026-02-06 20:41:59,407 - INFO -   Instance g5.48xlarge#3: 8×A10, 24GB, $16.29/instance-hour (from cloud (AWS))
+2026-02-06 20:41:59,408 - INFO -   Instance g5.24xlarge#0: 4×A10, 24GB, $8.14/instance-hour (from cloud (AWS))
+2026-02-06 20:41:59,408 - INFO -   Instance g5.24xlarge#1: 4×A10, 24GB, $8.14/instance-hour (from cloud (AWS))
+2026-02-06 20:41:59,408 - INFO -   Instance g5.24xlarge#2: 4×A10, 24GB, $8.14/instance-hour (from cloud (AWS))
+2026-02-06 20:41:59,408 - INFO -   Instance g5.24xlarge#3: 4×A10, 24GB, $8.14/instance-hour (from cloud (AWS))
+2026-02-06 20:41:59,408 - INFO -   Instance g5.12xlarge#0: 4×A10, 24GB, $5.67/instance-hour (from cloud (AWS))
+2026-02-06 20:41:59,408 - INFO -   Instance g5.12xlarge#1: 4×A10, 24GB, $5.67/instance-hour (from cloud (AWS))
+2026-02-06 20:41:59,408 - INFO -   Instance g5.12xlarge#2: 4×A10, 24GB, $5.67/instance-hour (from cloud (AWS))
+2026-02-06 20:41:59,408 - INFO -   Instance g5.12xlarge#3: 4×A10, 24GB, $5.67/instance-hour (from cloud (AWS))
+2026-02-06 20:41:59,408 - INFO -   Instance g5.4xlarge#0: 1×A10, 24GB, $1.62/instance-hour (from cloud (AWS))
+2026-02-06 20:41:59,408 - INFO -   Instance g5.4xlarge#1: 1×A10, 24GB, $1.62/instance-hour (from cloud (AWS))
+2026-02-06 20:41:59,408 - INFO -   Instance g5.4xlarge#2: 1×A10, 24GB, $1.62/instance-hour (from cloud (AWS))
+2026-02-06 20:41:59,408 - INFO -   Instance g5.4xlarge#3: 1×A10, 24GB, $1.62/instance-hour (from cloud (AWS))
+2026-02-06 20:41:59,422 - INFO - Loaded network bandwidth from /mnt/projects/LLM_placement_solver/config/network_bandwidth.csv
+2026-02-06 20:41:59,423 - INFO - Optimization priority: cost_first (weight=0.90)
+2026-02-06 20:41:59,423 - INFO - Workload phase: aggregated
+2026-02-06 20:41:59,423 - INFO - GPU p4de.24xlarge#0: max_tp=8, generated 15 allocations with unique partition IDs
+2026-02-06 20:41:59,423 - INFO - GPU p3dn.24xlarge#0: max_tp=8, generated 15 allocations with unique partition IDs
+2026-02-06 20:41:59,423 - INFO - GPU p3dn.24xlarge#1: max_tp=8, generated 15 allocations with unique partition IDs
+2026-02-06 20:41:59,423 - INFO - GPU p3dn.24xlarge#2: max_tp=8, generated 15 allocations with unique partition IDs
+2026-02-06 20:41:59,423 - INFO - GPU p3dn.24xlarge#3: max_tp=8, generated 15 allocations with unique partition IDs
+2026-02-06 20:41:59,423 - INFO - GPU g6e.48xlarge#0: max_tp=8, generated 15 allocations with unique partition IDs
+2026-02-06 20:41:59,423 - INFO - GPU g6e.48xlarge#1: max_tp=8, generated 15 allocations with unique partition IDs
+2026-02-06 20:41:59,424 - INFO - GPU g6e.48xlarge#2: max_tp=8, generated 15 allocations with unique partition IDs
+2026-02-06 20:41:59,424 - INFO - GPU g6e.48xlarge#3: max_tp=8, generated 15 allocations with unique partition IDs
+2026-02-06 20:41:59,424 - INFO - GPU g6e.24xlarge#0: max_tp=4, generated 7 allocations with unique partition IDs
+2026-02-06 20:41:59,424 - INFO - GPU g6e.24xlarge#1: max_tp=4, generated 7 allocations with unique partition IDs
+2026-02-06 20:41:59,424 - INFO - GPU g6e.24xlarge#2: max_tp=4, generated 7 allocations with unique partition IDs
+2026-02-06 20:41:59,424 - INFO - GPU g6e.24xlarge#3: max_tp=4, generated 7 allocations with unique partition IDs
+2026-02-06 20:41:59,424 - INFO - GPU g6e.12xlarge#0: max_tp=2, generated 3 allocations with unique partition IDs
+2026-02-06 20:41:59,424 - INFO - GPU g6e.12xlarge#1: max_tp=2, generated 3 allocations with unique partition IDs
+2026-02-06 20:41:59,424 - INFO - GPU g6e.12xlarge#2: max_tp=2, generated 3 allocations with unique partition IDs
+2026-02-06 20:41:59,424 - INFO - GPU g6e.12xlarge#3: max_tp=2, generated 3 allocations with unique partition IDs
+2026-02-06 20:41:59,424 - INFO - GPU g6e.4xlarge#0: max_tp=1, generated 1 allocations with unique partition IDs
+2026-02-06 20:41:59,424 - INFO - GPU g6e.4xlarge#1: max_tp=1, generated 1 allocations with unique partition IDs
+2026-02-06 20:41:59,424 - INFO - GPU g6e.4xlarge#2: max_tp=1, generated 1 allocations with unique partition IDs
+2026-02-06 20:41:59,424 - INFO - GPU g6e.4xlarge#3: max_tp=1, generated 1 allocations with unique partition IDs
+2026-02-06 20:41:59,424 - INFO - GPU g5.48xlarge#0: max_tp=8, generated 15 allocations with unique partition IDs
+2026-02-06 20:41:59,424 - INFO - GPU g5.48xlarge#1: max_tp=8, generated 15 allocations with unique partition IDs
+2026-02-06 20:41:59,424 - INFO - GPU g5.48xlarge#2: max_tp=8, generated 15 allocations with unique partition IDs
+2026-02-06 20:41:59,424 - INFO - GPU g5.48xlarge#3: max_tp=8, generated 15 allocations with unique partition IDs
+2026-02-06 20:41:59,424 - INFO - GPU g5.24xlarge#0: max_tp=4, generated 7 allocations with unique partition IDs
+2026-02-06 20:41:59,424 - INFO - GPU g5.24xlarge#1: max_tp=4, generated 7 allocations with unique partition IDs
+2026-02-06 20:41:59,424 - INFO - GPU g5.24xlarge#2: max_tp=4, generated 7 allocations with unique partition IDs
+2026-02-06 20:41:59,424 - INFO - GPU g5.24xlarge#3: max_tp=4, generated 7 allocations with unique partition IDs
+2026-02-06 20:41:59,424 - INFO - GPU g5.12xlarge#0: max_tp=4, generated 7 allocations with unique partition IDs
+2026-02-06 20:41:59,425 - INFO - GPU g5.12xlarge#1: max_tp=4, generated 7 allocations with unique partition IDs
+2026-02-06 20:41:59,425 - INFO - GPU g5.12xlarge#2: max_tp=4, generated 7 allocations with unique partition IDs
+2026-02-06 20:41:59,425 - INFO - GPU g5.12xlarge#3: max_tp=4, generated 7 allocations with unique partition IDs
+2026-02-06 20:41:59,425 - INFO - GPU g5.4xlarge#0: max_tp=1, generated 1 allocations with unique partition IDs
+2026-02-06 20:41:59,425 - INFO - GPU g5.4xlarge#1: max_tp=1, generated 1 allocations with unique partition IDs
+2026-02-06 20:41:59,425 - INFO - GPU g5.4xlarge#2: max_tp=1, generated 1 allocations with unique partition IDs
+2026-02-06 20:41:59,425 - INFO - GPU g5.4xlarge#3: max_tp=1, generated 1 allocations with unique partition IDs
+2026-02-06 20:41:59,425 - INFO - GPU p4de.24xlarge#0 with TP=8: max 80 layers
+2026-02-06 20:41:59,425 - INFO - GPU p3dn.24xlarge#0 with TP=8: max 73 layers
+2026-02-06 20:41:59,425 - INFO - GPU p3dn.24xlarge#1 with TP=8: max 73 layers
+2026-02-06 20:41:59,425 - INFO - GPU p3dn.24xlarge#2 with TP=8: max 73 layers
+2026-02-06 20:41:59,425 - INFO - GPU p3dn.24xlarge#3 with TP=8: max 73 layers
+2026-02-06 20:41:59,425 - INFO - GPU g6e.48xlarge#0 with TP=8: max 80 layers
+2026-02-06 20:41:59,425 - INFO - GPU g6e.48xlarge#1 with TP=8: max 80 layers
+2026-02-06 20:41:59,425 - INFO - GPU g6e.48xlarge#2 with TP=8: max 80 layers
+2026-02-06 20:41:59,425 - INFO - GPU g6e.48xlarge#3 with TP=8: max 80 layers
+2026-02-06 20:41:59,425 - INFO - GPU g6e.24xlarge#0 with TP=4: max 55 layers
+2026-02-06 20:41:59,425 - INFO - GPU g6e.24xlarge#1 with TP=4: max 55 layers
+2026-02-06 20:41:59,425 - INFO - GPU g6e.24xlarge#2 with TP=4: max 55 layers
+2026-02-06 20:41:59,425 - INFO - GPU g6e.24xlarge#3 with TP=4: max 55 layers
+2026-02-06 20:41:59,425 - INFO - GPU g6e.12xlarge#0 with TP=2: max 23 layers
+2026-02-06 20:41:59,425 - INFO - GPU g6e.12xlarge#1 with TP=2: max 23 layers
+2026-02-06 20:41:59,425 - INFO - GPU g6e.12xlarge#2 with TP=2: max 23 layers
+2026-02-06 20:41:59,426 - INFO - GPU g6e.12xlarge#3 with TP=2: max 23 layers
+2026-02-06 20:41:59,426 - INFO - GPU g6e.4xlarge#0 with TP=1: max 7 layers
+2026-02-06 20:41:59,426 - INFO - GPU g6e.4xlarge#1 with TP=1: max 7 layers
+2026-02-06 20:41:59,426 - INFO - GPU g6e.4xlarge#2 with TP=1: max 7 layers
+2026-02-06 20:41:59,426 - INFO - GPU g6e.4xlarge#3 with TP=1: max 7 layers
+2026-02-06 20:41:59,426 - INFO - GPU g5.48xlarge#0 with TP=8: max 51 layers
+2026-02-06 20:41:59,426 - INFO - GPU g5.48xlarge#1 with TP=8: max 51 layers
+2026-02-06 20:41:59,426 - INFO - GPU g5.48xlarge#2 with TP=8: max 51 layers
+2026-02-06 20:41:59,426 - INFO - GPU g5.48xlarge#3 with TP=8: max 51 layers
+2026-02-06 20:41:59,426 - INFO - GPU g5.24xlarge#0 with TP=4: max 23 layers
+2026-02-06 20:41:59,426 - INFO - GPU g5.24xlarge#1 with TP=4: max 23 layers
+2026-02-06 20:41:59,426 - INFO - GPU g5.24xlarge#2 with TP=4: max 23 layers
+2026-02-06 20:41:59,426 - INFO - GPU g5.24xlarge#3 with TP=4: max 23 layers
+2026-02-06 20:41:59,426 - INFO - GPU g5.12xlarge#0 with TP=4: max 23 layers
+2026-02-06 20:41:59,426 - INFO - GPU g5.12xlarge#1 with TP=4: max 23 layers
+2026-02-06 20:41:59,426 - INFO - GPU g5.12xlarge#2 with TP=4: max 23 layers
+2026-02-06 20:41:59,426 - INFO - GPU g5.12xlarge#3 with TP=4: max 23 layers
+2026-02-06 20:41:59,426 - INFO - GPU g5.4xlarge#0 with TP=1: max 1 layers
+2026-02-06 20:41:59,426 - INFO - GPU g5.4xlarge#1 with TP=1: max 1 layers
+2026-02-06 20:41:59,426 - INFO - GPU g5.4xlarge#2 with TP=1: max 1 layers
+2026-02-06 20:41:59,426 - INFO - GPU g5.4xlarge#3 with TP=1: max 1 layers
+2026-02-06 20:41:59,426 - INFO - GPU p4de.24xlarge#0 with TP=8: min 10 layers (for 10% utilization)
+2026-02-06 20:41:59,426 - INFO - GPU p3dn.24xlarge#0 with TP=8: min 1 layers (for 10% utilization)
+2026-02-06 20:41:59,427 - INFO - GPU p3dn.24xlarge#1 with TP=8: min 1 layers (for 10% utilization)
+2026-02-06 20:41:59,427 - INFO - GPU p3dn.24xlarge#2 with TP=8: min 1 layers (for 10% utilization)
+2026-02-06 20:41:59,427 - INFO - GPU p3dn.24xlarge#3 with TP=8: min 1 layers (for 10% utilization)
+2026-02-06 20:41:59,427 - INFO - GPU g6e.48xlarge#0 with TP=8: min 1 layers (for 10% utilization)
+2026-02-06 20:41:59,427 - INFO - GPU g6e.48xlarge#1 with TP=8: min 1 layers (for 10% utilization)
+2026-02-06 20:41:59,427 - INFO - GPU g6e.48xlarge#2 with TP=8: min 1 layers (for 10% utilization)
+2026-02-06 20:41:59,427 - INFO - GPU g6e.48xlarge#3 with TP=8: min 1 layers (for 10% utilization)
+2026-02-06 20:41:59,427 - INFO - GPU g6e.24xlarge#0 with TP=4: min 1 layers (for 10% utilization)
+2026-02-06 20:41:59,427 - INFO - GPU g6e.24xlarge#1 with TP=4: min 1 layers (for 10% utilization)
+2026-02-06 20:41:59,427 - INFO - GPU g6e.24xlarge#2 with TP=4: min 1 layers (for 10% utilization)
+2026-02-06 20:41:59,427 - INFO - GPU g6e.24xlarge#3 with TP=4: min 1 layers (for 10% utilization)
+2026-02-06 20:41:59,427 - INFO - GPU g6e.12xlarge#0 with TP=2: min 1 layers (for 10% utilization)
+2026-02-06 20:41:59,427 - INFO - GPU g6e.12xlarge#1 with TP=2: min 1 layers (for 10% utilization)
+2026-02-06 20:41:59,427 - INFO - GPU g6e.12xlarge#2 with TP=2: min 1 layers (for 10% utilization)
+2026-02-06 20:41:59,427 - INFO - GPU g6e.12xlarge#3 with TP=2: min 1 layers (for 10% utilization)
+2026-02-06 20:41:59,427 - INFO - GPU g6e.4xlarge#0 with TP=1: min 1 layers (for 10% utilization)
+2026-02-06 20:41:59,427 - INFO - GPU g6e.4xlarge#1 with TP=1: min 1 layers (for 10% utilization)
+2026-02-06 20:41:59,427 - INFO - GPU g6e.4xlarge#2 with TP=1: min 1 layers (for 10% utilization)
+2026-02-06 20:41:59,427 - INFO - GPU g6e.4xlarge#3 with TP=1: min 1 layers (for 10% utilization)
+2026-02-06 20:41:59,427 - INFO - GPU g5.48xlarge#0 with TP=8: min 1 layers (for 10% utilization)
+2026-02-06 20:41:59,427 - INFO - GPU g5.48xlarge#1 with TP=8: min 1 layers (for 10% utilization)
+2026-02-06 20:41:59,427 - INFO - GPU g5.48xlarge#2 with TP=8: min 1 layers (for 10% utilization)
+2026-02-06 20:41:59,427 - INFO - GPU g5.48xlarge#3 with TP=8: min 1 layers (for 10% utilization)
+2026-02-06 20:41:59,428 - INFO - GPU g5.24xlarge#0 with TP=4: min 1 layers (for 10% utilization)
+2026-02-06 20:41:59,428 - INFO - GPU g5.24xlarge#1 with TP=4: min 1 layers (for 10% utilization)
+2026-02-06 20:41:59,428 - INFO - GPU g5.24xlarge#2 with TP=4: min 1 layers (for 10% utilization)
+2026-02-06 20:41:59,428 - INFO - GPU g5.24xlarge#3 with TP=4: min 1 layers (for 10% utilization)
+2026-02-06 20:41:59,428 - INFO - GPU g5.12xlarge#0 with TP=4: min 1 layers (for 10% utilization)
+2026-02-06 20:41:59,428 - INFO - GPU g5.12xlarge#1 with TP=4: min 1 layers (for 10% utilization)
+2026-02-06 20:41:59,428 - INFO - GPU g5.12xlarge#2 with TP=4: min 1 layers (for 10% utilization)
+2026-02-06 20:41:59,428 - INFO - GPU g5.12xlarge#3 with TP=4: min 1 layers (for 10% utilization)
+2026-02-06 20:41:59,428 - INFO - GPU g5.4xlarge#0 with TP=1: min 1 layers (for 10% utilization)
+2026-02-06 20:41:59,428 - INFO - GPU g5.4xlarge#1 with TP=1: min 1 layers (for 10% utilization)
+2026-02-06 20:41:59,428 - INFO - GPU g5.4xlarge#2 with TP=1: min 1 layers (for 10% utilization)
+2026-02-06 20:41:59,428 - INFO - GPU g5.4xlarge#3 with TP=1: min 1 layers (for 10% utilization)
+2026-02-06 20:41:59,428 - INFO - Quantized segment sizes (divisors + powers of two): [10, 20, 40, 80]
+2026-02-06 20:41:59,428 - INFO -   Using 4 sizes for performance
+2026-02-06 20:41:59,428 - INFO - Batch size options: [32]
+2026-02-06 20:41:59,428 - INFO - Batch size options: [32]
+2026-02-06 20:42:00,262 - INFO - Generated 13938 segments with variable TP and batch size
+2026-02-06 20:42:00,263 - INFO -   Batch size options: [32]
+2026-02-06 20:42:00,263 - INFO -   Segments per config increased by 1x
+2026-02-06 20:42:00,263 - INFO -   Pre-computed throughput for 13938 segments
+2026-02-06 20:42:00,263 - INFO -   ✓ Verified 10 random segments - all match!
+2026-02-06 20:42:02,088 - INFO - Generated 835886 connections (before bandwidth filter)
+2026-02-06 20:42:19,399 - INFO - Network bandwidth filter (bottom 10%): 835886 -> 835886 connections
+2026-02-06 20:42:38,261 - INFO - ================================================================================
+2026-02-06 20:42:38,262 - INFO - THROUGHPUT DEBUG SAMPLES (roofline + TP + comm)
+2026-02-06 20:42:38,262 - INFO - ================================================================================
+2026-02-06 20:42:38,262 - INFO - Batch size options: [32]
+2026-02-06 20:42:38,315 - INFO - Sample segment: g5.12xlarge#0 (model=A10) TP=4, batch=32, layers=10, nvlink_bw=32.00 GB/s
+2026-02-06 20:42:38,315 - INFO - ================================================================================
+2026-02-06 20:42:38,315 - INFO - DEBUG: gpu_throughput_with_tp called
+2026-02-06 20:42:38,316 - INFO -   GPU: A10, TP=4, batch=32, seq=8192, layers=10
+2026-02-06 20:42:38,316 - INFO -   d_model=8192, d_hidden=28672, nvlink_bw=32.0 GB/s
+2026-02-06 20:42:38,316 - INFO -   Arithmetic Intensity: 25994.11 FLOPs/byte
+2026-02-06 20:42:38,316 - INFO -   Ridge Point: 208.33 FLOPs/byte
+2026-02-06 20:42:38,316 - INFO -   Regime: COMPUTE_BOUND
+2026-02-06 20:42:38,316 - INFO -   FLOPs per layer: 1.30e+14
+2026-02-06 20:42:38,316 - INFO -   Total FLOPs (×10 layers): 1.30e+15
+2026-02-06 20:42:38,316 - INFO -   Total memory: 49.91 GB
+2026-02-06 20:42:38,316 - INFO -   Base time per batch: 23.0653 sec
+2026-02-06 20:42:38,316 - INFO -   Communication overhead ratio: 8.03%
+2026-02-06 20:42:38,316 - INFO -   TP efficiency: 90.00%
+2026-02-06 20:42:38,316 - INFO -   Time per batch (with TP penalty): 25.6281 sec
+2026-02-06 20:42:38,316 - INFO -   Comm time per layer: 201.3266 ms
+2026-02-06 20:42:38,316 - INFO -   Total comm time: 2.0133 sec
+2026-02-06 20:42:38,316 - INFO -   Total time: 27.6414 sec
+2026-02-06 20:42:38,316 - INFO -   Tokens per batch: 262,144
+2026-02-06 20:42:38,316 - INFO -   Base throughput: 9,484 tokens/sec
+2026-02-06 20:42:38,316 - INFO -   Batch efficiency: 1.00
+2026-02-06 20:42:38,316 - INFO -   FINAL per-stage throughput: 9,484 tokens/sec
+2026-02-06 20:42:38,316 - INFO -   (Pipeline efficiency applied at solver level)
+2026-02-06 20:42:38,316 - INFO - ================================================================================
+2026-02-06 20:42:38,316 - INFO - ================================================================================
+2026-02-06 20:42:38,316 - INFO - DEBUG: gpu_throughput_with_tp called
+2026-02-06 20:42:38,316 - INFO -   GPU: A10, TP=4, batch=32, seq=8192, layers=10
+2026-02-06 20:42:38,316 - INFO -   d_model=8192, d_hidden=28672, nvlink_bw=32.0 GB/s
+2026-02-06 20:42:38,316 - INFO -   Arithmetic Intensity: 22.73 FLOPs/byte
+2026-02-06 20:42:38,316 - INFO -   Ridge Point: 208.33 FLOPs/byte
+2026-02-06 20:42:38,316 - INFO -   Regime: MEMORY_BOUND
+2026-02-06 20:42:38,316 - INFO -   FLOPs per layer: 1.61e+10
+2026-02-06 20:42:38,317 - INFO -   Total FLOPs (×10 layers): 1.61e+11
+2026-02-06 20:42:38,317 - INFO -   Total memory: 7.30 GB
+2026-02-06 20:42:38,317 - INFO -   Base time per batch: 0.0270 sec
+2026-02-06 20:42:38,317 - INFO -   Communication overhead ratio: 0.90%
+2026-02-06 20:42:38,317 - INFO -   TP efficiency: 90.00%
+2026-02-06 20:42:38,317 - INFO -   Time per batch (with TP penalty): 0.0301 sec
+2026-02-06 20:42:38,317 - INFO -   Comm time per layer: 0.0246 ms
+2026-02-06 20:42:38,317 - INFO -   Total comm time: 0.0002 sec
+2026-02-06 20:42:38,317 - INFO -   Total time: 0.0303 sec
+2026-02-06 20:42:38,317 - INFO -   Tokens per batch: 32
+2026-02-06 20:42:38,317 - INFO -   Base throughput: 1,056 tokens/sec
+2026-02-06 20:42:38,317 - INFO -   Batch efficiency: 1.00
+2026-02-06 20:42:38,317 - INFO -   FINAL per-stage throughput: 1,056 tokens/sec
+2026-02-06 20:42:38,317 - INFO -   (Pipeline efficiency applied at solver level)
+2026-02-06 20:42:38,317 - INFO - ================================================================================
+2026-02-06 20:42:38,317 - INFO - AGGREGATED: prefill=9484 tok/s, decode=1056 tok/s, combined=2923 tok/s (interference=0.8)
+2026-02-06 20:42:38,317 - INFO - Sample segment: g6e.12xlarge#0 (model=L40S) TP=2, batch=32, layers=10, nvlink_bw=32.00 GB/s
+2026-02-06 20:42:38,317 - INFO - ================================================================================
+2026-02-06 20:42:38,317 - INFO - DEBUG: gpu_throughput_with_tp called
+2026-02-06 20:42:38,317 - INFO -   GPU: L40S, TP=2, batch=32, seq=8192, layers=10
+2026-02-06 20:42:38,317 - INFO -   d_model=8192, d_hidden=28672, nvlink_bw=32.0 GB/s
+2026-02-06 20:42:38,317 - INFO -   Arithmetic Intensity: 45623.88 FLOPs/byte
+2026-02-06 20:42:38,317 - INFO -   Ridge Point: 418.98 FLOPs/byte
+2026-02-06 20:42:38,317 - INFO -   Regime: COMPUTE_BOUND
+2026-02-06 20:42:38,317 - INFO -   FLOPs per layer: 2.59e+14
+2026-02-06 20:42:38,317 - INFO -   Total FLOPs (×10 layers): 2.59e+15
+2026-02-06 20:42:38,317 - INFO -   Total memory: 56.87 GB
+2026-02-06 20:42:38,317 - INFO -   Base time per batch: 12.3588 sec
+2026-02-06 20:42:38,317 - INFO -   Communication overhead ratio: 9.80%
+2026-02-06 20:42:38,318 - INFO -   TP efficiency: 95.00%
+2026-02-06 20:42:38,318 - INFO -   Time per batch (with TP penalty): 13.0092 sec
+2026-02-06 20:42:38,318 - INFO -   Comm time per layer: 134.2177 ms
+2026-02-06 20:42:38,318 - INFO -   Total comm time: 1.3422 sec
+2026-02-06 20:42:38,318 - INFO -   Total time: 14.3514 sec
+2026-02-06 20:42:38,318 - INFO -   Tokens per batch: 262,144
+2026-02-06 20:42:38,318 - INFO -   Base throughput: 18,266 tokens/sec
+2026-02-06 20:42:38,318 - INFO -   Batch efficiency: 1.00
+2026-02-06 20:42:38,318 - INFO -   FINAL per-stage throughput: 18,266 tokens/sec
+2026-02-06 20:42:38,318 - INFO -   (Pipeline efficiency applied at solver level)
+2026-02-06 20:42:38,318 - INFO - ================================================================================
+2026-02-06 20:42:38,318 - INFO - ================================================================================
+2026-02-06 20:42:38,318 - INFO - DEBUG: gpu_throughput_with_tp called
+2026-02-06 20:42:38,318 - INFO -   GPU: L40S, TP=2, batch=32, seq=8192, layers=10
+2026-02-06 20:42:38,318 - INFO -   d_model=8192, d_hidden=28672, nvlink_bw=32.0 GB/s
+2026-02-06 20:42:38,318 - INFO -   Arithmetic Intensity: 22.74 FLOPs/byte
+2026-02-06 20:42:38,318 - INFO -   Ridge Point: 418.98 FLOPs/byte
+2026-02-06 20:42:38,318 - INFO -   Regime: MEMORY_BOUND
+2026-02-06 20:42:38,318 - INFO -   FLOPs per layer: 3.22e+10
+2026-02-06 20:42:38,318 - INFO -   Total FLOPs (×10 layers): 3.22e+11
+2026-02-06 20:42:38,318 - INFO -   Total memory: 14.60 GB
+2026-02-06 20:42:38,318 - INFO -   Base time per batch: 0.0291 sec
+2026-02-06 20:42:38,318 - INFO -   Communication overhead ratio: 0.56%
+2026-02-06 20:42:38,318 - INFO -   TP efficiency: 95.00%
+2026-02-06 20:42:38,318 - INFO -   Time per batch (with TP penalty): 0.0307 sec
+2026-02-06 20:42:38,318 - INFO -   Comm time per layer: 0.0164 ms
+2026-02-06 20:42:38,318 - INFO -   Total comm time: 0.0002 sec
+2026-02-06 20:42:38,318 - INFO -   Total time: 0.0308 sec
+2026-02-06 20:42:38,318 - INFO -   Tokens per batch: 32
+2026-02-06 20:42:38,318 - INFO -   Base throughput: 1,038 tokens/sec
+2026-02-06 20:42:38,319 - INFO -   Batch efficiency: 1.00
+2026-02-06 20:42:38,319 - INFO -   FINAL per-stage throughput: 1,038 tokens/sec
+2026-02-06 20:42:38,319 - INFO -   (Pipeline efficiency applied at solver level)
+2026-02-06 20:42:38,319 - INFO - ================================================================================
+2026-02-06 20:42:38,319 - INFO - AGGREGATED: prefill=18266 tok/s, decode=1038 tok/s, combined=3383 tok/s (interference=0.8)
+2026-02-06 20:42:38,319 - INFO - Sample segment: p3dn.24xlarge#0 (model=V100) TP=8, batch=32, layers=10, nvlink_bw=300.00 GB/s
+2026-02-06 20:42:38,319 - INFO - ================================================================================
+2026-02-06 20:42:38,319 - INFO - DEBUG: gpu_throughput_with_tp called
+2026-02-06 20:42:38,319 - INFO -   GPU: V100, TP=8, batch=32, seq=8192, layers=10
+2026-02-06 20:42:38,319 - INFO -   d_model=8192, d_hidden=28672, nvlink_bw=300.0 GB/s
+2026-02-06 20:42:38,319 - INFO -   Arithmetic Intensity: 13971.54 FLOPs/byte
+2026-02-06 20:42:38,319 - INFO -   Ridge Point: 138.89 FLOPs/byte
+2026-02-06 20:42:38,319 - INFO -   Regime: COMPUTE_BOUND
+2026-02-06 20:42:38,319 - INFO -   FLOPs per layer: 6.49e+13
+2026-02-06 20:42:38,319 - INFO -   Total FLOPs (×10 layers): 6.49e+14
+2026-02-06 20:42:38,319 - INFO -   Total memory: 46.43 GB
+2026-02-06 20:42:38,319 - INFO -   Base time per batch: 12.3564 sec
+2026-02-06 20:42:38,319 - INFO -   Communication overhead ratio: 1.99%
+2026-02-06 20:42:38,319 - INFO -   TP efficiency: 85.00%
+2026-02-06 20:42:38,319 - INFO -   Time per batch (with TP penalty): 14.5370 sec
+2026-02-06 20:42:38,319 - INFO -   Comm time per layer: 25.0540 ms
+2026-02-06 20:42:38,319 - INFO -   Total comm time: 0.2505 sec
+2026-02-06 20:42:38,319 - INFO -   Total time: 14.7875 sec
+2026-02-06 20:42:38,319 - INFO -   Tokens per batch: 262,144
+2026-02-06 20:42:38,319 - INFO -   Base throughput: 17,727 tokens/sec
+2026-02-06 20:42:38,319 - INFO -   Batch efficiency: 1.00
+2026-02-06 20:42:38,319 - INFO -   FINAL per-stage throughput: 17,727 tokens/sec
+2026-02-06 20:42:38,320 - INFO -   (Pipeline efficiency applied at solver level)
+2026-02-06 20:42:38,320 - INFO - ================================================================================
+2026-02-06 20:42:38,320 - INFO - ================================================================================
+2026-02-06 20:42:38,320 - INFO - DEBUG: gpu_throughput_with_tp called
+2026-02-06 20:42:38,320 - INFO -   GPU: V100, TP=8, batch=32, seq=8192, layers=10
+2026-02-06 20:42:38,320 - INFO -   d_model=8192, d_hidden=28672, nvlink_bw=300.0 GB/s
+2026-02-06 20:42:38,320 - INFO -   Arithmetic Intensity: 22.71 FLOPs/byte
+2026-02-06 20:42:38,320 - INFO -   Ridge Point: 138.89 FLOPs/byte
+2026-02-06 20:42:38,320 - INFO -   Regime: MEMORY_BOUND
+2026-02-06 20:42:38,320 - INFO -   FLOPs per layer: 8.05e+09
+2026-02-06 20:42:38,320 - INFO -   Total FLOPs (×10 layers): 8.05e+10
+2026-02-06 20:42:38,320 - INFO -   Total memory: 3.65 GB
+2026-02-06 20:42:38,320 - INFO -   Base time per batch: 0.0097 sec
+2026-02-06 20:42:38,320 - INFO -   Communication overhead ratio: 0.32%
+2026-02-06 20:42:38,320 - INFO -   TP efficiency: 85.00%
+2026-02-06 20:42:38,320 - INFO -   Time per batch (with TP penalty): 0.0114 sec
+2026-02-06 20:42:38,320 - INFO -   Comm time per layer: 0.0031 ms
+2026-02-06 20:42:38,320 - INFO -   Total comm time: 0.0000 sec
+2026-02-06 20:42:38,320 - INFO -   Total time: 0.0114 sec
+2026-02-06 20:42:38,320 - INFO -   Tokens per batch: 32
+2026-02-06 20:42:38,320 - INFO -   Base throughput: 2,806 tokens/sec
+2026-02-06 20:42:38,320 - INFO -   Batch efficiency: 1.00
+2026-02-06 20:42:38,320 - INFO -   FINAL per-stage throughput: 2,806 tokens/sec
+2026-02-06 20:42:38,320 - INFO -   (Pipeline efficiency applied at solver level)
+2026-02-06 20:42:38,320 - INFO - ================================================================================
+2026-02-06 20:42:38,320 - INFO - AGGREGATED: prefill=17727 tok/s, decode=2806 tok/s, combined=6873 tok/s (interference=0.8)
+2026-02-06 20:42:38,320 - INFO - Sample segment: p4de.24xlarge#0 (model=A100) TP=8, batch=32, layers=10, nvlink_bw=600.00 GB/s
+2026-02-06 20:42:38,320 - INFO - ================================================================================
+2026-02-06 20:42:38,320 - INFO - DEBUG: gpu_throughput_with_tp called
+2026-02-06 20:42:38,321 - INFO -   GPU: A100, TP=8, batch=32, seq=8192, layers=10
+2026-02-06 20:42:38,321 - INFO -   d_model=8192, d_hidden=28672, nvlink_bw=600.0 GB/s
+2026-02-06 20:42:38,321 - INFO -   Arithmetic Intensity: 13971.54 FLOPs/byte
+2026-02-06 20:42:38,321 - INFO -   Ridge Point: 153.02 FLOPs/byte
+2026-02-06 20:42:38,321 - INFO -   Regime: COMPUTE_BOUND
+2026-02-06 20:42:38,321 - INFO -   FLOPs per layer: 6.49e+13
+2026-02-06 20:42:38,321 - INFO -   Total FLOPs (×10 layers): 6.49e+14
+2026-02-06 20:42:38,321 - INFO -   Total memory: 46.43 GB
+2026-02-06 20:42:38,321 - INFO -   Base time per batch: 3.1988 sec
+2026-02-06 20:42:38,321 - INFO -   Communication overhead ratio: 3.77%
+2026-02-06 20:42:38,321 - INFO -   TP efficiency: 85.00%
+2026-02-06 20:42:38,321 - INFO -   Time per batch (with TP penalty): 3.7633 sec
+2026-02-06 20:42:38,321 - INFO -   Comm time per layer: 12.5270 ms
+2026-02-06 20:42:38,321 - INFO -   Total comm time: 0.1253 sec
+2026-02-06 20:42:38,321 - INFO -   Total time: 3.8885 sec
+2026-02-06 20:42:38,321 - INFO -   Tokens per batch: 262,144
+2026-02-06 20:42:38,321 - INFO -   Base throughput: 67,415 tokens/sec
+2026-02-06 20:42:38,321 - INFO -   Batch efficiency: 1.00
+2026-02-06 20:42:38,321 - INFO -   FINAL per-stage throughput: 67,415 tokens/sec
+2026-02-06 20:42:38,321 - INFO -   (Pipeline efficiency applied at solver level)
+2026-02-06 20:42:38,321 - INFO - ================================================================================
+2026-02-06 20:42:38,321 - INFO - ================================================================================
+2026-02-06 20:42:38,321 - INFO - DEBUG: gpu_throughput_with_tp called
+2026-02-06 20:42:38,321 - INFO -   GPU: A100, TP=8, batch=32, seq=8192, layers=10
+2026-02-06 20:42:38,321 - INFO -   d_model=8192, d_hidden=28672, nvlink_bw=600.0 GB/s
+2026-02-06 20:42:38,321 - INFO -   Arithmetic Intensity: 22.71 FLOPs/byte
+2026-02-06 20:42:38,321 - INFO -   Ridge Point: 153.02 FLOPs/byte
+2026-02-06 20:42:38,321 - INFO -   Regime: MEMORY_BOUND
+2026-02-06 20:42:38,321 - INFO -   FLOPs per layer: 8.05e+09
+2026-02-06 20:42:38,321 - INFO -   Total FLOPs (×10 layers): 8.05e+10
+2026-02-06 20:42:38,322 - INFO -   Total memory: 3.65 GB
+2026-02-06 20:42:38,322 - INFO -   Base time per batch: 0.0028 sec
+2026-02-06 20:42:38,322 - INFO -   Communication overhead ratio: 0.55%
+2026-02-06 20:42:38,322 - INFO -   TP efficiency: 85.00%
+2026-02-06 20:42:38,322 - INFO -   Time per batch (with TP penalty): 0.0032 sec
+2026-02-06 20:42:38,322 - INFO -   Comm time per layer: 0.0015 ms
+2026-02-06 20:42:38,322 - INFO -   Total comm time: 0.0000 sec
+2026-02-06 20:42:38,322 - INFO -   Total time: 0.0033 sec
+2026-02-06 20:42:38,322 - INFO -   Tokens per batch: 32
+2026-02-06 20:42:38,322 - INFO -   Base throughput: 9,819 tokens/sec
+2026-02-06 20:42:38,322 - INFO -   Batch efficiency: 1.00
+2026-02-06 20:42:38,322 - INFO -   FINAL per-stage throughput: 9,819 tokens/sec
+2026-02-06 20:42:38,322 - INFO -   (Pipeline efficiency applied at solver level)
+2026-02-06 20:42:38,322 - INFO - ================================================================================
+2026-02-06 20:42:38,322 - INFO - AGGREGATED: prefill=67415 tok/s, decode=9819 tok/s, combined=24817 tok/s (interference=0.8)
+2026-02-06 20:42:38,322 - INFO - Sample segment: g5.12xlarge#1 (model=A10) TP=4, batch=32, layers=10, nvlink_bw=32.00 GB/s
+2026-02-06 20:42:38,322 - INFO - ================================================================================
+2026-02-06 20:42:38,322 - INFO - DEBUG: gpu_throughput_with_tp called
+2026-02-06 20:42:38,322 - INFO -   GPU: A10, TP=4, batch=32, seq=8192, layers=10
+2026-02-06 20:42:38,322 - INFO -   d_model=8192, d_hidden=28672, nvlink_bw=32.0 GB/s
+2026-02-06 20:42:38,322 - INFO -   Arithmetic Intensity: 25994.11 FLOPs/byte
+2026-02-06 20:42:38,322 - INFO -   Ridge Point: 208.33 FLOPs/byte
+2026-02-06 20:42:38,322 - INFO -   Regime: COMPUTE_BOUND
+2026-02-06 20:42:38,322 - INFO -   FLOPs per layer: 1.30e+14
+2026-02-06 20:42:38,322 - INFO -   Total FLOPs (×10 layers): 1.30e+15
+2026-02-06 20:42:38,322 - INFO -   Total memory: 49.91 GB
+2026-02-06 20:42:38,322 - INFO -   Base time per batch: 23.0653 sec
+2026-02-06 20:42:38,322 - INFO -   Communication overhead ratio: 8.03%
+2026-02-06 20:42:38,322 - INFO -   TP efficiency: 90.00%
+2026-02-06 20:42:38,323 - INFO -   Time per batch (with TP penalty): 25.6281 sec
+2026-02-06 20:42:38,323 - INFO -   Comm time per layer: 201.3266 ms
+2026-02-06 20:42:38,323 - INFO -   Total comm time: 2.0133 sec
+2026-02-06 20:42:38,323 - INFO -   Total time: 27.6414 sec
+2026-02-06 20:42:38,323 - INFO -   Tokens per batch: 262,144
+2026-02-06 20:42:38,323 - INFO -   Base throughput: 9,484 tokens/sec
+2026-02-06 20:42:38,323 - INFO -   Batch efficiency: 1.00
+2026-02-06 20:42:38,323 - INFO -   FINAL per-stage throughput: 9,484 tokens/sec
+2026-02-06 20:42:38,323 - INFO -   (Pipeline efficiency applied at solver level)
+2026-02-06 20:42:38,323 - INFO - ================================================================================
+2026-02-06 20:42:38,323 - INFO - ================================================================================
+2026-02-06 20:42:38,323 - INFO - DEBUG: gpu_throughput_with_tp called
+2026-02-06 20:42:38,323 - INFO -   GPU: A10, TP=4, batch=32, seq=8192, layers=10
+2026-02-06 20:42:38,323 - INFO -   d_model=8192, d_hidden=28672, nvlink_bw=32.0 GB/s
+2026-02-06 20:42:38,323 - INFO -   Arithmetic Intensity: 22.73 FLOPs/byte
+2026-02-06 20:42:38,323 - INFO -   Ridge Point: 208.33 FLOPs/byte
+2026-02-06 20:42:38,323 - INFO -   Regime: MEMORY_BOUND
+2026-02-06 20:42:38,323 - INFO -   FLOPs per layer: 1.61e+10
+2026-02-06 20:42:38,323 - INFO -   Total FLOPs (×10 layers): 1.61e+11
+2026-02-06 20:42:38,323 - INFO -   Total memory: 7.30 GB
+2026-02-06 20:42:38,323 - INFO -   Base time per batch: 0.0270 sec
+2026-02-06 20:42:38,323 - INFO -   Communication overhead ratio: 0.90%
+2026-02-06 20:42:38,323 - INFO -   TP efficiency: 90.00%
+2026-02-06 20:42:38,323 - INFO -   Time per batch (with TP penalty): 0.0301 sec
+2026-02-06 20:42:38,323 - INFO -   Comm time per layer: 0.0246 ms
+2026-02-06 20:42:38,323 - INFO -   Total comm time: 0.0002 sec
+2026-02-06 20:42:38,323 - INFO -   Total time: 0.0303 sec
+2026-02-06 20:42:38,323 - INFO -   Tokens per batch: 32
+2026-02-06 20:42:38,323 - INFO -   Base throughput: 1,056 tokens/sec
+2026-02-06 20:42:38,323 - INFO -   Batch efficiency: 1.00
+2026-02-06 20:42:38,324 - INFO -   FINAL per-stage throughput: 1,056 tokens/sec
+2026-02-06 20:42:38,324 - INFO -   (Pipeline efficiency applied at solver level)
+2026-02-06 20:42:38,324 - INFO - ================================================================================
+2026-02-06 20:42:38,324 - INFO - AGGREGATED: prefill=9484 tok/s, decode=1056 tok/s, combined=2923 tok/s (interference=0.8)
+2026-02-06 20:42:38,324 - INFO - ================================================================================
+2026-02-06 20:42:38,324 - INFO - NETWORK DEBUG SAMPLES (all-reduce -> inter-stage -> all-scatter)
+2026-02-06 20:42:38,324 - INFO - ================================================================================
+2026-02-06 20:42:38,324 - INFO - p4de.24xlarge#0(TP=1) -> p4de.24xlarge#0(TP=1), tensor=0.0005GB, all-reduce=infGB/s, inter=600.00GB/s, all-scatter=infGB/s, effective=600.00GB/s, throughput=39,321,600 tokens/s
+2026-02-06 20:42:38,324 - INFO - p4de.24xlarge#0(TP=1) -> p4de.24xlarge#0(TP=1), tensor=0.0005GB, all-reduce=infGB/s, inter=600.00GB/s, all-scatter=infGB/s, effective=600.00GB/s, throughput=39,321,600 tokens/s
+2026-02-06 20:42:38,324 - INFO - p4de.24xlarge#0(TP=1) -> p4de.24xlarge#0(TP=1), tensor=0.0005GB, all-reduce=infGB/s, inter=600.00GB/s, all-scatter=infGB/s, effective=600.00GB/s, throughput=39,321,600 tokens/s
+2026-02-06 20:42:38,324 - INFO - p4de.24xlarge#0(TP=1) -> p4de.24xlarge#0(TP=1), tensor=0.0005GB, all-reduce=infGB/s, inter=600.00GB/s, all-scatter=infGB/s, effective=600.00GB/s, throughput=39,321,600 tokens/s
+2026-02-06 20:42:38,324 - INFO - p4de.24xlarge#0(TP=1) -> p4de.24xlarge#0(TP=1), tensor=0.0005GB, all-reduce=infGB/s, inter=600.00GB/s, all-scatter=infGB/s, effective=600.00GB/s, throughput=39,321,600 tokens/s
+2026-02-06 20:42:38,324 - INFO - Problem size validation:
+2026-02-06 20:42:38,324 - INFO -   - Segments: 13938
+2026-02-06 20:42:38,324 - INFO -   - Connections: 835886
+2026-02-06 20:42:38,324 - INFO -   - Binary variables: ~849824
+2026-02-06 20:42:38,324 - WARNING - Large problem (849824 binary variables)
+2026-02-06 20:42:38,324 - INFO - Initialized solver with TP and practical constraints:
+2026-02-06 20:42:38,324 - INFO -   - GPU types: 37, Total GPUs: 168
+2026-02-06 20:42:38,324 - INFO -   - TP Configuration: {'p4de.24xlarge#0': 8, 'p3dn.24xlarge#0': 8, 'p3dn.24xlarge#1': 8, 'p3dn.24xlarge#2': 8, 'p3dn.24xlarge#3': 8, 'g6e.48xlarge#0': 8, 'g6e.48xlarge#1': 8, 'g6e.48xlarge#2': 8, 'g6e.48xlarge#3': 8, 'g6e.24xlarge#0': 4, 'g6e.24xlarge#1': 4, 'g6e.24xlarge#2': 4, 'g6e.24xlarge#3': 4, 'g6e.12xlarge#0': 2, 'g6e.12xlarge#1': 2, 'g6e.12xlarge#2': 2, 'g6e.12xlarge#3': 2, 'g6e.4xlarge#0': 1, 'g6e.4xlarge#1': 1, 'g6e.4xlarge#2': 1, 'g6e.4xlarge#3': 1, 'g5.48xlarge#0': 8, 'g5.48xlarge#1': 8, 'g5.48xlarge#2': 8, 'g5.48xlarge#3': 8, 'g5.24xlarge#0': 4, 'g5.24xlarge#1': 4, 'g5.24xlarge#2': 4, 'g5.24xlarge#3': 4, 'g5.12xlarge#0': 4, 'g5.12xlarge#1': 4, 'g5.12xlarge#2': 4, 'g5.12xlarge#3': 4, 'g5.4xlarge#0': 1, 'g5.4xlarge#1': 1, 'g5.4xlarge#2': 1, 'g5.4xlarge#3': 1}
+2026-02-06 20:42:38,324 - INFO -   - Max pipeline stages: 8
+2026-02-06 20:42:38,324 - INFO -   - Min memory utilization: 0.1
+2026-02-06 20:42:38,324 - INFO -   - Segment quantization: True
+2026-02-06 20:42:38,324 - INFO -   - Model: 80 layers
+2026-02-06 20:42:38,324 - INFO -   - Problem size: 13938 segments, 835886 connections
+2026-02-06 20:42:38,324 - INFO - ================================================================================
+2026-02-06 20:42:38,324 - INFO - HOMOGENEOUS PLACEMENT SOLVER
+2026-02-06 20:42:38,324 - INFO - ================================================================================
+2026-02-06 20:42:38,325 - INFO - Constraints: same instance family, same layers/stage, same TP degree
+2026-02-06 20:42:38,325 - INFO - Batch size options: [32]
+2026-02-06 20:42:38,325 - INFO - Instance families found: ['p4de.24xlarge', 'p3dn.24xlarge', 'g6e.48xlarge', 'g6e.24xlarge', 'g6e.12xlarge', 'g6e.4xlarge', 'g5.48xlarge', 'g5.24xlarge', 'g5.12xlarge', 'g5.4xlarge']
+2026-02-06 20:42:38,325 - INFO - Total layers: 80, Max PP stages: 8
+2026-02-06 20:42:38,325 - INFO - Batch size options: [32]
+2026-02-06 20:42:38,329 - INFO - Enumerated 36 valid homogeneous configurations
+2026-02-06 20:42:38,329 - INFO - ================================================================================
+2026-02-06 20:42:38,329 - INFO - TOP 10 HOMOGENEOUS CONFIGURATIONS (by $/M tokens)
+2026-02-06 20:42:38,329 - INFO - ================================================================================
+2026-02-06 20:42:38,329 - INFO - Rank  Family               PP   TP   Layers/Stage  BS    Throughput   $/hour     $/M tokens  
+2026-02-06 20:42:38,329 - INFO - ----------------------------------------------------------------------------------------------------
+2026-02-06 20:42:38,329 - INFO - 1     g6e.48xlarge         2    4    40            32    1417         $27.39     $5.368892   
+2026-02-06 20:42:38,329 - INFO - 2     g6e.24xlarge         2    4    40            32    1417         $27.40     $5.370852   
+2026-02-06 20:42:38,329 - INFO - 3     p4de.24xlarge        1    8    80            32    2022         $40.96     $5.625776   
+2026-02-06 20:42:38,329 - INFO - 4     g6e.48xlarge         1    8    80            32    1314         $27.39     $5.788970   
+2026-02-06 20:42:38,329 - INFO - 5     g6e.48xlarge         4    2    20            32    1253         $27.39     $6.074366   
+2026-02-06 20:42:38,329 - INFO - 6     g6e.24xlarge         4    2    20            32    1253         $27.40     $6.076584   
+2026-02-06 20:42:38,329 - INFO - 7     g6e.12xlarge         4    2    20            32    1253         $27.40     $6.076584   
+2026-02-06 20:42:38,329 - INFO - 8     p4de.24xlarge        2    4    40            32    1744         $40.96     $6.524673   
+2026-02-06 20:42:38,329 - INFO - 9     g6e.48xlarge         2    8    40            32    2103         $54.78     $7.236212   
+2026-02-06 20:42:38,329 - INFO - 10    g6e.48xlarge         4    4    20            32    2024         $54.78     $7.516448   
+2026-02-06 20:42:38,329 - INFO - ================================================================================
+2026-02-06 20:42:38,330 - INFO - OPTIMAL HOMOGENEOUS SOLUTION
+2026-02-06 20:42:38,330 - INFO - ================================================================================
+2026-02-06 20:42:38,330 - INFO - Instance Family: g6e.48xlarge
+2026-02-06 20:42:38,330 - INFO - Instances Used: 1
+2026-02-06 20:42:38,330 - INFO - TP Degree: 4
+2026-02-06 20:42:38,330 - INFO - PP Stages: 2
+2026-02-06 20:42:38,330 - INFO - Layers per Stage: 40
+2026-02-06 20:42:38,330 - INFO - Batch Size: 32
+2026-02-06 20:42:38,330 - INFO - Stage Throughput: 5905 tokens/sec
+2026-02-06 20:42:38,330 - INFO - Pipeline Efficiency: 80.0%
+2026-02-06 20:42:38,330 - INFO - Effective Throughput: 1417 tokens/sec
+2026-02-06 20:42:38,330 - INFO - Cost: $27.39/hour
+2026-02-06 20:42:38,330 - INFO - $/M tokens: $5.368892
+2026-02-06 20:42:38,330 - INFO - ====================================================================================================
+2026-02-06 20:42:38,330 - INFO - LLM PLACEMENT OPTIMIZATION RESULTS (COST-AWARE)
+2026-02-06 20:42:38,330 - INFO - ====================================================================================================
+2026-02-06 20:42:38,330 - INFO - Model: llama3-70b (80 layers)
+2026-02-06 20:42:38,330 - INFO - Batch Size: 32 (optimal), Sequence Length: 8192
+2026-02-06 20:42:38,330 - INFO -   Available batch sizes: [32...32]
+2026-02-06 20:42:38,330 - INFO - TP Configuration: {'g6e.48xlarge#0': 4}
+2026-02-06 20:42:38,330 - INFO - Pipeline Stages: 2 (max: 8)
+2026-02-06 20:42:38,330 - INFO - PERFORMANCE & COST METRICS:
+2026-02-06 20:42:38,330 - INFO - ----------------------------------------------------------------------------------------------------
+2026-02-06 20:42:38,330 - INFO -   Throughput:        1417.11 tokens/sec
+2026-02-06 20:42:38,330 - INFO -   Cost:              $27.39/hour
+2026-02-06 20:42:38,330 - INFO -   $/M tokens:        $5.368892
+2026-02-06 20:42:38,330 - INFO -   Total Runtime:     0.20 hours (0.01 days)
+2026-02-06 20:42:38,330 - INFO -   Objective Value:   5904.6432
+2026-02-06 20:42:38,330 - INFO - COST COMPARISON vs COMPETITOR:
+2026-02-06 20:42:38,330 - INFO - ----------------------------------------------------------------------------------------------------
+2026-02-06 20:42:38,331 - INFO -   Competitor $/M tokens:  $100.000000
+2026-02-06 20:42:38,331 - INFO -   Our $/M tokens:         $5.368892
+2026-02-06 20:42:38,331 - INFO -   Improvement:            OK 94.6% BETTER
+2026-02-06 20:42:38,331 - INFO - GPU ASSIGNMENTS (WITH TP):
+2026-02-06 20:42:38,331 - INFO - ----------------------------------------------------------------------------------------------------
+2026-02-06 20:42:38,331 - INFO - GPU Type     TP   GPU IDs              Layers          Size   Throughput   Cost/h    
+2026-02-06 20:42:38,331 - INFO - ----------------------------------------------------------------------------------------------------
+2026-02-06 20:42:38,331 - INFO - g6e.48xlarge#0 4    [0, 1, 2, 3]         1-40            40     5904.64      $27.39    
+2026-02-06 20:42:38,331 - INFO - g6e.48xlarge#0 4    [4, 5, 6, 7]         41-80           40     5904.64      $27.39    
+2026-02-06 20:42:38,331 - INFO - NETWORK CONNECTIONS:
+2026-02-06 20:42:38,331 - INFO - --------------------------------------------------------------------------------
+2026-02-06 20:42:38,331 - INFO - Connection 1: g6e.48xlarge#0 partition 0 (layers 1-40) -> g6e.48xlarge#0 partition 1 (layers 41-80) [Throughput: 2097152.00]
+2026-02-06 20:42:38,331 - INFO - ====================================================================================================
+2026-02-06 20:42:38,332 - INFO - Solution saved to config/large/aggregated/method_enumeration-wrk_aggregated-in8192-out2048-bs32_32-20260206_204158/solution_homogeneous.json
+2026-02-06 20:42:38,334 - INFO - Solution CSV saved with 36 enumeration results to config/large/aggregated/method_enumeration-wrk_aggregated-in8192-out2048-bs32_32-20260206_204158/solution_summary.csv
+2026-02-06 20:42:38,334 - INFO - Total time: 39 seconds
+2026-02-06 20:42:38,483 - INFO - Total solver runtime: 39 seconds
+
+
+
+
