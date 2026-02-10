@@ -756,7 +756,10 @@ class LLMPlacementSolverWithTP:
                  cloud_provider: Optional[str] = None, throughput_debug_samples: int = 0,
                  workload_phase: Optional[str] = None, sequence_length: Optional[int] = None,
                  output_length: Optional[int] = None, min_batch_size: Optional[int] = None,
-                 max_batch_size: Optional[int] = None, skip_gurobi: bool = False):
+                 max_batch_size: Optional[int] = None, skip_gurobi: bool = False,
+                 gpu_pool_file: Optional[str] = None,
+                 network_bandwidth_file: Optional[str] = None,
+                 cloud_specs_file: Optional[str] = None):
         
         def _read_gurobi_wls_file(wls_path: str) -> Dict[str, Union[str, int]]:
             if not os.path.exists(wls_path):
@@ -800,30 +803,34 @@ class LLMPlacementSolverWithTP:
         self.max_threads = max_threads
 
         # Load cloud pricing data if available
-        cloud_specs_file = 'config/cloud_instances_specs.csv'
-        if os.path.exists(cloud_specs_file):
-            self.cloud_instances = self._load_cloud_instances(cloud_specs_file)
+        # Use provided path or fall back to default relative path
+        _cloud_specs_file = cloud_specs_file or 'config/cloud_instances_specs.csv'
+        if os.path.exists(_cloud_specs_file):
+            self.cloud_instances = self._load_cloud_instances(_cloud_specs_file)
         else:
             self.cloud_instances = None
-            
+
         # Load configuration
         config_file = os.path.join(config_dir, 'config.csv')
         base_config_dir = os.path.abspath(os.path.join(config_dir, os.pardir))
-        gpu_pool_file = os.path.join(base_config_dir, 'gpu_pool.csv')
-        network_file = os.path.join(base_config_dir, 'network_bandwidth.csv')
-        self.gpu_types = self._load_gpu_pool(gpu_pool_file)
+
+        # Use provided paths or fall back to defaults (relative to config_dir parent)
+        _gpu_pool_file = gpu_pool_file or os.path.join(base_config_dir, 'gpu_pool.csv')
+        _network_file = network_bandwidth_file or os.path.join(base_config_dir, 'network_bandwidth.csv')
+
+        self.gpu_types = self._load_gpu_pool(_gpu_pool_file)
         
         # Load or generate network bandwidth
         if generate_network is not None:
             intra_bw, inter_bw = generate_network
             generated = self._generate_network_bandwidth(intra_bw, inter_bw)
             logger.info(f"Generated network bandwidth matrix: intra={intra_bw} GB/s, inter={inter_bw} GB/s")
-            # Always save to and load from config/network_bandwidth.csv
-            self._save_network_bandwidth(network_file, generated)
-            logger.info(f"Saved generated network bandwidth to {network_file}")
+            # Save to the specified network file path
+            self._save_network_bandwidth(_network_file, generated)
+            logger.info(f"Saved generated network bandwidth to {_network_file}")
 
-        self.network_bandwidth = self._load_network_bandwidth(network_file)
-        logger.info(f"Loaded network bandwidth from {network_file}")
+        self.network_bandwidth = self._load_network_bandwidth(_network_file)
+        logger.info(f"Loaded network bandwidth from {_network_file}")
         
         self.config = self._load_config(
             config_file,
