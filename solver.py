@@ -1347,8 +1347,18 @@ class LLMPlacementSolverWithTP:
             allocations = []
             # Allow TP degrees even if they don't perfectly divide GPU count
             # It's OK to have some GPUs unused (e.g., use 8 of 12 GPUs for TP=8)
-            valid_tp_degrees = [d for d in [1, 2, 4, 8, 16]
-                            if d <= max_tp and d <= gpu_obj.count]
+            # CRITICAL: num_attention_heads must be divisible by tp_degree (vLLM requirement)
+            all_possible_tp = [d for d in [1, 2, 4, 8, 16] if d <= max_tp and d <= gpu_obj.count]
+            valid_tp_degrees = [d for d in all_possible_tp
+                            if self.config.num_attention_heads % d == 0]
+
+            # Log filtered TP degrees for debugging
+            filtered_out = [d for d in all_possible_tp if d not in valid_tp_degrees]
+            if filtered_out:
+                logger.warning(
+                    f"GPU {gpu_type}: TP degrees {filtered_out} filtered out - "
+                    f"num_attention_heads ({self.config.num_attention_heads}) not divisible"
+                )
 
             global_partition_id = 0  # Global counter across all TP degrees
 
