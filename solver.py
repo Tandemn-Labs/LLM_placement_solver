@@ -109,6 +109,10 @@ class Config:
     # NEW: Penalty for cross-instance PP connections (encourages intra-node placement)
     # Higher values more strongly prefer same-instance connections
     cross_instance_penalty: float = 0.01  # Default: small penalty per cross-instance edge
+    # NEW: Tight memory filtering - exclude configurations with low memory headroom
+    # Prevents OOM from unmodeled overhead (CUDA graphs, sampler, fragmentation, etc.)
+    filter_tight_memory: bool = True  # Default: filter out tight memory configs
+    tight_memory_threshold_pct: float = 10.0  # Default: 10% headroom threshold
 
 # GPU performance tiers for hierarchy constraints
 GPU_PERFORMANCE_TIERS = {
@@ -1028,37 +1032,6 @@ class LLMPlacementSolverWithTP:
             return "A40"
         return gpu_model
 
-    def _normalize_gpu_model(self, gpu_model: str) -> str:
-        """Normalize GPU model names to match ThroughputFunctions.GPU_SPECS keys."""
-        model = gpu_model.upper()
-        if "A100" in model:
-            return "A100"
-        if "H100" in model:
-            return "H100"
-        if "H200" in model:
-            return "H200"
-        if "B200" in model:
-            return "B200"
-        if "L40S" in model:
-            return "L40S"
-        if "L40" in model:
-            return "L40"
-        if "A10G" in model or "A10" in model:
-            return "A10"
-        if "V100" in model:
-            return "V100"
-        if "T4" in model:
-            return "T4"
-        if "L4" in model:
-            return "L4"
-        if "RTX4090" in model:
-            return "RTX4090"
-        if "L20" in model:
-            return "L20"
-        if "A40" in model:
-            return "A40"
-        return gpu_model
-    
     def _load_gpu_pool(self, filename: str) -> Dict[str, GPUType]:
         """Load GPU pool configuration (instance_name,count)"""
         df = pd.read_csv(filename)
@@ -1402,9 +1375,11 @@ class LLMPlacementSolverWithTP:
             # Activation memory with TP (excludes KV cache; KV scales with layers)
             activation_memory = self._calculate_activation_memory(tp_degree)
 
-            # Binary search for max layers
-            max_layers = self._binary_search_max_layers(
-                gpu_obj.memory_gb, weight_per_gpu_per_layer + kv_cache_per_layer, activation_memory
+            # Binary search for max layers (with context for logging)
+            context = {'gpu_type': gpu_type, 'tp_degree': tp_degree, 'batch_size': 'max'}
+            max_layers, is_tight, headroom_pct = self._binary_search_max_layers(
+                gpu_obj.memory_gb, weight_per_gpu_per_layer + kv_cache_per_layer,
+                activation_memory, context=context
             )
 
             max_sizes[(gpu_type, tp_degree)] = max_layers
@@ -1505,93 +1480,176 @@ class LLMPlacementSolverWithTP:
 
     def _calculate_activation_memory(self, tp_degree: int = 1, batch_size: int = None) -> float:
         """
-        Calculate peak activation memory per GPU with TP.
-        Accounts for all-reduce operations and KV cache sharding.
+        Calculate runtime memory overhead per GPU beyond weights and KV cache.
 
-        NEW: Phase-aware memory calculation (prefill vs decode vs aggregated)
-        - Prefill: Activations for all tokens + KV cache being written
-        - Decode: Activations for 1 token + FULL KV cache being read (much larger!)
-        - Aggregated: Use prefill peak (larger activations for seq_len tokens)
+        Models actual vLLM/inference framework memory consumers:
+        1. Peak activations (intermediate tensors, reused across layers)
+        2. CUDA graph workspace (pre-allocated for decode phase)
+        3. Sampler workspace (logits buffer, top-k/p workspace)
+        4. Allocator fragmentation (PyTorch caching allocator overhead on TOTAL memory)
+
+        Returns: Memory overhead in GB
         """
-        batch = batch_size if batch_size is not None else self.config.min_batch_size
+        batch = batch_size if batch_size is not None else self.config.max_batch_size
         hidden = self.config.d_model
         d_hidden = self.config.d_hidden
         bytes_per_elem = self.config.bytes_per_element
-        phase = self.config.workload_phase  # NEW: Get phase from config
+        phase = self.config.workload_phase
         d_head = hidden / self.config.num_attention_heads
         kv_dim = self.config.num_kv_heads * d_head
 
+        # 1. PEAK ACTIVATIONS (per-layer, reused across layers)
         if phase == 'prefill' or phase == 'aggregated':
-            # PREFILL/AGGREGATED: Use prefill peak (larger due to seq_len tokens)
-            # For aggregated: prefill activations are larger than decode (1 token)
             seq_len = self.config.sequence_length
+            tokens = seq_len
+        else:  # decode
+            tokens = 1
 
-            # Sharded intermediate tensors during computation
-            qkv_memory = (batch * seq_len * (
-                (hidden / tp_degree) +                # Q
-                2 * (kv_dim / tp_degree)              # K, V (GQA/MQA aware)
-            ) * bytes_per_elem) / (1024**3)
-            mlp_intermediate = (batch * seq_len * (4 * hidden / tp_degree) *
-                               bytes_per_elem) / (1024**3)
-            sharded_computation = qkv_memory + mlp_intermediate
+        # Sharded intermediate tensors during computation
+        qkv_memory = (batch * tokens * (
+            (hidden / tp_degree) +                # Q
+            2 * (kv_dim / tp_degree)              # K, V (GQA/MQA aware)
+        ) * bytes_per_elem) / (1024**3)
+        mlp_intermediate = (batch * tokens * (d_hidden / tp_degree) *
+                           bytes_per_elem) / (1024**3)
+        sharded_computation = qkv_memory + mlp_intermediate
 
-            # Full activation tensor after all-reduce (NOT sharded)
-            full_activation = (batch * seq_len * hidden * bytes_per_elem) / (1024**3)
+        # Full activation tensor after all-reduce (NOT sharded)
+        full_activation = (batch * tokens * hidden * bytes_per_elem) / (1024**3)
 
-            # Peak activation memory (exclude KV cache; it scales with layers)
-            peak_activation = max(sharded_computation, full_activation)
+        peak_activation = max(sharded_computation, full_activation)
 
-        else:  # phase == 'decode'
-            # DECODE: Generate 1 token at a time
+        # 2. CUDA GRAPH WORKSPACE (critical for decode!)
+        # vLLM captures CUDA graphs for decode to avoid kernel launch overhead
+        # Each captured graph pre-allocates workspace memory
+        if phase in ['decode', 'aggregated']:
+            # vLLM captures graphs for batch sizes: 1, 2, 4, 8, ... up to max
+            num_captured_graphs = min(6, int(math.log2(max(1, batch))) + 2)
+            decode_workspace_per_graph = (batch * 1 * (hidden + d_hidden / tp_degree) *
+                                          bytes_per_elem) / (1024**3)
+            cuda_graph_memory = num_captured_graphs * decode_workspace_per_graph
+            # Add fixed graph metadata overhead (~500 MB)
+            cuda_graph_memory += 0.5
+        else:
+            cuda_graph_memory = 0.0
 
-            # Sharded intermediate tensors for 1 token
-            qkv_memory = (batch * 1 * (
-                (hidden / tp_degree) +
-                2 * (kv_dim / tp_degree)
-            ) * bytes_per_elem) / (1024**3)
-            mlp_intermediate = (batch * 1 * (4 * hidden / tp_degree) *
-                               bytes_per_elem) / (1024**3)
-            sharded_computation = qkv_memory + mlp_intermediate
+        # 3. SAMPLER WORKSPACE
+        # Logits buffer: [batch, vocab_size] in float32 for numerical stability
+        logits_memory = (batch * self.config.vocab_size * 4) / (1024**3)  # float32
+        # Top-k/p workspace and temperature scaling buffers
+        sampler_memory = logits_memory * 1.5
 
-            # Full activation for 1 token after all-reduce
-            full_activation = (batch * 1 * hidden * bytes_per_elem) / (1024**3)
+        # 4. ALLOCATOR FRAGMENTATION
+        # PyTorch's caching allocator causes memory fragmentation
+        # This applies to ALL runtime overhead, not just activations
+        # Empirically: 12-18% depending on memory pressure
+        base_overhead = peak_activation + cuda_graph_memory + sampler_memory
+        allocator_fragmentation = base_overhead * 0.15
 
-            # Peak activation memory (exclude KV cache; it scales with layers)
-            peak_activation = max(sharded_computation, full_activation)
+        # Total runtime overhead
+        total_overhead = base_overhead + allocator_fragmentation
 
-        # Framework overhead (15%)
-        total_with_overhead = peak_activation * 1.15
-
-        return total_with_overhead
+        return total_overhead
     
-    def _binary_search_max_layers(self, gpu_memory: float, memory_per_layer: float, 
-                                  activation_memory: float) -> int:
-        """Binary search to find maximum layers that fit in GPU memory"""
+    def _binary_search_max_layers(self, gpu_memory: float, memory_per_layer: float,
+                                  activation_memory: float,
+                                  context: dict = None) -> tuple:
+        """
+        Binary search to find maximum layers that fit in GPU memory.
+
+        Args:
+            gpu_memory: Total GPU memory in GB
+            memory_per_layer: Memory per layer (weights + KV cache) in GB
+            activation_memory: Runtime overhead (activations + CUDA graphs + sampler + fragmentation) in GB
+            context: Optional dict with 'gpu_type', 'tp_degree', 'batch_size' for logging
+
+        Returns:
+            Tuple of (max_feasible_layers, is_tight_memory, headroom_pct)
+        """
         left, right = 1, self.config.num_decoder_layers
-        max_feasible = 1
-        
+        max_feasible = 0  # Start at 0 - might not fit ANY layers
+
         while left <= right:
             mid = (left + right) // 2
             total_memory = mid * memory_per_layer + activation_memory
-            
+
             if total_memory <= gpu_memory:
                 max_feasible = mid
                 left = mid + 1
             else:
                 right = mid - 1
-        
-        return max_feasible
+
+        # Calculate headroom
+        is_tight_memory = False
+        headroom_pct = 100.0
+
+        if max_feasible > 0:
+            used_memory = max_feasible * memory_per_layer + activation_memory
+            headroom = gpu_memory - used_memory
+            headroom_pct = headroom / gpu_memory * 100
+
+            # Tight memory threshold (configurable, default 10%)
+            tight_memory_threshold = getattr(self.config, 'tight_memory_threshold_pct', 10.0)
+            is_tight_memory = headroom_pct < tight_memory_threshold
+
+            if is_tight_memory:
+                # Build context string for detailed logging
+                ctx_str = ""
+                if context:
+                    gpu_type = context.get('gpu_type', 'unknown')
+                    tp_degree = context.get('tp_degree', '?')
+                    batch_size = context.get('batch_size', '?')
+                    ctx_str = f" [{gpu_type} TP={tp_degree} BS={batch_size} layers={max_feasible}]"
+
+                logger.warning(
+                    f"TIGHT MEMORY{ctx_str}: {used_memory:.1f}/{gpu_memory:.1f} GB used "
+                    f"({headroom:.1f} GB / {headroom_pct:.1f}% headroom). "
+                    f"Risk of OOM from unmodeled overhead."
+                )
+
+        return max_feasible, is_tight_memory, headroom_pct
     
-    def _compute_max_segment_size_for_tp(self, gpu_type: str, tp_degree: int, batch_size: int) -> int:
-        """Compute max segment size for a specific (gpu_type, tp_degree, batch_size)"""
+    def _compute_max_segment_size_for_tp(self, gpu_type: str, tp_degree: int, batch_size: int,
+                                         filter_tight_memory: bool = None) -> int:
+        """
+        Compute max segment size for a specific (gpu_type, tp_degree, batch_size).
+
+        Args:
+            gpu_type: GPU instance type
+            tp_degree: Tensor parallelism degree
+            batch_size: Batch size
+            filter_tight_memory: If True, returns 0 for tight memory configs (filtered out).
+                                 If None, uses config.filter_tight_memory (default True).
+
+        Returns:
+            Maximum number of layers, or 0 if filtered out due to tight memory
+        """
         gpu_obj = self.gpu_types[gpu_type]
         weight_per_gpu_per_layer = self.config.layer_weight_memory_gb / tp_degree
         kv_cache_per_layer = self._calculate_kv_cache_per_layer(tp_degree, batch_size)
         activation_memory = self._calculate_activation_memory(tp_degree, batch_size)
-        
-        return self._binary_search_max_layers(
-            gpu_obj.memory_gb, weight_per_gpu_per_layer + kv_cache_per_layer, activation_memory
+
+        context = {
+            'gpu_type': gpu_type,
+            'tp_degree': tp_degree,
+            'batch_size': batch_size
+        }
+
+        max_feasible, is_tight_memory, headroom_pct = self._binary_search_max_layers(
+            gpu_obj.memory_gb, weight_per_gpu_per_layer + kv_cache_per_layer,
+            activation_memory, context=context
         )
+
+        # Determine whether to filter tight memory configs
+        if filter_tight_memory is None:
+            filter_tight_memory = getattr(self.config, 'filter_tight_memory', True)
+
+        if is_tight_memory and filter_tight_memory:
+            logger.info(f"  FILTERED: {gpu_type} TP={tp_degree} BS={batch_size} "
+                       f"(headroom={headroom_pct:.1f}% < threshold)")
+            return 0
+
+        return max_feasible
 
     def _compute_min_segment_size_for_tp(self, gpu_type: str, tp_degree: int, batch_size: int) -> int:
         """Compute min segment size for a specific (gpu_type, tp_degree, batch_size)"""
@@ -1621,6 +1679,13 @@ class LLMPlacementSolverWithTP:
         while b <= self.config.max_batch_size:
             batch_sizes.append(b)
             b *= 2
+
+        # Handle edge case: min_batch_size > max_batch_size (invalid config)
+        if not batch_sizes:
+            logger.warning(f"Invalid batch size range: min={self.config.min_batch_size} > "
+                          f"max={self.config.max_batch_size}. Using min_batch_size.")
+            batch_sizes = [self.config.min_batch_size]
+
         # Ensure max_batch_size is included even if not exact power of 2
         if batch_sizes[-1] != self.config.max_batch_size:
             batch_sizes.append(self.config.max_batch_size)
@@ -2066,12 +2131,17 @@ class LLMPlacementSolverWithTP:
         # Verification: Check pre-computed throughputs are correct
         throughput_dict = getattr(self, 'segment_throughputs_temp', {})
         logger.info(f"  Pre-computed throughput for {len(throughput_dict)} segments")
-        
+
         # Verify a sample of pre-computed values
         import random
         verification_sample = min(10, len(valid_segments))
         sample_segments = random.sample(valid_segments, verification_sample) if len(valid_segments) > 0 else []
-        
+
+        # Track verification results
+        verification_passed = 0
+        verification_failed = 0
+        verification_missing = 0
+
         for seg in sample_segments:
             gpu_type, gpu_set, tp_degree, partition_id, start_layer, segment_size, batch_size = seg
             precomputed = throughput_dict.get(seg, None)
@@ -2086,12 +2156,22 @@ class LLMPlacementSolverWithTP:
             )
             if precomputed is None:
                 logger.error(f"  ✗ Missing pre-computed value for segment: {seg}")
+                verification_missing += 1
             elif abs(precomputed - recalculated) > 0.01:
-                logger.error(f"  ✗ Mismatch: pre-computed={precomputed:.2f}, recalculated={recalculated:.2f}")
+                logger.error(f"  ✗ Mismatch for {gpu_type} TP={tp_degree} layers={segment_size}: "
+                            f"pre-computed={precomputed:.2f}, recalculated={recalculated:.2f}")
+                verification_failed += 1
             else:
                 logger.debug(f"  ✓ Verified segment throughput: {precomputed:.2f} tokens/sec")
-        
-        logger.info(f"  ✓ Verified {verification_sample} random segments - all match!")
+                verification_passed += 1
+
+        # Report verification results accurately
+        if verification_failed > 0 or verification_missing > 0:
+            logger.error(f"  ✗ Verification FAILED: {verification_passed}/{verification_sample} passed, "
+                        f"{verification_failed} mismatches, {verification_missing} missing")
+        else:
+            logger.info(f"  ✓ Verified {verification_sample} random segments - all match!")
+
         return valid_segments
     
     def _generate_valid_connections(self) -> List[Tuple]:
@@ -2274,8 +2354,16 @@ class LLMPlacementSolverWithTP:
                 else:  # decode
                     tokens_per_batch = batch_size1 * 1  # 1 token per forward pass
                 throughput = tokens_per_batch / transfer_time_sec
+            elif tensor_size_gb == 0:
+                # No data to transfer (e.g., edge case with 0 batch size) - effectively infinite
+                throughput = float('inf')
             else:
-                throughput = 1e9  # Infinite throughput if no communication needed
+                # Zero bandwidth but non-zero tensor - this indicates missing/invalid data
+                logger.warning(f"Zero bandwidth between segments {gpu_type1}->>{gpu_type2} "
+                              f"(all_reduce={all_reduce_bw:.2f}, inter={inter_stage_bw:.2f}, "
+                              f"all_scatter={all_scatter_bw:.2f} GB/s). Setting low throughput.")
+                # Use very low throughput to discourage this connection (but not crash)
+                throughput = 1.0  # 1 token/sec - effectively infeasible
             
             gpu_pair_throughputs[(seg1, seg2)] = throughput
         
@@ -3585,7 +3673,12 @@ class LLMPlacementSolverWithTP:
             if self.b[bs].x > 0.5:
                 optimal_batch_size = bs
                 break
-        
+
+        # Guard against missing batch size (should not happen in valid solution)
+        if optimal_batch_size is None:
+            logger.error("No valid batch size found in solution - using min_batch_size as fallback")
+            optimal_batch_size = self.config.min_batch_size
+
         # Apply pipeline bubble efficiency (dynamic based on micro-batches)
         # Pipeline bubbles occur because not all stages are active simultaneously
         # More micro-batches = better pipeline utilization

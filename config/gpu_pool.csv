@@ -1,4 +1,13 @@
 instance_name,count
-g6e.48xlarge,2
-p4de.24xlarge,1
-g5.48xlarge,2
+g5.12xlarge,20
+g5.24xlarge,10
+g5.48xlarge,10
+g6.12xlarge,20
+g6.24xlarge,10
+g6.48xlarge,8
+g6e.12xlarge,20
+g6e.24xlarge,10
+g6e.48xlarge,10
+p3dn.24xlarge,2
+p4d.24xlarge,2
+p4de.24xlarge,2

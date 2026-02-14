@@ -10,15 +10,16 @@ function cleanup() {
     kill $(jobs -p)
     exit 1
 }
-config_dir_list=("config/llama3-70b")
+# config_dir_list=("config/llama3-70b")
+config_dir_list=("config/qwen2.5-72b")
 workload_phase_list=("aggregated") # "prefill" "decode" "aggregated"
 homogeneous=1
 warm_start_homogeneous=1
-io_length_pairs=("8192 2048") # ("1024 1024" "2048 2048" "4096 4096" "8192 8192" "16384 16384")
+io_length_pairs=("8192 1024") # ("1024 1024" "2048 2048" "4096 4096" "8192 8192" "16384 16384")
 batch_size_pairs=("32 32") # "64 64"
 cost_optimization_method_list=("enumeration") # "weighted"
 network_config_list=("none")
-run_on_background=true
+run_on_background=false
 cloud_provider="AWS"
 timestamp=$(date +%Y%m%d_%H%M%S)
 for config_dir in "${config_dir_list[@]}"; do
@@ -40,12 +41,14 @@ for config_dir in "${config_dir_list[@]}"; do
                     for batch_pair in "${batch_size_pairs[@]}"; do
                         min_batch_size=$(echo ${batch_pair} | cut -d' ' -f1)
                         max_batch_size=$(echo ${batch_pair} | cut -d' ' -f2)
-                        intra_bw=$(echo ${network_config} | cut -d' ' -f1)
-                        inter_bw=$(echo ${network_config} | cut -d' ' -f2)
+                        
+                        python config/generate_network_bandwidth.py --gpu-pool config/gpu_pool.csv --cloud-specs config/cloud_instances_specs.csv --output config/network_bandwidth.csv
+                        echo "** Starting solver, output_log_path: ${output_log_path}"
+
                         output_log_dir="${config_dir}/${workload_subdir}/method_${cost_optimization_method}-wrk_${workload_phase}-in${input_token_length}-out${output_token_length}-bs${min_batch_size}_${max_batch_size}-${timestamp}"
                         mkdir -p ${output_log_dir}
                         output_log_path="${output_log_dir}/output.txt"
-                        echo "** Starting solver, output_log_path: ${output_log_path}"
+                        echo "** Generating network bandwidth, output_log_path: ${output_log_path}"
                         start_time=$(date +%s)
                         if [ "${run_on_background}" = true ]; then
                             python3 solver.py --homogeneous ${homogeneous} --warm-start-homogeneous ${warm_start_homogeneous} --config-dir ${config_dir} --output-dir ${output_log_dir} --method ${cost_optimization_method} --cloud-provider ${cloud_provider} --throughput-debug-samples 5 --sequence-length ${input_token_length} --output-length  ${output_token_length} --min-batch-size ${min_batch_size} --max-batch-size ${max_batch_size} --workload-phase ${workload_phase} &> ${output_log_path} &

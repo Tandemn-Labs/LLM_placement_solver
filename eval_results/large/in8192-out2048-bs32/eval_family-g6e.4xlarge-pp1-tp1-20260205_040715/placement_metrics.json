@@ -1,0 +1,35 @@
+{
+  "config": {
+    "model_name": "llama3-70b",
+    "num_decoder_layers": 80,
+    "sequence_length": 8192,
+    "output_length": 2048,
+    "min_batch_size": 32,
+    "max_batch_size": 32,
+    "d_model": 8192,
+    "d_hidden": 28672,
+    "max_pipeline_stages": 8,
+    "min_memory_utilization": 0.1
+  },
+  "placement": {
+    "batch_size": 32,
+    "sequence_length": 8192,
+    "output_length": 2048,
+    "workload_phase": "aggregated",
+    "stages": [
+      {
+        "gpu_type": "g6e.4xlarge#0",
+        "tp_degree": 1,
+        "gpu_ids": [
+          0
+        ],
+        "start_layer": 1,
+        "end_layer": 80
+      }
+    ]
+  },
+  "solution": {
+    "status": "INFEASIBLE",
+    "error": "INFEASIBLE placement. Context: model_layers=80, phase=aggregated, seq_len=8192, output_len=2048, batch=32, pp_stages=1. Reasons: Stage 1 (g6e.4xlarge#0, TP=1, layers 1-80, size=80): memory overflow: required=264.15GB (activation=24.15GB + 80\u00d7per_layer=3.00GB) > GPU_mem=48.0GB. Max feasible layers=7 (max_required=45.15GB). per_layer breakdown: weights=1.75GB + kv_cache=1.25GB"
+  }
+}

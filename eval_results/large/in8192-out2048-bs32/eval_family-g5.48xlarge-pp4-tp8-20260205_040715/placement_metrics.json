@@ -1,0 +1,199 @@
+{
+  "config": {
+    "model_name": "llama3-70b",
+    "num_decoder_layers": 80,
+    "sequence_length": 8192,
+    "output_length": 2048,
+    "min_batch_size": 32,
+    "max_batch_size": 32,
+    "optimal_batch_size": 32,
+    "d_model": 8192,
+    "d_hidden": 28672,
+    "max_pipeline_stages": 8,
+    "min_memory_utilization": 0.1
+  },
+  "solution": {
+    "objective_value": 0.0,
+    "batch_size": 32,
+    "throughput_tokens_per_sec": 411.75487574611196,
+    "raw_throughput_tokens_per_sec": 2668.7816020581336,
+    "pipeline_efficiency": 0.5142857142857142,
+    "cost_per_hour": 65.16,
+    "cost_per_token": 4.395819227933189e-05,
+    "total_runtime_hours": 0.6746192799160818,
+    "meets_cost_threshold": true,
+    "tp_configuration": {
+      "g5.48xlarge#0": 8,
+      "g5.48xlarge#1": 8,
+      "g5.48xlarge#2": 8,
+      "g5.48xlarge#3": 8
+    },
+    "gpu_assignments": [
+      {
+        "gpu_type": "g5.48xlarge#0",
+        "partition_id": 0,
+        "gpu_ids": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7
+        ],
+        "global_gpu_ids": [
+          100,
+          101,
+          102,
+          103,
+          104,
+          105,
+          106,
+          107
+        ],
+        "tp_degree": 8,
+        "start_layer": 1,
+        "end_layer": 20,
+        "segment_size": 20,
+        "throughput": 2668.7816020581336
+      },
+      {
+        "gpu_type": "g5.48xlarge#1",
+        "partition_id": 1,
+        "gpu_ids": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7
+        ],
+        "global_gpu_ids": [
+          108,
+          109,
+          110,
+          111,
+          112,
+          113,
+          114,
+          115
+        ],
+        "tp_degree": 8,
+        "start_layer": 21,
+        "end_layer": 40,
+        "segment_size": 20,
+        "throughput": 2668.7816020581336
+      },
+      {
+        "gpu_type": "g5.48xlarge#2",
+        "partition_id": 2,
+        "gpu_ids": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7
+        ],
+        "global_gpu_ids": [
+          116,
+          117,
+          118,
+          119,
+          120,
+          121,
+          122,
+          123
+        ],
+        "tp_degree": 8,
+        "start_layer": 41,
+        "end_layer": 60,
+        "segment_size": 20,
+        "throughput": 2668.7816020581336
+      },
+      {
+        "gpu_type": "g5.48xlarge#3",
+        "partition_id": 3,
+        "gpu_ids": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7
+        ],
+        "global_gpu_ids": [
+          124,
+          125,
+          126,
+          127,
+          128,
+          129,
+          130,
+          131
+        ],
+        "tp_degree": 8,
+        "start_layer": 61,
+        "end_layer": 80,
+        "segment_size": 20,
+        "throughput": 2668.7816020581336
+      }
+    ],
+    "network_connections": [
+      {
+        "from_segment": {
+          "gpu_type": "g5.48xlarge#0",
+          "partition_id": 0,
+          "start_layer": 1,
+          "end_layer": 20
+        },
+        "to_segment": {
+          "gpu_type": "g5.48xlarge#1",
+          "partition_id": 1,
+          "start_layer": 21,
+          "end_layer": 40
+        },
+        "throughput": 204800.0
+      },
+      {
+        "from_segment": {
+          "gpu_type": "g5.48xlarge#1",
+          "partition_id": 1,
+          "start_layer": 21,
+          "end_layer": 40
+        },
+        "to_segment": {
+          "gpu_type": "g5.48xlarge#2",
+          "partition_id": 2,
+          "start_layer": 41,
+          "end_layer": 60
+        },
+        "throughput": 204800.0
+      },
+      {
+        "from_segment": {
+          "gpu_type": "g5.48xlarge#2",
+          "partition_id": 2,
+          "start_layer": 41,
+          "end_layer": 60
+        },
+        "to_segment": {
+          "gpu_type": "g5.48xlarge#3",
+          "partition_id": 3,
+          "start_layer": 61,
+          "end_layer": 80
+        },
+        "throughput": 204800.0
+      }
+    ],
+    "solve_status": null,
+    "num_pipeline_stages": 4
+  }
+}

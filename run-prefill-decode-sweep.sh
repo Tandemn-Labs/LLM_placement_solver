@@ -2,6 +2,10 @@
 
 # Prefill-Decode Batch Size Sweep Runner
 # Runs solver for BOTH prefill and decode phases
+# 
+# New directory structure:
+# - Config: config/{size}/config.csv (one per size, not per workload)
+# - Results: config/{size}/prefill-only/, config/{size}/decode-only/
 
 trap cleanup SIGINT SIGTERM SIGKILL SIGQUIT
 
@@ -34,8 +38,9 @@ echo ""
 echo "========================================================================"
 echo "PHASE 1: PREFILL (Compute-bound, O(n²) attention)"
 echo "========================================================================"
-config_dir="config/${target_config}-prefill"
+config_dir="config/${target_config}"
 phase_label="PREFILL"
+workload_subdir="prefill-only"
 
 declare -a pids_prefill
 declare -a output_logs_prefill
@@ -47,7 +52,8 @@ for cost_optimization_method in "${cost_optimization_method_list[@]}"; do
         inter_bw=$(echo ${network_config} | cut -d' ' -f2)
         
         for batch_size in "${batch_size_list[@]}"; do
-            output_log_dir="${config_dir}/output-${timestamp}/batch_${batch_size}"
+            # New structure: config/{size}/{workload}-only/output-{timestamp}/batch_{size}
+            output_log_dir="${config_dir}/${workload_subdir}/output-${timestamp}/batch_${batch_size}"
             mkdir -p ${output_log_dir}
             
             output_log_path="${output_log_dir}/method_${cost_optimization_method}-network_${intra_bw}_${inter_bw}.txt"
@@ -75,6 +81,7 @@ for cost_optimization_method in "${cost_optimization_method_list[@]}"; do
                 --method ${cost_optimization_method} \
                 --generate-network ${intra_bw} ${inter_bw} \
                 --cloud-provider ${cloud_provider} \
+                --workload-phase prefill \
                 &> ${output_log_path} &
             
             solver_pid=$!
@@ -106,7 +113,8 @@ echo ""
 echo "========================================================================"
 echo "PHASE 2: DECODE (Memory-bound, O(n) KV cache access)"
 echo "========================================================================"
-config_dir="config/${target_config}-decode"
+config_dir="config/${target_config}"
+workload_subdir="decode-only"
 
 declare -a pids_decode
 declare -a output_logs_decode
@@ -118,7 +126,8 @@ for cost_optimization_method in "${cost_optimization_method_list[@]}"; do
         inter_bw=$(echo ${network_config} | cut -d' ' -f2)
         
         for batch_size in "${batch_size_list[@]}"; do
-            output_log_dir="${config_dir}/output-${timestamp}/batch_${batch_size}"
+            # New structure: config/{size}/{workload}-only/output-{timestamp}/batch_{size}
+            output_log_dir="${config_dir}/${workload_subdir}/output-${timestamp}/batch_${batch_size}"
             mkdir -p ${output_log_dir}
             
             output_log_path="${output_log_dir}/method_${cost_optimization_method}-network_${intra_bw}_${inter_bw}.txt"
@@ -146,6 +155,7 @@ for cost_optimization_method in "${cost_optimization_method_list[@]}"; do
                 --method ${cost_optimization_method} \
                 --generate-network ${intra_bw} ${inter_bw} \
                 --cloud-provider ${cloud_provider} \
+                --workload-phase decode \
                 &> ${output_log_path} &
             
             solver_pid=$!
@@ -181,13 +191,14 @@ echo "========================================================================"
 # Analyze PREFILL results
 echo ""
 echo "=== PREFILL PHASE RESULTS ==="
-config_dir="config/${target_config}-prefill"
-results_csv="${config_dir}/output-${timestamp}/batch_sweep_results.csv"
-solution_csv="${config_dir}/output-${timestamp}/solution.csv"
+config_dir="config/${target_config}"
+workload_subdir="prefill-only"
+results_csv="${config_dir}/${workload_subdir}/output-${timestamp}/batch_sweep_results.csv"
+solution_csv="${config_dir}/${workload_subdir}/output-${timestamp}/solution.csv"
 
 first_batch=true
 for batch_size in "${batch_size_list[@]}"; do
-    csv_file="${config_dir}/output-${timestamp}/batch_${batch_size}/solution_summary.csv"
+    csv_file="${config_dir}/${workload_subdir}/output-${timestamp}/batch_${batch_size}/solution_summary.csv"
     if [ -f "$csv_file" ]; then
         if [ "$first_batch" = true ]; then
             cat "$csv_file" > "$results_csv"
@@ -247,13 +258,14 @@ done
 # Analyze DECODE results
 echo ""
 echo "=== DECODE PHASE RESULTS ==="
-config_dir="config/${target_config}-decode"
-results_csv="${config_dir}/output-${timestamp}/batch_sweep_results.csv"
-solution_csv="${config_dir}/output-${timestamp}/solution.csv"
+config_dir="config/${target_config}"
+workload_subdir="decode-only"
+results_csv="${config_dir}/${workload_subdir}/output-${timestamp}/batch_sweep_results.csv"
+solution_csv="${config_dir}/${workload_subdir}/output-${timestamp}/solution.csv"
 
 first_batch=true
 for batch_size in "${batch_size_list[@]}"; do
-    csv_file="${config_dir}/output-${timestamp}/batch_${batch_size}/solution_summary.csv"
+    csv_file="${config_dir}/${workload_subdir}/output-${timestamp}/batch_${batch_size}/solution_summary.csv"
     if [ -f "$csv_file" ]; then
         if [ "$first_batch" = true ]; then
             cat "$csv_file" > "$results_csv"
@@ -314,11 +326,11 @@ echo ""
 echo "========================================================================"
 echo "PREFILL-DECODE SWEEP COMPLETE!"
 echo "========================================================================"
-echo "PREFILL results: config/${target_config}-prefill/output-${timestamp}/"
+echo "PREFILL results: config/${target_config}/prefill-only/output-${timestamp}/"
 echo "  - batch_sweep_results.csv: All batch size results"
 echo "  - solution.csv: Best solution (lowest \$/M tokens)"
 echo ""
-echo "DECODE results:  config/${target_config}-decode/output-${timestamp}/"
+echo "DECODE results:  config/${target_config}/decode-only/output-${timestamp}/"
 echo "  - batch_sweep_results.csv: All batch size results"
 echo "  - solution.csv: Best solution (lowest \$/M tokens)"
 echo "========================================================================"
