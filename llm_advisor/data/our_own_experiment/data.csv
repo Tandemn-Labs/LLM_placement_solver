@@ -59,12 +59,12 @@ deepseek-ai/DeepSeek-R1-Distill-Llama-70B,2048,512,180.05,144.16,35.88,2x g5.12x
 deepseek-ai/DeepSeek-R1-Distill-Llama-70B,2048,512,337.18,269.98,67.2,2x g5.48xlarge,8,2,,2.0724,26.99525288478021
 deepseek-ai/DeepSeek-R1-Distill-Llama-70B,2048,512,670.89,537.19,133.71,3x g5.12xlarge,4,3,,0.3906,5.087740631052822
 deepseek-ai/DeepSeek-R1-Distill-Llama-70B,2048,512,498.7,399.31,99.39,4x g5.48xlarge,8,4,,2.8024,36.50351784401463
-deepseek-ai/DeepSeek-R1-Distill-Llama-70B,8192,2048,252.06,200.65,51.4,g6.12xlarge,4,1,,1.5524,5.15757713324224
-deepseek-ai/DeepSeek-R1-Distill-Llama-70B,8192,2048,887.38,706.41,180.97,2x g6.12xlarge,4,2,,0.8819,2.929989597950929
-deepseek-ai/DeepSeek-R1-Distill-Llama-70B,8192,2048,1048.91,835.0,213.91,3x g6.12xlarge,4,3,,1.1192,3.718160324173013
-deepseek-ai/DeepSeek-R1-Distill-Llama-70B,8192,2048,1125.87,896.26,229.6,4x g6.12xlarge,4,4,,1.3902,4.618668417573073
-deepseek-ai/DeepSeek-R1-Distill-Llama-70B,8192,2048,532.07,423.56,108.51,g6.48xlarge,8,1,,2.0978,6.969615889832118
-deepseek-ai/DeepSeek-R1-Distill-Llama-70B,8192,2048,747.86,595.35,152.52,2x g6.48xlarge,8,2,,2.985,9.917146210271664
-deepseek-ai/DeepSeek-R1-Distill-Llama-70B,8192,2048,920.51,732.78,187.72,3x g6.48xlarge,8,3,,3.6378,12.08572550126755
-deepseek-ai/DeepSeek-R1-Distill-Llama-70B,8192,2048,776.91,618.47,158.44,2x g6.12xlarge,2,4,,1.0073,3.3465883890718224
-deepseek-ai/DeepSeek-R1-Distill-Llama-70B,8192,2048,524.64,417.64,106.99,8x g6.2xlarge,1,8,,1.2622,4.193384114655844
+deepseek-ai/DeepSeek-R1-Distill-Llama-70B,8192,2048,252.06,200.65,51.4,g6e.12xlarge,4,1,,1.5524,5.15757713324224
+deepseek-ai/DeepSeek-R1-Distill-Llama-70B,8192,2048,887.38,706.41,180.97,2x g6e.12xlarge,4,2,,0.8819,2.929989597950929
+deepseek-ai/DeepSeek-R1-Distill-Llama-70B,8192,2048,1048.91,835.0,213.91,3x g6e.12xlarge,4,3,,1.1192,3.718160324173013
+deepseek-ai/DeepSeek-R1-Distill-Llama-70B,8192,2048,1125.87,896.26,229.6,4x g6e.12xlarge,4,4,,1.3902,4.618668417573073
+deepseek-ai/DeepSeek-R1-Distill-Llama-70B,8192,2048,532.07,423.56,108.51,g6e.48xlarge,8,1,,2.0978,6.969615889832118
+deepseek-ai/DeepSeek-R1-Distill-Llama-70B,8192,2048,747.86,595.35,152.52,2x g6e.48xlarge,8,2,,2.985,9.917146210271664
+deepseek-ai/DeepSeek-R1-Distill-Llama-70B,8192,2048,920.51,732.78,187.72,3x g6e.48xlarge,8,3,,3.6378,12.08572550126755
+deepseek-ai/DeepSeek-R1-Distill-Llama-70B,8192,2048,776.91,618.47,158.44,2x g6e.12xlarge,2,4,,1.0073,3.3465883890718224
+deepseek-ai/DeepSeek-R1-Distill-Llama-70B,8192,2048,524.64,417.64,106.99,8x g6e.2xlarge,1,8,,1.2622,4.193384114655844

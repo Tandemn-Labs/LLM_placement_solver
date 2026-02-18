@@ -116,12 +116,34 @@ CANONICAL_COLUMNS = [
     "kv_offload_target",
     "cuda_graphs",
     "spec_decode",
-    # --- derived ---
+    # --- derived (existing) ---
     "prefill_decode_ratio",
     # --- batch size (where applicable) ---
     "batch_size",
     # --- raw HuggingFace config.json (JSON string) ---
     "model_config_json",
+    # --- derived (model structure) ---
+    "is_moe",
+    "num_experts_active",
+    "vocab_size",
+    "attention_heads_per_kv_head",
+    # --- derived (sizing) ---
+    "model_size_gb",
+    "params_per_gpu",
+    "model_fits_single_gpu",
+    "vram_headroom_gb",
+    # --- derived (hardware) ---
+    "gpu_bandwidth_gbps",
+    "gpu_tflops_fp16",
+    "gpu_generation",
+    # --- derived (efficiency ratios) ---
+    "bandwidth_per_param",
+    "flops_per_param",
+    "kv_heads_per_tp",
+    # --- derived (topology) ---
+    "crosses_node_boundary",
+    # --- derived (cost) ---
+    "price_per_gpu_hour_usd",
 ]
 
 
@@ -141,12 +163,18 @@ INSTANCE_PRICING = {
     "g6.48xlarge": 1.204,
 }
 
-# Map GPU model key -> vram_gb from gpu_specs.py
+# Map GPU model key -> vram_gb from gpu_specs.py (H100_SXM, H200, H200_SXM now in GPU_SPECS)
 GPU_MEM_MAP = {k: v["vram_gb"] for k, v in GPU_SPECS.items()}
-# Add SXM variants
-GPU_MEM_MAP["H100_SXM"] = 80
-GPU_MEM_MAP["H200"] = 141
-GPU_MEM_MAP["H200_SXM"] = 141
+
+# Instance type → GPUs per instance (AWS on-demand)
+INSTANCE_GPUS = {
+    "g5.2xlarge": 1, "g5.12xlarge": 4, "g5.48xlarge": 8,
+    "g6.2xlarge": 1, "g6.12xlarge": 4, "g6.48xlarge": 8,
+    "g6e.2xlarge": 1, "g6e.12xlarge": 4, "g6e.48xlarge": 8,
+    "p4d.24xlarge": 8, "p4de.24xlarge": 8, "p5.48xlarge": 8,
+}
+
+DGX_GPUS_PER_NODE = 8
 
 # Short model name → HuggingFace canonical ID
 MODEL_NAME_MAP = {
@@ -165,13 +193,14 @@ SPLITWISE_HW_MAP = {
 
 # Fallback architecture info when HF API is unavailable
 # Tuple: (architecture_class, params_billion, raw_config_dict_or_None)
+# params_billion values are exact counts from safetensors headers
 FALLBACK_ARCHITECTURES = {
-    "meta-llama/Meta-Llama-3-70B-Instruct": ("LlamaForCausalLM", 70.6, None),
-    "meta-llama/Llama-2-70b-hf": ("LlamaForCausalLM", 68.7, None),
-    "nvidia/Llama-3.3-70B-Instruct-FP8": ("LlamaForCausalLM", 70.6, None),
-    "nvidia/Llama-3.1-8B-Instruct-FP8": ("LlamaForCausalLM", 8.0, None),
-    "deepseek-ai/DeepSeek-R1-Distill-Llama-70B": ("LlamaForCausalLM", 70.6, None),
-    "bigscience/bloom": ("BloomForCausalLM", 176.0, None),
+    "meta-llama/Meta-Llama-3-70B-Instruct": ("LlamaForCausalLM", 70.553706, None),
+    "meta-llama/Llama-2-70b-hf": ("LlamaForCausalLM", 68.976653, None),
+    "nvidia/Llama-3.3-70B-Instruct-FP8": ("LlamaForCausalLM", 70.553706, None),
+    "nvidia/Llama-3.1-8B-Instruct-FP8": ("LlamaForCausalLM", 8.030261, None),
+    "deepseek-ai/DeepSeek-R1-Distill-Llama-70B": ("LlamaForCausalLM", 70.553706, None),
+    "bigscience/bloom": ("BloomForCausalLM", 176.247271, None),
 }
 
 # HuggingFace token for gated model access (set via HF_TOKEN env var or --hf-token)
@@ -232,6 +261,32 @@ def _fetch_config_with_auth(model_id: str) -> dict | None:
     return None
 
 
+def _fetch_exact_params(model_id: str) -> float:
+    """Fetch exact parameter count from HF Model Info API (safetensors.total).
+
+    Returns params in billions, or NaN if unavailable.
+    """
+    headers = {}
+    if HF_TOKEN:
+        headers["Authorization"] = f"Bearer {HF_TOKEN}"
+    try:
+        resp = requests.get(
+            f"https://huggingface.co/api/models/{model_id}",
+            headers=headers,
+            timeout=15,
+        )
+        if resp.status_code == 200:
+            data = resp.json()
+            safetensors = data.get("safetensors")
+            if safetensors:
+                total = safetensors.get("total")
+                if total and total > 0:
+                    return total / 1e9
+    except Exception:
+        pass
+    return np.nan
+
+
 def _hf_lookup(model_id: str):
     """Return (architecture_str, params_billion, raw_config_json_str) for a model."""
     if model_id in _hf_cache:
@@ -240,20 +295,30 @@ def _hf_lookup(model_id: str):
     # Try fetch with auth (handles both cached + API)
     config = _fetch_config_with_auth(model_id)
 
+    # Get exact param count from safetensors metadata (ground truth)
+    params_b = _fetch_exact_params(model_id)
+
+    # If API didn't provide exact count, check FALLBACK_ARCHITECTURES
+    if pd.isna(params_b) and model_id in FALLBACK_ARCHITECTURES:
+        params_b = FALLBACK_ARCHITECTURES[model_id][1]
+
     if config:
-        # Parse architecture using the same logic as model_arch.py
         arch = get_model_architecture(model_id)
         if arch and arch.architectures:
-            result = (arch.architectures[0], arch.params_billions, config)
+            arch_str = arch.architectures[0]
+            # Fall back to estimated count only if neither API nor fallback provided exact
+            if pd.isna(params_b):
+                params_b = arch.params_billions
+                print(f"    WARN: using estimated params for {model_id}: {params_b:.3f}B")
         else:
-            # Config fetched but get_model_architecture failed — extract manually
             archs = config.get("architectures", [])
             arch_str = archs[0] if archs else np.nan
-            result = (arch_str, np.nan, config)
+        result = (arch_str, params_b, config)
     elif model_id in FALLBACK_ARCHITECTURES:
-        result = FALLBACK_ARCHITECTURES[model_id]
+        fb = FALLBACK_ARCHITECTURES[model_id]
+        result = (fb[0], params_b if pd.notna(params_b) else fb[1], fb[2])
     else:
-        result = (np.nan, np.nan, None)
+        result = (np.nan, params_b, None)
 
     _hf_cache[model_id] = result
     return result
@@ -358,6 +423,56 @@ def _set_output_len_single(row: dict, val):
     """Set all 4 output_len fields to a single value."""
     for suffix in ("min", "max", "avg", "fixed"):
         row[f"output_len_tokens_{suffix}"] = val
+
+
+def _gpu_spec(gpu_model, field: str):
+    """Lookup a single GPU spec field. Returns NaN for unknown/heterogeneous GPUs."""
+    if pd.isna(gpu_model) or not isinstance(gpu_model, str):
+        return np.nan
+    # Heterogeneous configs contain commas (e.g. "L40S,A10G")
+    if "," in gpu_model:
+        return np.nan
+    spec = GPU_SPECS.get(gpu_model)
+    if spec is None:
+        return np.nan
+    return spec.get(field, np.nan)
+
+
+def _parse_model_config(raw_json_str):
+    """Parse model_config_json string → dict. Returns None on failure."""
+    if pd.isna(raw_json_str) or not isinstance(raw_json_str, str):
+        return None
+    try:
+        return json.loads(raw_json_str)
+    except (json.JSONDecodeError, TypeError):
+        return None
+
+
+def _infer_gpus_per_node(instance_type):
+    """Infer GPUs per node from instance type string.
+
+    Handles: "3x g6e.48xlarge", "DGX-A100", simple instance names.
+    Returns NaN for heterogeneous solver configs with '#' notation.
+    """
+    if pd.isna(instance_type) or not isinstance(instance_type, str):
+        return np.nan
+    instance_type = instance_type.strip()
+    if not instance_type:
+        return np.nan
+
+    # Heterogeneous solver configs
+    if "#" in instance_type:
+        return np.nan
+
+    # DGX systems
+    if instance_type.upper().startswith("DGX"):
+        return DGX_GPUS_PER_NODE
+
+    # Multi-node: "3x g6e.48xlarge"
+    multi_match = re.match(r"\d+x\s+(.+)", instance_type)
+    base = multi_match.group(1).strip() if multi_match else instance_type
+
+    return INSTANCE_GPUS.get(base, np.nan)
 
 
 # ---------------------------------------------------------------------------
@@ -1071,6 +1186,181 @@ def compute_derived(df: pd.DataFrame) -> pd.DataFrame:
         / (df.loc[mask_decode, "tokens_per_sec_decode"] * 3.6)
     )
 
+    # -----------------------------------------------------------------------
+    # Phase 1: Parse HF configs → model structure columns
+    # -----------------------------------------------------------------------
+    configs = df["model_config_json"].apply(_parse_model_config)
+
+    df["is_moe"] = configs.apply(
+        lambda c: bool(c.get("num_local_experts", 0) > 0) if c else np.nan
+    )
+    df["num_experts_active"] = configs.apply(
+        lambda c: c.get("num_experts_per_tok", np.nan) if c else np.nan
+    )
+    df["vocab_size"] = configs.apply(
+        lambda c: c.get("vocab_size", np.nan) if c else np.nan
+    )
+
+    def _gqa_ratio(c):
+        if c is None:
+            return np.nan
+        n_heads = c.get("num_attention_heads")
+        n_kv = c.get("num_key_value_heads")
+        if n_heads and n_kv and n_kv > 0:
+            return n_heads / n_kv
+        return np.nan
+
+    df["attention_heads_per_kv_head"] = configs.apply(_gqa_ratio)
+
+    def _num_kv_heads(c):
+        if c is None:
+            return np.nan
+        return c.get("num_key_value_heads", np.nan)
+
+    num_kv_heads = configs.apply(_num_kv_heads)
+    tp_valid = df["tp"].where(df["tp"] > 0)
+    df["kv_heads_per_tp"] = num_kv_heads / tp_valid
+
+    # -----------------------------------------------------------------------
+    # Phase 2: Sizing
+    # -----------------------------------------------------------------------
+    bytes_per_param = df["precision"].map({"fp8": 1, "fp16": 2, "bf16": 2}).fillna(2)
+    df["model_size_gb"] = df["params_billion"] * bytes_per_param
+
+    gpu_count_valid = df["gpu_count_total"].where(df["gpu_count_total"] > 0)
+    df["params_per_gpu"] = df["params_billion"] / gpu_count_valid
+
+    df["model_fits_single_gpu"] = np.where(
+        df["model_size_gb"].notna() & df["gpu_mem_gb"].notna(),
+        df["model_size_gb"] <= df["gpu_mem_gb"],
+        np.nan,
+    )
+
+    df["vram_headroom_gb"] = np.where(
+        df["gpu_mem_gb"].notna() & df["gpu_count_total"].notna() & df["model_size_gb"].notna(),
+        (df["gpu_mem_gb"] * df["gpu_count_total"]) - df["model_size_gb"],
+        np.nan,
+    )
+
+    # -----------------------------------------------------------------------
+    # Phase 3: GPU hardware lookups
+    # -----------------------------------------------------------------------
+    df["gpu_bandwidth_gbps"] = df["gpu_model"].apply(
+        lambda g: _gpu_spec(g, "memory_bandwidth_gbps")
+    )
+    df["gpu_tflops_fp16"] = df["gpu_model"].apply(
+        lambda g: _gpu_spec(g, "fp16_tflops")
+    )
+    df["gpu_generation"] = df["gpu_model"].apply(
+        lambda g: _gpu_spec(g, "architecture")
+    )
+
+    # -----------------------------------------------------------------------
+    # Phase 4: Efficiency ratios
+    # -----------------------------------------------------------------------
+    params_valid = df["params_billion"].where(df["params_billion"] > 0)
+    df["bandwidth_per_param"] = (
+        df["gpu_bandwidth_gbps"] * df["tp"] / params_valid
+    )
+    df["flops_per_param"] = (
+        df["gpu_tflops_fp16"] * df["tp"] / params_valid
+    )
+
+    # -----------------------------------------------------------------------
+    # Phase 5: Topology inference — fill gpus_per_node and num_nodes
+    # -----------------------------------------------------------------------
+    for idx, row in df.iterrows():
+        src = row["data_source"]
+        gpn = row["gpus_per_node"]
+        nn = row["num_nodes"]
+
+        if pd.notna(gpn) and pd.notna(nn):
+            continue  # already populated
+
+        if src == "dynamo_swept":
+            # DGX H100/H200, 8 GPUs/node, single node
+            df.at[idx, "gpus_per_node"] = DGX_GPUS_PER_NODE
+            df.at[idx, "num_nodes"] = 1
+
+        elif src == "dynamo_test":
+            # tp GPUs per node, single node
+            df.at[idx, "gpus_per_node"] = row["tp"] if pd.notna(row["tp"]) else np.nan
+            df.at[idx, "num_nodes"] = 1
+
+        elif src == "solver":
+            inst = row.get("instance_type") if pd.notna(row.get("instance_type")) else None
+            if inst:
+                inferred_gpn = _infer_gpus_per_node(inst)
+                df.at[idx, "gpus_per_node"] = inferred_gpn
+                gc = row["gpu_count_total"]
+                if pd.notna(inferred_gpn) and inferred_gpn > 0 and pd.notna(gc):
+                    _, base, _ = _parse_device_type(inst)
+                    multi_match = re.match(r"(\d+)x\s+", inst)
+                    if multi_match:
+                        df.at[idx, "num_nodes"] = int(multi_match.group(1))
+                    else:
+                        import math
+                        df.at[idx, "num_nodes"] = math.ceil(gc / inferred_gpn)
+
+        elif src == "vidur":
+            # A100 DGX-style, infer from gpu_count
+            gc = row["gpu_count_total"]
+            if pd.notna(gc):
+                df.at[idx, "gpus_per_node"] = min(int(gc), DGX_GPUS_PER_NODE)
+                import math
+                df.at[idx, "num_nodes"] = math.ceil(gc / DGX_GPUS_PER_NODE)
+            else:
+                # Fallback: infer gpu_count from tp * pp
+                tp_val = row["tp"] if pd.notna(row["tp"]) else 1
+                pp_val = row["pp"] if pd.notna(row["pp"]) else 1
+                gc = tp_val * pp_val
+                df.at[idx, "gpu_count_total"] = gc
+                df.at[idx, "gpus_per_node"] = min(int(gc), DGX_GPUS_PER_NODE)
+                import math
+                df.at[idx, "num_nodes"] = math.ceil(gc / DGX_GPUS_PER_NODE)
+
+        elif src == "our_experiment":
+            # Already populated by loader — skip
+            pass
+
+        elif src == "our_experiment_perfdb":
+            # L40S on g6e, max 8/node
+            gc = row["gpu_count_total"]
+            if pd.notna(gc):
+                df.at[idx, "gpus_per_node"] = min(int(gc), 8)
+                import math
+                df.at[idx, "num_nodes"] = math.ceil(gc / 8)
+
+        elif src == "splitwise":
+            # DGX, 8 GPUs/node
+            df.at[idx, "gpus_per_node"] = DGX_GPUS_PER_NODE
+            df.at[idx, "num_nodes"] = 1
+
+    # crosses_node_boundary
+    df["crosses_node_boundary"] = np.where(
+        df["num_nodes"].notna(),
+        df["num_nodes"] > 1,
+        np.nan,
+    )
+
+    # Recompute gpu_count-dependent sizing columns (Phase 5 may have filled gpu_count_total)
+    gpu_count_valid = df["gpu_count_total"].where(df["gpu_count_total"] > 0)
+    df["params_per_gpu"] = df["params_billion"] / gpu_count_valid
+    df["vram_headroom_gb"] = np.where(
+        df["gpu_mem_gb"].notna() & df["gpu_count_total"].notna() & df["model_size_gb"].notna(),
+        (df["gpu_mem_gb"] * df["gpu_count_total"]) - df["model_size_gb"],
+        np.nan,
+    )
+
+    # -----------------------------------------------------------------------
+    # Phase 6: Cost
+    # -----------------------------------------------------------------------
+    mask_price = df["price_per_instance_hour_usd"].notna() & (df["gpu_count_total"] > 0)
+    df.loc[mask_price, "price_per_gpu_hour_usd"] = (
+        df.loc[mask_price, "price_per_instance_hour_usd"]
+        / df.loc[mask_price, "gpu_count_total"]
+    )
+
     return df
 
 
@@ -1107,7 +1397,28 @@ def validate(df: pd.DataFrame) -> bool:
     if no_slash.any():
         print(f"  WARN: {no_slash.sum()} model_name values without '/' (may not be HF IDs)")
 
-    # 5. Summary
+    # 5. model_size_gb > 0 where populated
+    bad_size = df["model_size_gb"].dropna() <= 0
+    if bad_size.any():
+        models = df.loc[bad_size[bad_size].index, "model_name"].unique().tolist()
+        print(f"  WARN: {bad_size.sum()} rows with model_size_gb <= 0 (params_billion=0 for: {models})")
+
+    # 6. vram_headroom_gb not extremely negative
+    extreme_neg = df["vram_headroom_gb"].dropna() < -100
+    if extreme_neg.any():
+        print(f"  WARN: {extreme_neg.sum()} rows with vram_headroom_gb < -100 GB")
+
+    # 7. crosses_node_boundary not all NaN
+    if df["crosses_node_boundary"].isna().all():
+        print("  FAIL: crosses_node_boundary is all NaN")
+        ok = False
+
+    # 8. kv_heads_per_tp < 1 (info — KV head replication scenarios)
+    kv_rep = df["kv_heads_per_tp"].dropna() < 1
+    if kv_rep.any():
+        print(f"  INFO: {kv_rep.sum()} rows with kv_heads_per_tp < 1 (KV head replication)")
+
+    # 9. Summary
     print(f"\n  Total rows: {len(df)}")
     print(f"\n  Rows per source:")
     for src, cnt in df["data_source"].value_counts().items():

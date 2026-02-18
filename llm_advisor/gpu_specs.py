@@ -120,6 +120,57 @@ GPU_SPECS = {
         "best_for": "largest models, maximum throughput, cutting-edge performance",
     },
 
+    # NVIDIA H100 SXM (DGX H100)
+    "H100_SXM": {
+        "name": "NVIDIA H100 SXM",
+        "architecture": "Hopper",
+        "vram_gb": 80,
+        "fp16_tflops": 989,
+        "fp32_tflops": 67,
+        "memory_bandwidth_gbps": 3350,
+        "nvlink": True,
+        "nvlink_bandwidth_gbps": 900,
+        "pcie_gen": 5,
+        "tdp_watts": 700,
+        "aws_instance_prefix": None,
+        "relative_performance": "flagship",
+        "best_for": "largest models, maximum throughput, DGX deployments",
+    },
+
+    # NVIDIA H200 (141 GB HBM3e)
+    "H200": {
+        "name": "NVIDIA H200",
+        "architecture": "Hopper",
+        "vram_gb": 141,
+        "fp16_tflops": 989,
+        "fp32_tflops": 67,
+        "memory_bandwidth_gbps": 4800,
+        "nvlink": True,
+        "nvlink_bandwidth_gbps": 900,
+        "pcie_gen": 5,
+        "tdp_watts": 700,
+        "aws_instance_prefix": None,
+        "relative_performance": "flagship",
+        "best_for": "largest models, maximum memory capacity, cutting-edge performance",
+    },
+
+    # NVIDIA H200 SXM (DGX H200)
+    "H200_SXM": {
+        "name": "NVIDIA H200 SXM",
+        "architecture": "Hopper",
+        "vram_gb": 141,
+        "fp16_tflops": 989,
+        "fp32_tflops": 67,
+        "memory_bandwidth_gbps": 4800,
+        "nvlink": True,
+        "nvlink_bandwidth_gbps": 900,
+        "pcie_gen": 5,
+        "tdp_watts": 700,
+        "aws_instance_prefix": None,
+        "relative_performance": "flagship",
+        "best_for": "largest models, maximum memory capacity, DGX deployments",
+    },
+
     # NVIDIA A40 (various cloud providers)
     "A40": {
         "name": "NVIDIA A40",

@@ -153,11 +153,11 @@ These columns use the "None" string convention: `"None"` means the feature was
 | `cuda_graphs` | string | CUDA graph optimization | our_experiment, our_experiment_perfdb |
 | `spec_decode` | string | Speculative decoding | our_experiment, our_experiment_perfdb |
 
-### Derived
+### Derived (Existing)
 
 | Column | Type | Unit | Description | Coverage |
 |---|---|---|---|---|
-| `prefill_decode_ratio` | float | — | `input_len_avg / output_len_avg` (where both exist) | 86% |
+| `prefill_decode_ratio` | float | — | `input_len_avg / output_len_avg` (where both exist). Equivalent to `io_ratio`. | 86% |
 | `batch_size` | float | — | Batch size used in the run. For vidur this stores the QPS. | 78% |
 
 ### Model Config
@@ -165,6 +165,64 @@ These columns use the "None" string convention: `"None"` means the feature was
 | Column | Type | Description | Coverage |
 |---|---|---|---|
 | `model_config_json` | string | Full HuggingFace `config.json` as compact JSON string. Parse with `json.loads()`. Contains architecture details: `num_hidden_layers`, `hidden_size`, `num_attention_heads`, `num_key_value_heads`, `intermediate_size`, `vocab_size`, `max_position_embeddings`, etc. | 100% |
+
+### Derived (Model Structure)
+
+Extracted from `model_config_json` (HuggingFace config.json).
+
+| Column | Type | Unit | Description | Coverage |
+|---|---|---|---|---|
+| `is_moe` | bool | — | True if the model is a Mixture-of-Experts architecture (has `num_local_experts > 0` in HF config) | ~100% |
+| `num_experts_active` | int | — | Number of active experts per token (`num_experts_per_tok` from HF config). NaN for dense models. | MoE models only |
+| `vocab_size` | int | tokens | Vocabulary size from HF config | ~100% |
+| `attention_heads_per_kv_head` | float | — | GQA group size = `num_attention_heads / num_key_value_heads`. Value > 1 indicates grouped-query attention. | ~100% |
+
+### Derived (Sizing)
+
+Computed from `params_billion`, `precision`, `gpu_mem_gb`, `gpu_count_total`.
+
+| Column | Type | Unit | Description | Coverage |
+|---|---|---|---|---|
+| `model_size_gb` | float | GB | Weight footprint: `params_billion * bytes_per_param` (2 for fp16, 1 for fp8) | ~99% |
+| `params_per_gpu` | float | billions | `params_billion / gpu_count_total` | ~99% |
+| `model_fits_single_gpu` | bool | — | True if `model_size_gb <= gpu_mem_gb` | ~90% |
+| `vram_headroom_gb` | float | GB | `(gpu_mem_gb * gpu_count_total) - model_size_gb`. VRAM remaining after weights — the budget available for KV cache, CUDA graphs, activations, and framework overhead. Negative means weights alone exceed total VRAM. | ~90% |
+
+### Derived (Hardware)
+
+Looked up from `GPU_SPECS` using `gpu_model`. NaN for heterogeneous GPU configs (comma-separated solver rows).
+
+| Column | Type | Unit | Description | Coverage |
+|---|---|---|---|---|
+| `gpu_bandwidth_gbps` | float | GB/s | Memory bandwidth from GPU_SPECS | ~95% |
+| `gpu_tflops_fp16` | float | TFLOPS | FP16 tensor core TFLOPS from GPU_SPECS | ~95% |
+| `gpu_generation` | string | — | Architecture generation (e.g. `Hopper`, `Ampere`, `Ada Lovelace`) | ~95% |
+
+### Derived (Efficiency Ratios)
+
+| Column | Type | Unit | Description | Coverage |
+|---|---|---|---|---|
+| `bandwidth_per_param` | float | GB/s/B-params | `gpu_bandwidth_gbps * tp / params_billion` — memory bandwidth available per billion params | ~95% |
+| `flops_per_param` | float | TFLOPS/B-params | `gpu_tflops_fp16 * tp / params_billion` — compute available per billion params | ~95% |
+| `kv_heads_per_tp` | float | — | `num_key_value_heads / tp`. Values < 1 indicate KV head replication across TP ranks. | ~100% |
+
+### Derived (Topology)
+
+| Column | Type | Unit | Description | Coverage |
+|---|---|---|---|---|
+| `crosses_node_boundary` | bool | — | True if `num_nodes > 1`. After topology inference, populated for all sources. | ~100% |
+
+### Derived (Cost)
+
+| Column | Type | Unit | Description | Coverage |
+|---|---|---|---|---|
+| `price_per_gpu_hour_usd` | float | USD/GPU/hr | `price_per_instance_hour_usd / gpu_count_total` | ~14% |
+
+### Notes
+
+- **`io_ratio`** is equivalent to the existing `prefill_decode_ratio` column. No separate column is created.
+- **`num_nodes`** and **`gpus_per_node`** already exist in the schema. `compute_derived()` now infers values for all sources (dynamo → DGX 8 GPU/node, solver → from instance type, vidur → from gpu_count, splitwise → DGX 8 GPU/node).
+- **Heterogeneous GPU configs** (solver rows with comma-separated `gpu_model` like `"L40S,A10G"`) produce NaN for all GPU-spec-derived columns (`gpu_bandwidth_gbps`, `gpu_tflops_fp16`, `gpu_generation`, and downstream ratios).
 
 ---
 
@@ -179,8 +237,8 @@ Columns populated per source (empty = NaN for all rows from that source):
 | region | | | | | x | x | |
 | instance_type | | | x | x | x | | x |
 | price_per_instance_hour_usd | | | x | | x | | |
-| num_nodes | | | | | x | | |
-| gpus_per_node | | | | | x | | |
+| num_nodes | x | x | x | x | x | x | x |
+| gpus_per_node | x | x | x | x | x | x | x |
 | request_pattern | | | | x | x | x | |
 | num_requests | | | | x | x | | |
 | output_len_tokens_* | | | x | x | x | x | x |
@@ -192,3 +250,18 @@ Columns populated per source (empty = NaN for all rows from that source):
 | cost_per_1m_tokens_* | | | x | | x | | |
 | is_lmcache (+ other flags) | | | | | x | x | |
 | batch_size | | | x | x | | | x |
+| is_moe | x | x | x | x | x | x | x |
+| vocab_size | x | x | x | x | x | x | x |
+| attention_heads_per_kv_head | x | x | x | x | x | x | x |
+| model_size_gb | x | x | x | x | x | x | x |
+| params_per_gpu | x | x | x | x | x | x | x |
+| model_fits_single_gpu | x | x | | x | x | x | x |
+| vram_headroom_gb | x | x | | x | x | x | x |
+| gpu_bandwidth_gbps | x | x | ~partial | x | x | x | x |
+| gpu_tflops_fp16 | x | x | ~partial | x | x | x | x |
+| gpu_generation | x | x | ~partial | x | x | x | x |
+| bandwidth_per_param | x | x | ~partial | x | x | x | x |
+| flops_per_param | x | x | ~partial | x | x | x | x |
+| kv_heads_per_tp | x | x | x | x | x | x | x |
+| crosses_node_boundary | x | x | x | x | x | x | x |
+| price_per_gpu_hour_usd | | | x | | x | | |
