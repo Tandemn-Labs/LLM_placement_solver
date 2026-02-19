@@ -82,6 +82,7 @@ class Config:
     vocab_size: int
     num_attention_heads: int
     num_kv_heads: int
+    max_position_embeddings: int  # Model's max context length (caps max_model_len)
     layer_weight_memory_gb: float
     time_limit_seconds: float
     optimality_gap: float
@@ -1231,6 +1232,7 @@ class LLMPlacementSolverWithTP:
             vocab_size=int(config_dict['vocab_size']),
             num_attention_heads=int(config_dict['num_attention_heads']),
             num_kv_heads=int(config_dict.get('num_kv_heads', config_dict['num_attention_heads'])),
+            max_position_embeddings=int(config_dict.get('max_position_embeddings', 131072)),  # Default to 128K if not specified
             layer_weight_memory_gb=float(config_dict['layer_weight_memory_gb']),
             time_limit_seconds=float(config_dict['time_limit_seconds']),
             optimality_gap=float(config_dict['optimality_gap']),

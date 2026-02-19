@@ -5,6 +5,8 @@ d_model,5120
 d_hidden,27648
 vocab_size,152064
 num_attention_heads,40
+num_kv_heads,8
+max_position_embeddings,32768
 layer_weight_memory_gb,1.0
 time_limit_seconds,300
 optimality_gap,0.01
@@ -24,4 +26,3 @@ cost_normalization,1.0
 total_tokens_to_process,1000000
 real_world_efficiency,0.30
 micro_batch_size,8
-num_kv_heads,8

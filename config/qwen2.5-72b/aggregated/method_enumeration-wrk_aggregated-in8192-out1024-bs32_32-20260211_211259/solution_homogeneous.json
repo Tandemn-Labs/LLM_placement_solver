@@ -1,0 +1,115 @@
+{
+  "config": {
+    "model_name": "qwen2.5-72b",
+    "num_decoder_layers": 80,
+    "sequence_length": 8192,
+    "output_length": 1024,
+    "min_batch_size": 32,
+    "max_batch_size": 32,
+    "optimal_batch_size": 32,
+    "d_model": 8192,
+    "d_hidden": 29568,
+    "max_pipeline_stages": 8,
+    "min_memory_utilization": 0.1
+  },
+  "solution": {
+    "objective_value": 8461.999447059045,
+    "batch_size": 32,
+    "throughput_tokens_per_sec": 2030.8798672941707,
+    "cost_per_hour": 31.38,
+    "cost_per_token": 4.2920641476840575e-06,
+    "total_runtime_hours": 0.13677706015564237,
+    "meets_cost_threshold": true,
+    "tp_configuration": {
+      "g6.48xlarge#0": 8,
+      "g6.48xlarge#1": 8
+    },
+    "gpu_assignments": [
+      {
+        "gpu_type": "g6.48xlarge#0",
+        "partition_id": 0,
+        "gpu_ids": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7
+        ],
+        "global_gpu_ids": [
+          264,
+          265,
+          266,
+          267,
+          268,
+          269,
+          270,
+          271
+        ],
+        "tp_degree": 8,
+        "start_layer": 1,
+        "end_layer": 40,
+        "segment_size": 40,
+        "throughput": 8461.999447059045
+      },
+      {
+        "gpu_type": "g6.48xlarge#1",
+        "partition_id": 0,
+        "gpu_ids": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7
+        ],
+        "global_gpu_ids": [
+          272,
+          273,
+          274,
+          275,
+          276,
+          277,
+          278,
+          279
+        ],
+        "tp_degree": 8,
+        "start_layer": 41,
+        "end_layer": 80,
+        "segment_size": 40,
+        "throughput": 8461.999447059045
+      }
+    ],
+    "network_connections": [
+      {
+        "from_segment": {
+          "gpu_type": "g6.48xlarge#0",
+          "partition_id": 0,
+          "start_layer": 1,
+          "end_layer": 40
+        },
+        "to_segment": {
+          "gpu_type": "g6.48xlarge#1",
+          "partition_id": 0,
+          "start_layer": 41,
+          "end_layer": 80
+        },
+        "throughput": 204800.0
+      }
+    ],
+    "solve_status": 2,
+    "num_pipeline_stages": 2,
+    "homogeneous_config": {
+      "family": "g6.48xlarge",
+      "tp_degree": 8,
+      "pp_stages": 2,
+      "layers_per_stage": 40,
+      "instances_used": 2,
+      "pipeline_efficiency": 0.8
+    }
+  }
+}
