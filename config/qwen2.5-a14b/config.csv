@@ -2,10 +2,10 @@ parameter,value
 model_name,qwen2.5-a14b
 num_decoder_layers,28
 d_model,3584
-d_hidden,2560
+d_hidden,40960
 vocab_size,152064
 num_attention_heads,28
-layer_weight_memory_gb,2.0
+layer_weight_memory_gb,4.0
 time_limit_seconds,300
 optimality_gap,0.01
 bytes_per_element,2
