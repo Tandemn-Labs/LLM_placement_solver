@@ -133,6 +133,13 @@ class Config:
     # Prevents OOM from unmodeled overhead (CUDA graphs, sampler, fragmentation, etc.)
     filter_tight_memory: bool = True  # Default: filter out tight memory configs
     tight_memory_threshold_pct: float = 10.0  # Default: 10% headroom threshold
+    # vLLM PagedAttention KV block size (tokens per block)
+    kv_block_size: int = 16
+    # enforce_eager mode penalty (disables CUDA graphs → decode overhead)
+    enforce_eager: bool = False
+    enforce_eager_penalty: float = 0.80
+    # Cross-node PP latency (microseconds per pipeline stage boundary)
+    cross_node_pp_latency_us: float = 0.0
 
 # GPU performance tiers for hierarchy constraints
 GPU_PERFORMANCE_TIERS = {
@@ -160,22 +167,25 @@ class ThroughputFunctions:
     """Throughput functions with TP support"""
 
     GPU_SPECS = {
-        # Modern GPUs optimized for LLM inference (FP16/BF16 with modern tensor cores)
-        'H100': {'tflops': 989, 'mem_bw': 3350, 'efficiency': 0.70},  # Best for LLMs
-        'A100': {'tflops': 312, 'mem_bw': 2039, 'efficiency': 0.65},  # Excellent for LLMs
-        'L40S': {'tflops': 362, 'mem_bw': 864, 'efficiency': 0.58},   # Good Ada Lovelace
-        'A40': {'tflops': 150, 'mem_bw': 696, 'efficiency': 0.52},    # Ampere workstation
-        'L40': {'tflops': 181, 'mem_bw': 864, 'efficiency': 0.55},    # Ada Lovelace
-        
-        # Older GPUs - lower efficiency for modern LLM workloads
-        'V100': {'tflops': 125, 'mem_bw': 900, 'efficiency': 0.42},   # Volta - old tensor cores
-        'RTX4090': {'tflops': 165, 'mem_bw': 1008, 'efficiency': 0.50},
-        
+        # Split efficiency: compute_efficiency (sustained GEMM / peak TFLOPS),
+        #                   memory_efficiency (sustained BW / peak BW for decode streaming)
+        # HBM GPUs achieve higher memory_efficiency (0.65-0.72) due to HBM streaming access.
+        # GDDR6X GPUs have lower memory_efficiency (0.50-0.58) due to GDDR latency/bank conflicts.
+        'H100': {'tflops': 989, 'mem_bw': 3350, 'compute_efficiency': 0.80, 'memory_efficiency': 0.72},
+        'A100': {'tflops': 312, 'mem_bw': 2039, 'compute_efficiency': 0.78, 'memory_efficiency': 0.70},
+        'L40S': {'tflops': 362, 'mem_bw': 864,  'compute_efficiency': 0.70, 'memory_efficiency': 0.55},
+        'A40':  {'tflops': 150, 'mem_bw': 696,  'compute_efficiency': 0.70, 'memory_efficiency': 0.55},
+        'L40':  {'tflops': 181, 'mem_bw': 864,  'compute_efficiency': 0.70, 'memory_efficiency': 0.55},
+
+        # Older GPUs
+        'V100': {'tflops': 125, 'mem_bw': 900,  'compute_efficiency': 0.68, 'memory_efficiency': 0.65},
+        'RTX4090': {'tflops': 165, 'mem_bw': 1008, 'compute_efficiency': 0.72, 'memory_efficiency': 0.58},
+
         # Budget GPUs
-        'L20': {'tflops': 119, 'mem_bw': 480, 'efficiency': 0.48},    # Budget Ada
-        'L4': {'tflops': 121, 'mem_bw': 300, 'efficiency': 0.45},      # Budget Ada (PCIe)
-        'A10': {'tflops': 125, 'mem_bw': 600, 'efficiency': 0.45},    # Budget Ampere
-        'T4': {'tflops': 65, 'mem_bw': 320, 'efficiency': 0.38}       # Old Turing
+        'L20':  {'tflops': 119, 'mem_bw': 480,  'compute_efficiency': 0.68, 'memory_efficiency': 0.55},
+        'L4':   {'tflops': 121, 'mem_bw': 300,  'compute_efficiency': 0.65, 'memory_efficiency': 0.50},
+        'A10':  {'tflops': 62.5,'mem_bw': 600,  'compute_efficiency': 0.65, 'memory_efficiency': 0.40},  # Dense FP16 (not sparse 125), GDDR6
+        'T4':   {'tflops': 65,  'mem_bw': 320,  'compute_efficiency': 0.60, 'memory_efficiency': 0.50},
     }
 
     @staticmethod
@@ -206,7 +216,9 @@ class ThroughputFunctions:
                                       tp_degree: int = 1, phase: str = 'prefill',
                                       num_attention_heads: Optional[int] = None,
                                       num_kv_heads: Optional[int] = None,
-                                      head_dim: Optional[int] = None) -> float:
+                                      head_dim: Optional[int] = None,
+                                      vocab_size: int = 0,
+                                      total_num_layers: int = 0) -> float:
         """
         Calculate arithmetic intensity (FLOPs / Byte) using roofline model.
         Higher AI = more compute-bound, lower AI = more memory-bound.
@@ -273,8 +285,20 @@ class ThroughputFunctions:
                 (d_hidden / tp_degree) * d_model
             )
 
-        flops_per_layer = flops_attention + flops_ffn
+        # RMSNorm FLOPs: 2 norms per layer (pre-attention + pre-FFN), ~5 ops per element
+        tokens = seq_len if phase == 'prefill' else 1
+        rmsnorm_flops_per_layer = 2 * 5 * batch_size * tokens * d_model
+
+        flops_per_layer = flops_attention + flops_ffn + rmsnorm_flops_per_layer
         total_flops = flops_per_layer * num_layers
+
+        # LM head (amortized across pipeline stages proportionally)
+        if vocab_size > 0 and total_num_layers > 0:
+            layer_fraction = num_layers / total_num_layers
+            lm_head_flops = 2 * batch_size * tokens * d_model * vocab_size * layer_fraction
+        else:
+            lm_head_flops = 0
+        total_flops += lm_head_flops
 
         # === Memory Access Calculation (PHASE-AWARE) ===
         # Weights (divided by TP): same for both phases
@@ -283,28 +307,52 @@ class ThroughputFunctions:
             (2 * d_model * kv_dim) +                    # W_k, W_v (GQA/MQA aware)
             (3 * d_model * d_hidden)                    # W_gate, W_up, W_down
         ) * bytes_per_element / tp_degree
-        
+
         if phase == 'prefill':
             # KV cache being written
             bytes_kv_cache_per_layer = 2 * batch_size * seq_len * kv_dim * bytes_per_element / tp_degree
             # Activations for all tokens
             bytes_activations_per_layer = batch_size * seq_len * d_model * bytes_per_element
+            # Attention score intermediate tensors: QK^T write + softmax read + V-multiply read
+            attn_score_bytes_per_layer = (batch_size * (num_attention_heads / tp_degree)
+                                          * seq_len * seq_len * bytes_per_element * 3)
         else:  # decode
             # KV cache being READ (full cached context!)
-            # Note: This function doesn't have output_length, so can't account for growth
-            # The caller (gpu_throughput_with_tp) should pass adjusted seq_len if needed
             kv_cache_len = seq_len
             bytes_kv_cache_per_layer = 2 * batch_size * kv_cache_len * kv_dim * bytes_per_element / tp_degree
+            # PagedAttention scatter/gather overhead (~15% extra on KV cache reads)
+            bytes_kv_cache_per_layer *= 1.15
             # Activations for 1 token only
             bytes_activations_per_layer = batch_size * 1 * d_model * bytes_per_element
-        
-        bytes_per_layer = bytes_weights_per_layer + bytes_kv_cache_per_layer + bytes_activations_per_layer
+            # Attention score intermediate tensors for decode (1 query token × kv_cache_len)
+            attn_score_bytes_per_layer = (batch_size * (num_attention_heads / tp_degree)
+                                          * kv_cache_len * bytes_per_element * 3)
+
+        # RMSNorm bytes: 2 norms × (read input + write output + read norm weight)
+        # Norm weights are replicated (not sharded by TP)
+        rmsnorm_bytes_per_layer = 2 * (2 * batch_size * tokens * d_model + d_model) * bytes_per_element
+
+        # Residual connections: 2 per layer × (read + write) × d_model per token
+        residual_bytes_per_layer = 2 * 2 * batch_size * tokens * d_model * bytes_per_element
+
+        bytes_per_layer = (bytes_weights_per_layer + bytes_kv_cache_per_layer +
+                           bytes_activations_per_layer + rmsnorm_bytes_per_layer +
+                           residual_bytes_per_layer + attn_score_bytes_per_layer)
         total_bytes = bytes_per_layer * num_layers
-        
+
+        # LM head bytes (amortized)
+        if vocab_size > 0 and total_num_layers > 0:
+            layer_fraction = num_layers / total_num_layers
+            # Weight read per GPU (column-parallel, sharded by TP)
+            lm_head_weight_bytes = d_model * vocab_size * bytes_per_element / tp_degree * layer_fraction
+            # Output activation per GPU (before all-gather)
+            lm_head_act_bytes = batch_size * tokens * vocab_size * bytes_per_element / tp_degree * layer_fraction
+            total_bytes += lm_head_weight_bytes + lm_head_act_bytes
+
         # Arithmetic Intensity = FLOPs / Bytes
         if total_bytes == 0:
             return float('inf')
-        
+
         return total_flops / total_bytes
     
     @staticmethod
@@ -382,7 +430,7 @@ class ThroughputFunctions:
             num_layers, batch_size, seq_len, d_model, d_hidden, bytes_per_element,
             tp_degree=1, phase='prefill',
             num_attention_heads=num_attention_heads, num_kv_heads=num_kv_heads,
-            head_dim=head_dim
+            head_dim=head_dim, vocab_size=0, total_num_layers=0
         )
 
         # Get ridge point for this GPU
@@ -434,10 +482,10 @@ class ThroughputFunctions:
         # === Calculate Throughput Based on Regime ===
         if regime == "COMPUTE_BOUND":
             # Limited by compute - use FLOPS
-            time_per_batch = total_flops / (specs['tflops'] * 1e12 * specs['efficiency'])
+            time_per_batch = total_flops / (specs['tflops'] * 1e12 * specs['compute_efficiency'])
         else:  # MEMORY_BOUND
             # Limited by memory bandwidth
-            time_per_batch = total_bytes / (specs['mem_bw'] * 1e9 * specs['efficiency'])
+            time_per_batch = total_bytes / (specs['mem_bw'] * 1e9 * specs['memory_efficiency'])
         
         tokens_per_batch = batch_size * seq_len
         base_throughput = tokens_per_batch / time_per_batch
@@ -455,7 +503,9 @@ class ThroughputFunctions:
                                num_attention_heads: Optional[int] = None,
                                num_kv_heads: Optional[int] = None,
                                head_dim: Optional[int] = None,
-                               prefill_batch: int = 1) -> float:
+                               prefill_batch: int = 1,
+                               vocab_size: int = 0,
+                               total_num_layers: int = 0) -> float:
         """
         GPU throughput with tensor parallelism using roofline model.
 
@@ -499,7 +549,7 @@ class ThroughputFunctions:
                 tp_degree=tp_degree, d_hidden=d_hidden, nvlink_bw_gbps=nvlink_bw_gbps,
                 debug=debug, phase='prefill', output_length=0,
                 num_attention_heads=num_attention_heads, num_kv_heads=num_kv_heads,
-                head_dim=head_dim
+                head_dim=head_dim, vocab_size=vocab_size, total_num_layers=total_num_layers
             )
             # Compute decode throughput at batch=batch_size (decode concurrency)
             decode_tp = ThroughputFunctions.gpu_throughput_with_tp(
@@ -508,7 +558,7 @@ class ThroughputFunctions:
                 tp_degree=tp_degree, d_hidden=d_hidden, nvlink_bw_gbps=nvlink_bw_gbps,
                 debug=debug, phase='decode', output_length=output_length,
                 num_attention_heads=num_attention_heads, num_kv_heads=num_kv_heads,
-                head_dim=head_dim
+                head_dim=head_dim, vocab_size=vocab_size, total_num_layers=total_num_layers
             )
             # Combine using wave model (replaces Little's Law + interference_factor)
             aggregated_tp = ThroughputFunctions.calculate_aggregated_throughput(
@@ -544,7 +594,7 @@ class ThroughputFunctions:
         arithmetic_intensity = ThroughputFunctions.calculate_arithmetic_intensity(
             num_layers, batch_size, seq_len, d_model, d_hidden, bytes_per_element, tp_degree, phase,
             num_attention_heads=num_attention_heads, num_kv_heads=num_kv_heads,
-            head_dim=head_dim
+            head_dim=head_dim, vocab_size=vocab_size, total_num_layers=total_num_layers
         )
         
         ridge_point = ThroughputFunctions.get_ridge_point(gpu_type)
@@ -610,12 +660,23 @@ class ThroughputFunctions:
                 (d_hidden / tp_degree) * d_model
             )
 
-        flops_per_layer = attn_proj_flops + attn_score_flops + ffn_flops
+        # RMSNorm FLOPs: 2 norms per layer (pre-attention + pre-FFN), ~5 ops per element
+        tokens = seq_len if phase == 'prefill' else 1
+        rmsnorm_flops_per_layer = 2 * 5 * batch_size * tokens * d_model
+
+        flops_per_layer = attn_proj_flops + attn_score_flops + ffn_flops + rmsnorm_flops_per_layer
         total_flops_per_gpu = num_layers * flops_per_layer
 
+        # LM head FLOPs (amortized across pipeline stages)
+        lm_head_flops = 0
+        if vocab_size > 0 and total_num_layers > 0:
+            layer_fraction = num_layers / total_num_layers
+            lm_head_flops = 2 * batch_size * tokens * d_model * vocab_size * layer_fraction
+            total_flops_per_gpu += lm_head_flops
+
         if debug:
-            logger.info(f"  FLOPs per layer: {flops_per_layer:.2e}")
-            logger.info(f"  Total FLOPs (×{num_layers} layers): {total_flops_per_gpu:.2e}")
+            logger.info(f"  FLOPs per layer: {flops_per_layer:.2e} (rmsnorm={rmsnorm_flops_per_layer:.2e})")
+            logger.info(f"  Total FLOPs (×{num_layers} layers + lm_head={lm_head_flops:.2e}): {total_flops_per_gpu:.2e}")
 
         # === Compute Memory Access PER GPU (weights sharded by TP) ===
         # PHASE-AWARE memory access patterns
@@ -626,34 +687,59 @@ class ThroughputFunctions:
             (2 * d_model * (kv_dim / tp_degree)) +                                  # W_k, W_v
             (3 * d_model * (d_hidden / tp_degree))
         ) * bytes_per_element
-        
+
         if phase == 'prefill':
             # PREFILL: Activations for all tokens per layer
             activation_bytes = num_layers * batch_size * seq_len * d_model * bytes_per_element
             # KV cache being written (sharded)
             kv_cache_bytes = num_layers * 2 * batch_size * seq_len * (kv_dim / tp_degree) * bytes_per_element
-        
+            # Attention score intermediate tensors: QK^T write + softmax read + V-multiply read
+            attn_score_bytes = num_layers * batch_size * (num_attention_heads / tp_degree) * seq_len * seq_len * bytes_per_element * 3
+
         else:  # phase == 'decode'
             # DECODE: Activation for 1 token per layer
             activation_bytes = num_layers * batch_size * 1 * d_model * bytes_per_element
             # CRITICAL: Must READ entire KV cache (which grows during generation!)
-            # Use average cache length for realistic estimation
             if output_length > 0:
                 avg_kv_cache_len = seq_len + (output_length - 1) / 2.0
             else:
                 avg_kv_cache_len = seq_len
             kv_cache_bytes = num_layers * 2 * batch_size * avg_kv_cache_len * (kv_dim / tp_degree) * bytes_per_element
-        
-        total_bytes_per_gpu = weight_bytes + activation_bytes + kv_cache_bytes
-        
+            # PagedAttention scatter/gather overhead (~15% extra on KV cache reads)
+            kv_cache_bytes *= 1.15
+            # Attention score intermediate tensors for decode (1 query × kv_cache_len)
+            attn_score_bytes = num_layers * batch_size * (num_attention_heads / tp_degree) * avg_kv_cache_len * bytes_per_element * 3
+
+        # RMSNorm bytes: 2 norms × (read input + write output + read norm weight)
+        # Norm weights are replicated (not sharded by TP)
+        rmsnorm_bytes = num_layers * 2 * (2 * batch_size * tokens * d_model + d_model) * bytes_per_element
+
+        # Residual connections: 2 per layer × (read + write) × d_model per token
+        residual_bytes = num_layers * 2 * 2 * batch_size * tokens * d_model * bytes_per_element
+
+        # LM head bytes (amortized)
+        lm_head_bytes = 0
+        if vocab_size > 0 and total_num_layers > 0:
+            layer_fraction = num_layers / total_num_layers
+            lm_head_wt_bytes = d_model * vocab_size * bytes_per_element / tp_degree * layer_fraction
+            lm_head_act_bytes = batch_size * tokens * vocab_size * bytes_per_element / tp_degree * layer_fraction
+            lm_head_bytes = lm_head_wt_bytes + lm_head_act_bytes
+
+        total_bytes_per_gpu = (weight_bytes + activation_bytes + kv_cache_bytes +
+                               attn_score_bytes + rmsnorm_bytes + residual_bytes + lm_head_bytes)
+
         if debug:
+            logger.info(f"  Memory: weights={weight_bytes/1e9:.3f}GB, act={activation_bytes/1e9:.3f}GB, "
+                        f"kv={kv_cache_bytes/1e9:.3f}GB, attn_score={attn_score_bytes/1e9:.3f}GB, "
+                        f"rmsnorm={rmsnorm_bytes/1e9:.3f}GB, residual={residual_bytes/1e9:.3f}GB, "
+                        f"lm_head={lm_head_bytes/1e9:.3f}GB")
             logger.info(f"  Total memory: {total_bytes_per_gpu / 1e9:.2f} GB")
         
         # === Calculate BASE time (without TP efficiency penalty first) ===
         if regime == "COMPUTE_BOUND":
-            base_time_per_batch = total_flops_per_gpu / (specs['tflops'] * 1e12 * specs['efficiency'])
+            base_time_per_batch = total_flops_per_gpu / (specs['tflops'] * 1e12 * specs['compute_efficiency'])
         else:  # MEMORY_BOUND
-            base_time_per_batch = total_bytes_per_gpu / (specs['mem_bw'] * 1e9 * specs['efficiency'])
+            base_time_per_batch = total_bytes_per_gpu / (specs['mem_bw'] * 1e9 * specs['memory_efficiency'])
         
         # === Communication Overhead (compute before applying TP efficiency) ===
         # Megatron-style TP has 2 all-reduces per transformer layer:
@@ -667,36 +753,39 @@ class ThroughputFunctions:
             activation_size_bytes = batch_size * 1 * d_model * bytes_per_element  # 1 token
 
         num_allreduce_per_layer = 2  # post-attention + post-FFN
-        comm_time_per_layer = (num_allreduce_per_layer * 2 * activation_size_bytes
-                               / (nvlink_bw_gbps * 1e9) * (tp_degree - 1) / tp_degree)
+        # Per-op latency and effective BW depend on interconnect type
+        if nvlink_bw_gbps >= 100:  # NVLink
+            allreduce_latency_s = 5e-6
+            effective_comm_bw = nvlink_bw_gbps
+        else:  # PCIe
+            allreduce_latency_s = 200e-6
+            # PCIe effective BW degrades with more GPUs due to switch/root-complex contention.
+            # Nominal PCIe 4.0 x16 = 32 GB/s bidirectional, but ring all-reduce across
+            # multiple GPUs shares switch bandwidth and suffers from topology bottlenecks.
+            pcie_tp_bw_scale = {1: 1.0, 2: 0.75, 4: 0.375, 8: 0.125}.get(
+                tp_degree, max(0.10, 0.5 / tp_degree))
+            effective_comm_bw = nvlink_bw_gbps * pcie_tp_bw_scale
+        comm_time_per_layer = num_allreduce_per_layer * (
+            2 * activation_size_bytes / (effective_comm_bw * 1e9) * (tp_degree - 1) / tp_degree
+            + allreduce_latency_s
+        )
         total_comm_time = num_layers * comm_time_per_layer
         
-        # === TP Efficiency Factor (bandwidth-aware) ===
-        # Additional overheads not captured by explicit all-reduce communication time:
-        #   Fixed component: kernel launch overhead, NCCL scheduling, CUDA stream sync
-        #   BW-dependent component: sync barrier latency, memory bandwidth contention
-        # On NVLink (300-900 GB/s) the BW-dependent component is negligible;
-        # on PCIe (32 GB/s) it dominates.  Reference BW = 32 GB/s (PCIe 4.0 x16).
+        # === TP Efficiency Factor ===
+        # Residual overhead after explicit comm_time: CUDA stream sync, BW contention
+        # Per-op latency is now captured in comm_time (Change 4), so this is minimal.
         comm_overhead_ratio = 0.0  # Initialize
         if tp_degree == 1:
             tp_efficiency_compute = 1.00  # No TP, no overhead
         else:
             comm_overhead_ratio = total_comm_time / (base_time_per_batch + total_comm_time)
 
-            # Fixed overhead (kernel launches, software scheduling) — independent of BW
-            fixed_overhead = {2: 0.02, 4: 0.04, 8: 0.06, 16: 0.08}.get(tp_degree, 0.10)
-            # BW-dependent overhead (sync barriers, contention) — scales with 32/bw
-            bw_dep_overhead = {2: 0.03, 4: 0.06, 8: 0.09, 16: 0.12}.get(tp_degree, 0.15)
-            bw_scale = min(1.5, 32.0 / max(1.0, nvlink_bw_gbps))
-            additional_overhead = fixed_overhead + bw_dep_overhead * bw_scale
-
-            tp_efficiency_compute = max(0.30, 1.0 - additional_overhead)
+            residual_overhead = {2: 0.01, 4: 0.02, 8: 0.03, 16: 0.05}.get(tp_degree, 0.06)
+            tp_efficiency_compute = max(0.50, 1.0 - residual_overhead)
 
             logger.debug(
                 f"  [tp_overhead] TP={tp_degree}, bw={nvlink_bw_gbps:.1f}GB/s, "
-                f"fixed={fixed_overhead:.3f}, bw_dep={bw_dep_overhead:.3f}, "
-                f"bw_scale={bw_scale:.3f} (ref=32GB/s), "
-                f"additional_overhead={additional_overhead:.4f}, "
+                f"residual_overhead={residual_overhead:.3f}, "
                 f"comm_overhead_ratio={comm_overhead_ratio:.4f}, "
                 f"tp_eff={tp_efficiency_compute:.4f}"
             )
@@ -732,7 +821,15 @@ class ThroughputFunctions:
         if phase == 'prefill':
             batch_eff = min(1.0, 0.70 + 0.30 * min(1.0, seq_len / 512))
         else:
-            batch_eff = ThroughputFunctions.batch_efficiency_factor(batch_size)
+            # Decode is memory-bound; even batch=1 achieves high BW utilization with CUDA graphs
+            if batch_size >= 16:
+                batch_eff = 1.0
+            elif batch_size >= 4:
+                batch_eff = 0.95
+            elif batch_size >= 2:
+                batch_eff = 0.90
+            else:
+                batch_eff = 0.85
         
         if debug:
             logger.info(f"  Total time: {total_time:.4f} sec")
@@ -1304,7 +1401,7 @@ class LLMPlacementSolverWithTP:
         # NEW: Runtime calibration knobs (optional)
         # real_world_efficiency: overall efficiency multiplier [0,1]
         # micro_batch_size: assumed micro-batch size for pipeline bubble model
-        real_world_efficiency = float(config_dict.get('real_world_efficiency', 0.30))
+        real_world_efficiency = float(config_dict.get('real_world_efficiency', 0.55))
         micro_batch_size = int(config_dict.get('micro_batch_size', 8))
 
         # max_num_batched_tokens: vLLM default is 16384 (0 = fall back to max_model_len)
@@ -1317,6 +1414,12 @@ class LLMPlacementSolverWithTP:
 
         # NEW: Penalty for cross-instance PP connections (encourages intra-node placement)
         cross_instance_penalty = float(config_dict.get('cross_instance_penalty', 0.01))
+
+        # NEW: KV block size, enforce_eager, cross-node PP latency
+        kv_block_size = int(config_dict.get('kv_block_size', 16))
+        enforce_eager = str(config_dict.get('enforce_eager', 'false')).lower() in ('true', '1', 'yes')
+        enforce_eager_penalty = float(config_dict.get('enforce_eager_penalty', 0.80))
+        cross_node_pp_latency_us = float(config_dict.get('cross_node_pp_latency_us', 0.0))
         
         return Config(
             workload_phase=workload_phase,
@@ -1358,7 +1461,11 @@ class LLMPlacementSolverWithTP:
             max_num_seqs=max_num_seqs or 256,
             max_num_batched_tokens=max_num_batched_tokens,
             gpu_memory_utilization=gpu_memory_utilization,
-            cross_instance_penalty=cross_instance_penalty
+            cross_instance_penalty=cross_instance_penalty,
+            kv_block_size=kv_block_size,
+            enforce_eager=enforce_eager,
+            enforce_eager_penalty=enforce_eager_penalty,
+            cross_node_pp_latency_us=cross_node_pp_latency_us
         )
     
     def _get_min_intra_tp_bandwidth(self, gpu_type: str, gpu_set: FrozenSet[int]) -> float:
@@ -1499,8 +1606,9 @@ class LLMPlacementSolverWithTP:
             _O = max(1, self.config.output_length)
 
             # Inter-stage activation transfer time per iteration
-            pf_comm = (_P * _S * _d * _bpe) / (inter_stage_bw * 1e9)
-            dc_comm = (_N * 1 * _d * _bpe) / (inter_stage_bw * 1e9)
+            latency_s = self.config.cross_node_pp_latency_us * 1e-6
+            pf_comm = (_P * _S * _d * _bpe) / (inter_stage_bw * 1e9) + latency_s
+            dc_comm = (_N * 1 * _d * _bpe) / (inter_stage_bw * 1e9) + latency_s
 
             # Per-iteration compute times (from roofline)
             T_pf = (_P * _S) / prefill_tp
@@ -1902,7 +2010,10 @@ class LLMPlacementSolverWithTP:
         if avg_seq_tokens <= 0:
             return 1
 
-        kv_per_seq = self._kv_bytes_per_token(layers_per_stage, tp_degree) * avg_seq_tokens
+        # vLLM allocates KV in blocks of kv_block_size tokens — round up for fragmentation
+        kv_block_size = self.config.kv_block_size
+        paged_tokens = math.ceil(avg_seq_tokens / kv_block_size) * kv_block_size
+        kv_per_seq = self._kv_bytes_per_token(layers_per_stage, tp_degree) * paged_tokens
         if kv_per_seq <= 0:
             return 1
 
@@ -2150,8 +2261,8 @@ class LLMPlacementSolverWithTP:
                 continue
             segment_size = end_layer - start_layer + 1
 
-            max_seg = self._compute_max_segment_size_for_tp(gpu_type, tp_degree, batch_size)
-            min_seg = self._compute_min_segment_size_for_tp(gpu_type, tp_degree, batch_size)
+            max_seg = self._compute_max_segment_size_for_tp(gpu_type, tp_degree, batch_size=1)
+            min_seg = self._compute_min_segment_size_for_tp(gpu_type, tp_degree, batch_size=1)
 
             gpu_mem = self.gpu_types[gpu_type].memory_gb
             weight_per_layer = self.config.layer_weight_memory_gb / tp_degree
@@ -2298,9 +2409,11 @@ class LLMPlacementSolverWithTP:
         if "workload_phase" in placement:
             self.config.workload_phase = str(placement["workload_phase"]).lower()
 
-        batch_size = int(placement.get("batch_size", self.config.min_batch_size))
-        self.config.min_batch_size = batch_size
-        self.config.max_batch_size = batch_size
+        # batch_size from placement is treated as an optional cap (user override)
+        # Actual decode batch is derived from KV-cache capacity per stage
+        user_batch_size = placement.get("batch_size", None)
+        if user_batch_size is not None:
+            user_batch_size = int(user_batch_size)
 
         stages = placement.get("stages", [])
         if not stages:
@@ -2359,17 +2472,18 @@ class LLMPlacementSolverWithTP:
 
             used_local_ids[gpu_type].update(gpu_set)
             segment_size = end_layer - start_layer + 1
-            max_seg_size = self._compute_max_segment_size_for_tp(gpu_type, tp_degree, batch_size)
+            # Use batch_size=1 for weight feasibility (KV capacity checked separately)
+            max_seg_size = self._compute_max_segment_size_for_tp(gpu_type, tp_degree, batch_size=1)
             if segment_size > max_seg_size:
                 raise ValueError(
                     f"Segment {start_layer}-{end_layer} (size={segment_size}) exceeds "
-                    f"max feasible size {max_seg_size} for {gpu_type} TP={tp_degree} batch={batch_size}"
+                    f"max feasible size {max_seg_size} for {gpu_type} TP={tp_degree}"
                 )
-            min_seg_size = self._compute_min_segment_size_for_tp(gpu_type, tp_degree, batch_size)
+            min_seg_size = self._compute_min_segment_size_for_tp(gpu_type, tp_degree, batch_size=1)
             if segment_size < min_seg_size:
                 raise ValueError(
                     f"Segment {start_layer}-{end_layer} (size={segment_size}) below "
-                    f"min feasible size {min_seg_size} for {gpu_type} TP={tp_degree} batch={batch_size}"
+                    f"min feasible size {min_seg_size} for {gpu_type} TP={tp_degree}"
                 )
             if segment_size < self.config.min_layers_per_stage:
                 raise ValueError(
@@ -2384,29 +2498,52 @@ class LLMPlacementSolverWithTP:
                     f"Segment size {segment_size} not in quantized sizes {self.quantized_sizes}"
                 )
             partition_id = idx
-            segment = (gpu_type, gpu_set, tp_degree, partition_id, start_layer, segment_size, batch_size)
-            segments.append(segment)
 
             nvlink_bw = self._get_min_intra_tp_bandwidth(gpu_type, gpu_set)
 
-            # Derive prefill_batch for aggregated mode (consistent with homogeneous solver)
+            # --- Derive decode concurrency from KV pool (consistent with solve_homogeneous) ---
             _gpu_mem = self.gpu_types[gpu_type].memory_gb
+            max_concurrent = self._derive_max_concurrent_sequences(_gpu_mem, segment_size, tp_degree)
+            effective_decode_batch = min(self.config.max_num_seqs, max_concurrent)
+            if user_batch_size is not None:
+                effective_decode_batch = min(effective_decode_batch, user_batch_size)
+            effective_decode_batch = max(1, effective_decode_batch)
+
+            # Check enforce_eager from placement or config
+            stage_enforce_eager = placement.get("enforce_eager", self.config.enforce_eager)
+            if isinstance(stage_enforce_eager, str):
+                stage_enforce_eager = stage_enforce_eager.lower() in ('true', '1', 'yes')
+
+            logger.info(
+                f"  Stage {idx}: {gpu_type} TP={tp_degree} layers={start_layer}-{end_layer} "
+                f"max_concurrent={max_concurrent}, eff_decode_batch={effective_decode_batch}"
+            )
+
+            segment = (gpu_type, gpu_set, tp_degree, partition_id, start_layer, segment_size, effective_decode_batch)
+            segments.append(segment)
+
+            # Derive prefill_batch for aggregated mode (consistent with homogeneous solver)
             _max_model_len = self._compute_max_model_len(_gpu_mem, segment_size, tp_degree)
             _mnbt = self.config.max_num_batched_tokens or _max_model_len
             _S = self.config.sequence_length
-            _prefill_batch = max(1, min(_mnbt // _S if _S > 0 else 1, batch_size))
+            _prefill_batch = max(1, min(_mnbt // _S if _S > 0 else 1, effective_decode_batch))
 
             throughput = ThroughputFunctions.gpu_throughput_with_tp(
                 self._get_gpu_model_name(gpu_type), self.config.sequence_length,
-                batch_size, segment_size, self.config.d_model,
+                effective_decode_batch, segment_size, self.config.d_model,
                 self.config.bytes_per_element, tp_degree, self.config.d_hidden, nvlink_bw,
                 debug=False, phase=self.config.workload_phase,
                 output_length=self.config.output_length,
                 num_attention_heads=self.config.num_attention_heads,
                 num_kv_heads=self.config.num_kv_heads,
                 head_dim=self.config.head_dim,
-                prefill_batch=_prefill_batch
+                prefill_batch=_prefill_batch,
+                vocab_size=self.config.vocab_size,
+                total_num_layers=self.config.num_decoder_layers
             )
+            # Apply enforce_eager penalty to pure decode phase throughput
+            if stage_enforce_eager and self.config.workload_phase == 'decode':
+                throughput *= self.config.enforce_eager_penalty
 
             # Compute per-stage prefill/decode throughputs for 1F1B pipeline model
             if self.config.workload_phase == 'aggregated':
@@ -2417,18 +2554,34 @@ class LLMPlacementSolverWithTP:
                     debug=False, phase='prefill',
                     num_attention_heads=self.config.num_attention_heads,
                     num_kv_heads=self.config.num_kv_heads,
-                    head_dim=self.config.head_dim
+                    head_dim=self.config.head_dim,
+                    vocab_size=self.config.vocab_size,
+                    total_num_layers=self.config.num_decoder_layers
                 )
                 stage_decode_tp = ThroughputFunctions.gpu_throughput_with_tp(
                     self._get_gpu_model_name(gpu_type), self.config.sequence_length,
-                    batch_size, segment_size, self.config.d_model,
+                    effective_decode_batch, segment_size, self.config.d_model,
                     self.config.bytes_per_element, tp_degree, self.config.d_hidden, nvlink_bw,
                     debug=False, phase='decode',
                     output_length=self.config.output_length,
                     num_attention_heads=self.config.num_attention_heads,
                     num_kv_heads=self.config.num_kv_heads,
-                    head_dim=self.config.head_dim
+                    head_dim=self.config.head_dim,
+                    vocab_size=self.config.vocab_size,
+                    total_num_layers=self.config.num_decoder_layers
                 )
+                # Apply enforce_eager penalty to decode (decode is memory-bound, affected by CUDA graph overhead)
+                if stage_enforce_eager:
+                    stage_decode_tp *= self.config.enforce_eager_penalty
+                    # Recompute aggregated throughput with penalty-adjusted decode
+                    throughput = ThroughputFunctions.calculate_aggregated_throughput(
+                        prefill_throughput=stage_prefill_tp,
+                        decode_throughput=stage_decode_tp,
+                        seq_len=self.config.sequence_length,
+                        output_len=self.config.output_length,
+                        max_num_seqs=effective_decode_batch,
+                        prefill_batch=_prefill_batch,
+                    )
             else:
                 stage_prefill_tp = 0.0
                 stage_decode_tp = 0.0
@@ -2447,6 +2600,7 @@ class LLMPlacementSolverWithTP:
                 'prefill_tp': stage_prefill_tp,
                 'decode_tp': stage_decode_tp,
                 'prefill_batch': _prefill_batch,
+                'effective_decode_batch': effective_decode_batch,
             })
 
         assignments.sort(key=lambda x: x['start_layer'])
@@ -2502,6 +2656,10 @@ class LLMPlacementSolverWithTP:
         num_stages = len(assignments)
         inter_stage_bw = self._get_inter_stage_bw_for_placement(segments_sorted)
 
+        # Pipeline-wide effective decode batch = bottleneck across stages
+        effective_batches = [a['effective_decode_batch'] for a in assignments]
+        pipeline_effective_decode_batch = min(effective_batches) if effective_batches else 1
+
         if num_stages <= 1:
             pipeline_efficiency = 1.0
         elif self.config.workload_phase == 'aggregated':
@@ -2512,11 +2670,11 @@ class LLMPlacementSolverWithTP:
                 num_stages, inter_stage_bw,
                 prefill_tp=min(prefill_tps),
                 decode_tp=min(decode_tps),
-                effective_decode_batch=batch_size,
+                effective_decode_batch=pipeline_effective_decode_batch,
                 prefill_batch=min(prefill_batches)
             )
         else:
-            batch_for_phase = 1 if self.config.workload_phase == 'prefill' else batch_size
+            batch_for_phase = 1 if self.config.workload_phase == 'prefill' else pipeline_effective_decode_batch
             pipeline_efficiency = self._compute_pipeline_efficiency_1f1b(
                 num_stages, inter_stage_bw,
                 stage_throughput=raw_throughput,
@@ -2537,7 +2695,8 @@ class LLMPlacementSolverWithTP:
 
         self.solution = {
             'objective_value': 0.0,
-            'batch_size': batch_size,
+            'batch_size': pipeline_effective_decode_batch,
+            'effective_decode_batch': pipeline_effective_decode_batch,
             'throughput_tokens_per_sec': throughput_per_sec,
             'raw_throughput_tokens_per_sec': raw_throughput,
             'pipeline_efficiency': pipeline_efficiency,
@@ -2613,7 +2772,9 @@ class LLMPlacementSolverWithTP:
                                     num_attention_heads=self.config.num_attention_heads,
                                     num_kv_heads=self.config.num_kv_heads,
                                     head_dim=self.config.head_dim,
-                                    prefill_batch=_prefill_batch
+                                    prefill_batch=_prefill_batch,
+                                    vocab_size=self.config.vocab_size,
+                                    total_num_layers=self.config.num_decoder_layers
                                 )
                                 # Store in dictionary for O(1) lookup later
                                 if not hasattr(self, 'segment_throughputs_temp'):
@@ -2661,7 +2822,9 @@ class LLMPlacementSolverWithTP:
                 num_attention_heads=self.config.num_attention_heads,
                 num_kv_heads=self.config.num_kv_heads,
                 head_dim=self.config.head_dim,
-                prefill_batch=_prefill_batch
+                prefill_batch=_prefill_batch,
+                vocab_size=self.config.vocab_size,
+                total_num_layers=self.config.num_decoder_layers
             )
             if precomputed is None:
                 logger.error(f"  ✗ Missing pre-computed value for segment: {seg}")
@@ -2940,7 +3103,9 @@ class LLMPlacementSolverWithTP:
                 num_attention_heads=self.config.num_attention_heads,
                 num_kv_heads=self.config.num_kv_heads,
                 head_dim=self.config.head_dim,
-                prefill_batch=_prefill_batch
+                prefill_batch=_prefill_batch,
+                vocab_size=self.config.vocab_size,
+                total_num_layers=self.config.num_decoder_layers
             )
 
     def _log_network_debug_samples(self, sample_count: int) -> None:
@@ -3366,7 +3531,9 @@ class LLMPlacementSolverWithTP:
                     num_attention_heads=self.config.num_attention_heads,
                     num_kv_heads=self.config.num_kv_heads,
                     head_dim=self.config.head_dim,
-                    prefill_batch=_prefill_batch
+                    prefill_batch=_prefill_batch,
+                    vocab_size=self.config.vocab_size,
+                    total_num_layers=self.config.num_decoder_layers
                 )
                 throughput_by_type[gpu_type] = max_throughput
                 max_throughput_global = max(max_throughput_global, max_throughput)
@@ -4247,7 +4414,9 @@ class LLMPlacementSolverWithTP:
                         debug=False, phase='prefill',
                         num_attention_heads=self.config.num_attention_heads,
                         num_kv_heads=self.config.num_kv_heads,
-                        head_dim=self.config.head_dim
+                        head_dim=self.config.head_dim,
+                        vocab_size=self.config.vocab_size,
+                        total_num_layers=self.config.num_decoder_layers
                     )
                     dc_tp = ThroughputFunctions.gpu_throughput_with_tp(
                         gpu_model, self.config.sequence_length,
@@ -4257,7 +4426,9 @@ class LLMPlacementSolverWithTP:
                         output_length=self.config.output_length,
                         num_attention_heads=self.config.num_attention_heads,
                         num_kv_heads=self.config.num_kv_heads,
-                        head_dim=self.config.head_dim
+                        head_dim=self.config.head_dim,
+                        vocab_size=self.config.vocab_size,
+                        total_num_layers=self.config.num_decoder_layers
                     )
                     prefill_tps.append(pf_tp)
                     decode_tps.append(dc_tp)
@@ -4502,9 +4673,11 @@ class LLMPlacementSolverWithTP:
                 self.config.d_model, self.config.d_hidden, self.config.bytes_per_element, tp_degree,
                 phase=self.config.workload_phase,
                 num_attention_heads=self.config.num_attention_heads,
-                num_kv_heads=self.config.num_kv_heads
+                num_kv_heads=self.config.num_kv_heads,
+                vocab_size=self.config.vocab_size,
+                total_num_layers=self.config.num_decoder_layers
             )
-            
+
             # Get ridge point
             ridge_point = ThroughputFunctions.get_ridge_point(self._get_gpu_model_name(gpu_type))
             
@@ -4547,7 +4720,9 @@ class LLMPlacementSolverWithTP:
                 self.config.d_model, self.config.d_hidden, self.config.bytes_per_element, tp_degree,
                 phase=self.config.workload_phase,
                 num_attention_heads=self.config.num_attention_heads,
-                num_kv_heads=self.config.num_kv_heads
+                num_kv_heads=self.config.num_kv_heads,
+                vocab_size=self.config.vocab_size,
+                total_num_layers=self.config.num_decoder_layers
             )
             ridge_point = ThroughputFunctions.get_ridge_point(self._get_gpu_model_name(gpu_type))
             regime = ThroughputFunctions.determine_regime(ai, ridge_point)
@@ -4592,7 +4767,9 @@ class LLMPlacementSolverWithTP:
                 self.config.d_model, self.config.d_hidden, self.config.bytes_per_element, tp_degree,
                 phase=self.config.workload_phase,
                 num_attention_heads=self.config.num_attention_heads,
-                num_kv_heads=self.config.num_kv_heads
+                num_kv_heads=self.config.num_kv_heads,
+                vocab_size=self.config.vocab_size,
+                total_num_layers=self.config.num_decoder_layers
             )
             ridge_point = ThroughputFunctions.get_ridge_point(self._get_gpu_model_name(gpu_type))
             regime = ThroughputFunctions.determine_regime(ai, ridge_point)
@@ -4611,8 +4788,8 @@ class LLMPlacementSolverWithTP:
             specs = ThroughputFunctions.GPU_SPECS.get(self._get_gpu_model_name(gpu_type))
             if specs:
                 # Per-GPU specs
-                effective_flops_per_gpu = specs['tflops'] * specs['efficiency']
-                effective_bw_per_gpu = specs['mem_bw'] * specs['efficiency']
+                effective_flops_per_gpu = specs['tflops'] * specs['compute_efficiency']
+                effective_bw_per_gpu = specs['mem_bw'] * specs['memory_efficiency']
                 # Total instance capacity (all GPUs in instance)
                 total_flops = effective_flops_per_gpu * gpu_obj.count
                 total_bw = effective_bw_per_gpu * gpu_obj.count
@@ -4724,7 +4901,9 @@ class LLMPlacementSolverWithTP:
                         num_attention_heads=self.config.num_attention_heads,
                         num_kv_heads=self.config.num_kv_heads,
                         head_dim=self.config.head_dim,
-                        prefill_batch=_prefill_batch
+                        prefill_batch=_prefill_batch,
+                        vocab_size=self.config.vocab_size,
+                        total_num_layers=self.config.num_decoder_layers
                     )
                     hyp_cost = gpu_obj.cost_per_hour  # Instance cost (same regardless of TP)
                     logger.info(
@@ -4783,7 +4962,9 @@ class LLMPlacementSolverWithTP:
                 num_attention_heads=self.config.num_attention_heads,
                 num_kv_heads=self.config.num_kv_heads,
                 head_dim=self.config.head_dim,
-                prefill_batch=_prefill_batch
+                prefill_batch=_prefill_batch,
+                vocab_size=self.config.vocab_size,
+                total_num_layers=self.config.num_decoder_layers
             )
             alt_cost = best_gpu.cost_per_hour  # Instance cost (same regardless of TP)
             alt_cost_per_token = alt_cost / (alt_throughput * 3600)
@@ -4852,7 +5033,9 @@ class LLMPlacementSolverWithTP:
                         num_attention_heads=self.config.num_attention_heads,
                         num_kv_heads=self.config.num_kv_heads,
                         head_dim=self.config.head_dim,
-                        prefill_batch=_prefill_batch
+                        prefill_batch=_prefill_batch,
+                        vocab_size=self.config.vocab_size,
+                        total_num_layers=self.config.num_decoder_layers
                     )
                     c_alt = best_gpu.cost_per_hour  # Instance cost (same regardless of TP)
                     obj_alt = (t_alt / self.config.throughput_normalization) - \
@@ -5378,7 +5561,9 @@ class LLMPlacementSolverWithTP:
                             debug=False, phase='prefill',
                             num_attention_heads=self.config.num_attention_heads,
                             num_kv_heads=self.config.num_kv_heads,
-                            head_dim=self.config.head_dim
+                            head_dim=self.config.head_dim,
+                            vocab_size=self.config.vocab_size,
+                            total_num_layers=self.config.num_decoder_layers
                         )
                         # Decode: batch_size=effective_decode_batch (actual engine concurrency)
                         decode_tp = ThroughputFunctions.gpu_throughput_with_tp(
@@ -5390,8 +5575,13 @@ class LLMPlacementSolverWithTP:
                             output_length=self.config.output_length,
                             num_attention_heads=self.config.num_attention_heads,
                             num_kv_heads=self.config.num_kv_heads,
-                            head_dim=self.config.head_dim
+                            head_dim=self.config.head_dim,
+                            vocab_size=self.config.vocab_size,
+                            total_num_layers=self.config.num_decoder_layers
                         )
+                        # Apply enforce_eager penalty to decode (decode is memory-bound, affected by CUDA graph overhead)
+                        if self.config.enforce_eager:
+                            decode_tp *= self.config.enforce_eager_penalty
                         # Combine with wave model (replaces Little's Law + interference_factor)
                         stage_throughput = ThroughputFunctions.calculate_aggregated_throughput(
                             prefill_throughput=prefill_tp,
@@ -5429,8 +5619,13 @@ class LLMPlacementSolverWithTP:
                             debug=False, phase=self.config.workload_phase,
                             num_attention_heads=self.config.num_attention_heads,
                             num_kv_heads=self.config.num_kv_heads,
-                            head_dim=self.config.head_dim
+                            head_dim=self.config.head_dim,
+                            vocab_size=self.config.vocab_size,
+                            total_num_layers=self.config.num_decoder_layers
                         )
+                        # Apply enforce_eager penalty to decode phase
+                        if self.config.enforce_eager and self.config.workload_phase == 'decode':
+                            stage_throughput *= self.config.enforce_eager_penalty
 
                     if stage_throughput <= 0:
                         continue
@@ -5735,7 +5930,8 @@ class LLMPlacementSolverWithTP:
         # --- GPU specs ---
         logger.info(f"[GPU] {_gpu}: peak={_specs['tflops']} TFLOPS, "
                     f"mem_bw={_specs['mem_bw']} GB/s, "
-                    f"hw_efficiency={_specs['efficiency']:.0%}, "
+                    f"compute_eff={_specs['compute_efficiency']:.0%}, "
+                    f"memory_eff={_specs['memory_efficiency']:.0%}, "
                     f"nvlink_bw={_nvlink:.0f} GB/s")
         _ridge = _specs['tflops'] * 1e12 / (_specs['mem_bw'] * 1e9)
         logger.info(f"[GPU] Ridge point: {_ridge:.1f} FLOPs/byte")
@@ -5807,6 +6003,7 @@ class LLMPlacementSolverWithTP:
 
         # Recompute FLOPs for prefill
         _pb = opt_prefill_batch
+        _layer_frac = _lps / self.config.num_decoder_layers
         _pf_q = 2 * _pb * S * self.config.d_model * (_q_o_dim / _tp)
         _pf_k = 2 * _pb * S * self.config.d_model * (_kv_dim / _tp)
         _pf_v = 2 * _pb * S * self.config.d_model * (_kv_dim / _tp)
@@ -5818,12 +6015,18 @@ class LLMPlacementSolverWithTP:
             self.config.d_model * (self.config.d_hidden / _tp) +
             (self.config.d_hidden / _tp) * self.config.d_model
         )
-        _pf_flops_layer = _pf_attn_proj + _pf_attn_score + _pf_ffn
+        _pf_rmsnorm_flops = 2 * 5 * _pb * S * self.config.d_model
+        _pf_flops_layer = _pf_attn_proj + _pf_attn_score + _pf_ffn + _pf_rmsnorm_flops
         _pf_total_flops = _lps * _pf_flops_layer
+        # LM head (amortized)
+        _pf_lmhead_flops = 2 * _pb * S * self.config.d_model * self.config.vocab_size * _layer_frac
+        _pf_total_flops += _pf_lmhead_flops
 
         logger.info(f"[Roofline-Prefill] FLOPs/layer: attn_proj={_pf_attn_proj:.3e}, "
-                    f"attn_score(O(n²))={_pf_attn_score:.3e}, ffn={_pf_ffn:.3e}")
-        logger.info(f"[Roofline-Prefill] Total FLOPs: {_pf_flops_layer:.3e}/layer × {_lps} = {_pf_total_flops:.3e}")
+                    f"attn_score(O(n²))={_pf_attn_score:.3e}, ffn={_pf_ffn:.3e}, "
+                    f"rmsnorm={_pf_rmsnorm_flops:.3e}")
+        logger.info(f"[Roofline-Prefill] Total FLOPs: {_pf_flops_layer:.3e}/layer × {_lps} "
+                    f"+ lm_head={_pf_lmhead_flops:.3e} = {_pf_total_flops:.3e}")
 
         # Memory access for prefill
         _pf_wt_bytes = _lps * (
@@ -5833,11 +6036,24 @@ class LLMPlacementSolverWithTP:
         ) * self.config.bytes_per_element
         _pf_act_bytes = _lps * _pb * S * self.config.d_model * self.config.bytes_per_element
         _pf_kv_bytes = _lps * 2 * _pb * S * (_kv_dim / _tp) * self.config.bytes_per_element
-        _pf_total_bytes = _pf_wt_bytes + _pf_act_bytes + _pf_kv_bytes
+        # Attention score intermediate tensors (QK^T write + softmax read + V-multiply read)
+        _pf_attn_score_bytes = _lps * _pb * (self.config.num_attention_heads / _tp) * S * S * self.config.bytes_per_element * 3
+        # RMSNorm bytes: 2 norms × (read input + write output + read norm weight)
+        _pf_rmsnorm_bytes = _lps * 2 * (2 * _pb * S * self.config.d_model + self.config.d_model) * self.config.bytes_per_element
+        # Residual connections: 2 per layer × (read + write) × d_model per token
+        _pf_residual_bytes = _lps * 2 * 2 * _pb * S * self.config.d_model * self.config.bytes_per_element
+        # LM head bytes (amortized)
+        _pf_lmhead_wt_bytes = self.config.d_model * self.config.vocab_size * self.config.bytes_per_element / _tp * _layer_frac
+        _pf_lmhead_act_bytes = _pb * S * self.config.vocab_size * self.config.bytes_per_element / _tp * _layer_frac
+        _pf_lmhead_bytes = _pf_lmhead_wt_bytes + _pf_lmhead_act_bytes
+        _pf_total_bytes = (_pf_wt_bytes + _pf_act_bytes + _pf_kv_bytes +
+                           _pf_attn_score_bytes + _pf_rmsnorm_bytes + _pf_residual_bytes + _pf_lmhead_bytes)
 
         logger.info(f"[Roofline-Prefill] Memory: weights={_pf_wt_bytes/1e9:.3f}GB, "
                     f"act={_pf_act_bytes/1e9:.3f}GB, kv_write={_pf_kv_bytes/1e9:.3f}GB, "
-                    f"total={_pf_total_bytes/1e9:.3f}GB")
+                    f"attn_score={_pf_attn_score_bytes/1e9:.3f}GB, "
+                    f"rmsnorm={_pf_rmsnorm_bytes/1e9:.3f}GB, residual={_pf_residual_bytes/1e9:.3f}GB, "
+                    f"lm_head={_pf_lmhead_bytes/1e9:.3f}GB, total={_pf_total_bytes/1e9:.3f}GB")
 
         _pf_ai = _pf_total_flops / _pf_total_bytes if _pf_total_bytes > 0 else 0
         _pf_regime = "COMPUTE" if _pf_ai > _ridge else "MEMORY"
@@ -5845,25 +6061,38 @@ class LLMPlacementSolverWithTP:
                     f"(ridge={_ridge:.1f})")
 
         if _pf_regime == "COMPUTE":
-            _pf_base_time = _pf_total_flops / (_specs['tflops'] * 1e12 * _specs['efficiency'])
+            _pf_base_time = _pf_total_flops / (_specs['tflops'] * 1e12 * _specs['compute_efficiency'])
         else:
-            _pf_base_time = _pf_total_bytes / (_specs['mem_bw'] * 1e9 * _specs['efficiency'])
+            _pf_base_time = _pf_total_bytes / (_specs['mem_bw'] * 1e9 * _specs['memory_efficiency'])
 
         _pf_comm_size = _pb * S * self.config.d_model * self.config.bytes_per_element
-        _pf_comm_per_layer = 2 * 2 * _pf_comm_size / (_nvlink * 1e9) * (_tp - 1) / _tp if _tp > 1 else 0
+        # Per-op latency and effective BW: PCIe degrades with TP degree
+        _allreduce_latency = 5e-6 if _nvlink >= 100 else 200e-6
+        if _nvlink >= 100:
+            _eff_comm_bw = _nvlink
+        else:
+            _pcie_scale = {1: 1.0, 2: 0.75, 4: 0.375, 8: 0.125}.get(_tp, max(0.10, 0.5 / _tp))
+            _eff_comm_bw = _nvlink * _pcie_scale
+        _pf_comm_per_layer = 2 * (2 * _pf_comm_size / (_eff_comm_bw * 1e9) * (_tp - 1) / _tp + _allreduce_latency) if _tp > 1 else 0
         _pf_total_comm = _lps * _pf_comm_per_layer
-        _pf_tp_eff = max(0.30, 1.0 - {1:0,2:0.05,4:0.10,8:0.15,16:0.20}.get(_tp, 0.25))
+        # Simplified TP efficiency: residual overhead only (per-op latency in comm_time)
+        if _tp == 1:
+            _pf_tp_eff = 1.0
+        else:
+            _residual_oh = {2: 0.01, 4: 0.02, 8: 0.03, 16: 0.05}.get(_tp, 0.06)
+            _pf_tp_eff = max(0.50, 1.0 - _residual_oh)
         _pf_time = _pf_base_time / _pf_tp_eff
         _pf_total_time = _pf_time + _pf_total_comm
         _pf_batch_eff = min(1.0, 0.70 + 0.30 * min(1.0, S / 512))
         _pf_throughput = (_pb * S / _pf_total_time) * _pf_batch_eff
 
         logger.info(f"[Roofline-Prefill] base_time={_pf_base_time*1000:.2f}ms, "
-                    f"tp_overhead_eff={_pf_tp_eff:.2f}, "
+                    f"tp_eff={_pf_tp_eff:.4f} "
+                    f"(residual_oh={_residual_oh if _tp > 1 else 0:.3f}), "
                     f"adjusted={_pf_time*1000:.2f}ms")
         logger.info(f"[Roofline-Prefill] comm/layer={_pf_comm_per_layer*1000:.4f}ms "
                     f"(act_size={_pf_comm_size/1e6:.1f}MB, "
-                    f"nvlink={_nvlink:.0f}GB/s), "
+                    f"nvlink={_nvlink:.0f}GB/s, latency={_allreduce_latency*1e6:.0f}μs/op), "
                     f"total_comm={_pf_total_comm*1000:.2f}ms")
         logger.info(f"[Roofline-Prefill] total_time={_pf_total_time*1000:.2f}ms, "
                     f"batch_eff={_pf_batch_eff:.2f}, "
@@ -5888,12 +6117,18 @@ class LLMPlacementSolverWithTP:
             self.config.d_model * (self.config.d_hidden / _tp) +
             (self.config.d_hidden / _tp) * self.config.d_model
         )
-        _dc_flops_layer = _dc_attn_proj + _dc_attn_score + _dc_ffn
+        _dc_rmsnorm_flops = 2 * 5 * _db * 1 * self.config.d_model
+        _dc_flops_layer = _dc_attn_proj + _dc_attn_score + _dc_ffn + _dc_rmsnorm_flops
         _dc_total_flops = _lps * _dc_flops_layer
+        # LM head (amortized)
+        _dc_lmhead_flops = 2 * _db * 1 * self.config.d_model * self.config.vocab_size * _layer_frac
+        _dc_total_flops += _dc_lmhead_flops
 
         logger.info(f"[Roofline-Decode] FLOPs/layer: attn_proj={_dc_attn_proj:.3e}, "
-                    f"attn_score(O(n))={_dc_attn_score:.3e}, ffn={_dc_ffn:.3e}")
-        logger.info(f"[Roofline-Decode] Total FLOPs: {_dc_flops_layer:.3e}/layer × {_lps} = {_dc_total_flops:.3e}")
+                    f"attn_score(O(n))={_dc_attn_score:.3e}, ffn={_dc_ffn:.3e}, "
+                    f"rmsnorm={_dc_rmsnorm_flops:.3e}")
+        logger.info(f"[Roofline-Decode] Total FLOPs: {_dc_flops_layer:.3e}/layer × {_lps} "
+                    f"+ lm_head={_dc_lmhead_flops:.3e} = {_dc_total_flops:.3e}")
 
         _dc_wt_bytes = _lps * (
             (self.config.d_model * (_q_o_dim / _tp) + _q_o_dim * (self.config.d_model / _tp)) +
@@ -5902,28 +6137,51 @@ class LLMPlacementSolverWithTP:
         ) * self.config.bytes_per_element
         _dc_act_bytes = _lps * _db * 1 * self.config.d_model * self.config.bytes_per_element
         _dc_kv_bytes = _lps * 2 * _db * _avg_kv * (_kv_dim / _tp) * self.config.bytes_per_element
-        _dc_total_bytes = _dc_wt_bytes + _dc_act_bytes + _dc_kv_bytes
+        # PagedAttention scatter/gather overhead
+        _dc_kv_bytes *= 1.15
+        # Attention score intermediate tensors (1 query × kv_cache_len)
+        _dc_attn_score_bytes = _lps * _db * (self.config.num_attention_heads / _tp) * _avg_kv * self.config.bytes_per_element * 3
+        # RMSNorm bytes
+        _dc_rmsnorm_bytes = _lps * 2 * (2 * _db * 1 * self.config.d_model + self.config.d_model) * self.config.bytes_per_element
+        # Residual connections
+        _dc_residual_bytes = _lps * 2 * 2 * _db * 1 * self.config.d_model * self.config.bytes_per_element
+        # LM head bytes (amortized)
+        _dc_lmhead_wt_bytes = self.config.d_model * self.config.vocab_size * self.config.bytes_per_element / _tp * _layer_frac
+        _dc_lmhead_act_bytes = _db * 1 * self.config.vocab_size * self.config.bytes_per_element / _tp * _layer_frac
+        _dc_lmhead_bytes = _dc_lmhead_wt_bytes + _dc_lmhead_act_bytes
+        _dc_total_bytes = (_dc_wt_bytes + _dc_act_bytes + _dc_kv_bytes +
+                           _dc_attn_score_bytes + _dc_rmsnorm_bytes + _dc_residual_bytes + _dc_lmhead_bytes)
 
         logger.info(f"[Roofline-Decode] Memory: weights={_dc_wt_bytes/1e9:.3f}GB, "
                     f"act={_dc_act_bytes/1e6:.2f}MB, kv_read={_dc_kv_bytes/1e9:.3f}GB, "
-                    f"total={_dc_total_bytes/1e9:.3f}GB")
+                    f"attn_score={_dc_attn_score_bytes/1e6:.2f}MB, "
+                    f"rmsnorm={_dc_rmsnorm_bytes/1e6:.2f}MB, residual={_dc_residual_bytes/1e6:.2f}MB, "
+                    f"lm_head={_dc_lmhead_bytes/1e6:.2f}MB, total={_dc_total_bytes/1e9:.3f}GB")
 
         _dc_ai = _dc_total_flops / _dc_total_bytes if _dc_total_bytes > 0 else 0
         _dc_regime = "COMPUTE" if _dc_ai > _ridge else "MEMORY"
         logger.info(f"[Roofline-Decode] AI={_dc_ai:.1f} FLOPs/byte → {_dc_regime}-BOUND")
 
         if _dc_regime == "COMPUTE":
-            _dc_base_time = _dc_total_flops / (_specs['tflops'] * 1e12 * _specs['efficiency'])
+            _dc_base_time = _dc_total_flops / (_specs['tflops'] * 1e12 * _specs['compute_efficiency'])
         else:
-            _dc_base_time = _dc_total_bytes / (_specs['mem_bw'] * 1e9 * _specs['efficiency'])
+            _dc_base_time = _dc_total_bytes / (_specs['mem_bw'] * 1e9 * _specs['memory_efficiency'])
 
         _dc_comm_size = _db * 1 * self.config.d_model * self.config.bytes_per_element
-        _dc_comm_per_layer = 2 * 2 * _dc_comm_size / (_nvlink * 1e9) * (_tp - 1) / _tp if _tp > 1 else 0
+        _dc_comm_per_layer = 2 * (2 * _dc_comm_size / (_eff_comm_bw * 1e9) * (_tp - 1) / _tp + _allreduce_latency) if _tp > 1 else 0
         _dc_total_comm = _lps * _dc_comm_per_layer
         _dc_tp_eff = _pf_tp_eff
         _dc_time = _dc_base_time / _dc_tp_eff
         _dc_total_time = _dc_time + _dc_total_comm
-        _dc_batch_eff = ThroughputFunctions.batch_efficiency_factor(_db)
+        # Decode batch efficiency: memory-bound, high utilization even at small batch
+        if _db >= 16:
+            _dc_batch_eff = 1.0
+        elif _db >= 4:
+            _dc_batch_eff = 0.95
+        elif _db >= 2:
+            _dc_batch_eff = 0.90
+        else:
+            _dc_batch_eff = 0.85
         _dc_throughput = (_db / _dc_total_time) * _dc_batch_eff
 
         logger.info(f"[Roofline-Decode] base_time={_dc_base_time*1000:.3f}ms, "
