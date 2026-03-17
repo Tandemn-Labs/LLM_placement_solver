@@ -167,25 +167,32 @@ class ThroughputFunctions:
     """Throughput functions with TP support"""
 
     GPU_SPECS = {
-        # Split efficiency: compute_efficiency (sustained GEMM / peak TFLOPS),
-        #                   memory_efficiency (sustained BW / peak BW for decode streaming)
         # HBM GPUs achieve higher memory_efficiency (0.65-0.72) due to HBM streaming access.
         # GDDR6X GPUs have lower memory_efficiency (0.50-0.58) due to GDDR latency/bank conflicts.
-        'H100': {'tflops': 989, 'mem_bw': 3350, 'compute_efficiency': 0.80, 'memory_efficiency': 0.72},
-        'A100': {'tflops': 312, 'mem_bw': 2039, 'compute_efficiency': 0.78, 'memory_efficiency': 0.70},
-        'L40S': {'tflops': 362, 'mem_bw': 864,  'compute_efficiency': 0.70, 'memory_efficiency': 0.55},
-        'A40':  {'tflops': 150, 'mem_bw': 696,  'compute_efficiency': 0.70, 'memory_efficiency': 0.55},
-        'L40':  {'tflops': 181, 'mem_bw': 864,  'compute_efficiency': 0.70, 'memory_efficiency': 0.55},
+        #
+        # generation_factor: multiplier on real_world_efficiency to account for
+        # software-level differences across GPU architectures. vLLM kernels
+        # (PagedAttention, fused RMSNorm, etc.) are optimized for Ampere+;
+        # older architectures (Volta, Turing) lack BF16, FlashAttention v2,
+        # and have less efficient tensor core micro-ops. We are currently applying ~0.5x factor on V100.
+        # real-world throughput than roofline predicts (Lambda A100-vs-V100
+        # benchmarks show 1.6-3.4x gap for transformers).
+        # Baseline 1.0 = Ampere/Ada (the generation the roofline model is calibrated for).
+        'H100': {'tflops': 989, 'mem_bw': 3350, 'compute_efficiency': 0.80, 'memory_efficiency': 0.72, 'generation_factor': 1.15},
+        'A100': {'tflops': 312, 'mem_bw': 2039, 'compute_efficiency': 0.78, 'memory_efficiency': 0.70, 'generation_factor': 1.0},
+        'L40S': {'tflops': 362, 'mem_bw': 864,  'compute_efficiency': 0.70, 'memory_efficiency': 0.55, 'generation_factor': 1.0},
+        'A40':  {'tflops': 150, 'mem_bw': 696,  'compute_efficiency': 0.70, 'memory_efficiency': 0.55, 'generation_factor': 1.0},
+        'L40':  {'tflops': 181, 'mem_bw': 864,  'compute_efficiency': 0.70, 'memory_efficiency': 0.55, 'generation_factor': 1.0},
 
-        # Older GPUs
-        'V100': {'tflops': 125, 'mem_bw': 900,  'compute_efficiency': 0.68, 'memory_efficiency': 0.65},
-        'RTX4090': {'tflops': 165, 'mem_bw': 1008, 'compute_efficiency': 0.72, 'memory_efficiency': 0.58},
+        # Older GPUs — penalized for missing BF16, FlashAttention v2, unoptimized kernels
+        'V100': {'tflops': 125, 'mem_bw': 900,  'compute_efficiency': 0.68, 'memory_efficiency': 0.65, 'generation_factor': 0.50},
+        'RTX4090': {'tflops': 165, 'mem_bw': 1008, 'compute_efficiency': 0.72, 'memory_efficiency': 0.58, 'generation_factor': 1.0},
 
         # Budget GPUs
-        'L20':  {'tflops': 119, 'mem_bw': 480,  'compute_efficiency': 0.68, 'memory_efficiency': 0.55},
-        'L4':   {'tflops': 121, 'mem_bw': 300,  'compute_efficiency': 0.65, 'memory_efficiency': 0.50},
-        'A10':  {'tflops': 62.5,'mem_bw': 600,  'compute_efficiency': 0.65, 'memory_efficiency': 0.40},  # Dense FP16 (not sparse 125), GDDR6
-        'T4':   {'tflops': 65,  'mem_bw': 320,  'compute_efficiency': 0.60, 'memory_efficiency': 0.50},
+        'L20':  {'tflops': 119, 'mem_bw': 480,  'compute_efficiency': 0.68, 'memory_efficiency': 0.55, 'generation_factor': 1.0},
+        'L4':   {'tflops': 121, 'mem_bw': 300,  'compute_efficiency': 0.65, 'memory_efficiency': 0.50, 'generation_factor': 1.0},
+        'A10':  {'tflops': 62.5,'mem_bw': 600,  'compute_efficiency': 0.65, 'memory_efficiency': 0.40, 'generation_factor': 1.0},  # Dense FP16 (not sparse 125), GDDR6
+        'T4':   {'tflops': 65,  'mem_bw': 320,  'compute_efficiency': 0.60, 'memory_efficiency': 0.50, 'generation_factor': 0.55},
     }
 
     @staticmethod
@@ -2681,7 +2688,17 @@ class LLMPlacementSolverWithTP:
                 batch_for_phase=batch_for_phase
             )
 
-        throughput_per_sec = raw_throughput * pipeline_efficiency * self.config.real_world_efficiency
+        # Apply generation factor from the bottleneck GPU
+        _milp_gen_factor = 1.0
+        if assignments:
+            _milp_gpu_models = [self.gpu_types[a['gpu_type']].gpu_model for a in assignments
+                                if a['gpu_type'] in self.gpu_types]
+            if _milp_gpu_models:
+                _milp_gen_factor = min(
+                    ThroughputFunctions.GPU_SPECS.get(m, {}).get('generation_factor', 1.0)
+                    for m in _milp_gpu_models
+                )
+        throughput_per_sec = raw_throughput * pipeline_efficiency * self.config.real_world_efficiency * _milp_gen_factor
 
         used_instances = sorted({a['gpu_type'] for a in assignments})
         cost_per_hour = sum(self.gpu_types[gpu_type].cost_per_hour for gpu_type in used_instances)
@@ -4381,6 +4398,7 @@ class LLMPlacementSolverWithTP:
             optimal_batch_size = self.config.min_batch_size
 
         # Pipeline efficiency using 1F1B wave model (consistent with homogeneous solver)
+        active_segments = []
         if num_stages <= 1:
             pipeline_efficiency = 1.0
         else:
@@ -4449,8 +4467,17 @@ class LLMPlacementSolverWithTP:
                     batch_for_phase=batch_for_phase
                 )
 
-        # Apply real-world efficiency factor
+        # Apply real-world efficiency factor with GPU generation penalty
         real_world_efficiency = self.config.real_world_efficiency
+        # Get generation factor from active segments' GPU model
+        _diag_gen_factor = 1.0
+        if active_segments:
+            _seg_gpu_types = [seg[0].split('#')[0] for seg in active_segments]
+            for _sgt in _seg_gpu_types:
+                _sgt_model = self.gpu_types[_sgt].gpu_model if _sgt in self.gpu_types else ''
+                _gf = ThroughputFunctions.GPU_SPECS.get(_sgt_model, {}).get('generation_factor', 1.0)
+                _diag_gen_factor = min(_diag_gen_factor, _gf)
+        real_world_efficiency *= _diag_gen_factor
 
         throughput_per_sec = raw_throughput * pipeline_efficiency * real_world_efficiency
 
@@ -4458,7 +4485,7 @@ class LLMPlacementSolverWithTP:
         logger.info(f"  Batch size: {optimal_batch_size}")
         logger.info(f"  Pipeline stages: {num_stages}")
         logger.info(f"  Pipeline efficiency (1F1B): {pipeline_efficiency:.1%}")
-        logger.info(f"  Real-world efficiency: {real_world_efficiency:.1%}")
+        logger.info(f"  Real-world efficiency: {real_world_efficiency:.1%} (gen_factor={_diag_gen_factor:.2f})")
         logger.info(f"  Combined efficiency: {pipeline_efficiency * real_world_efficiency:.1%}")
         logger.info(f"  Raw throughput: {raw_throughput:.2f} tokens/sec")
         logger.info(f"  After pipeline efficiency: {raw_throughput * pipeline_efficiency:.2f} tokens/sec")
@@ -5653,8 +5680,11 @@ class LLMPlacementSolverWithTP:
                     else:
                         pipeline_efficiency = 1.0
 
-                    # Apply real-world efficiency factor
+                    # Apply real-world efficiency factor with GPU generation penalty
                     real_world_efficiency = self.config.real_world_efficiency
+                    _specs = ThroughputFunctions.GPU_SPECS.get(gpu_model, {})
+                    generation_factor = _specs.get('generation_factor', 1.0)
+                    real_world_efficiency *= generation_factor
 
                     effective_throughput = stage_throughput * pipeline_efficiency * real_world_efficiency
 
@@ -5668,7 +5698,7 @@ class LLMPlacementSolverWithTP:
                     logger.debug(
                         f"  [{family} TP={tp_degree} PP={pp_stages}] "
                         f"stage_tp={stage_throughput:.0f} tok/s, "
-                        f"pp_eff={pipeline_efficiency:.4f}, rw_eff={real_world_efficiency:.2f}, "
+                        f"pp_eff={pipeline_efficiency:.4f}, rw_eff={real_world_efficiency:.2f} (gen={generation_factor:.2f}), "
                         f"eff_tp={effective_throughput:.0f} tok/s, "
                         f"${total_cost_per_hour:.2f}/hr, ${cost_per_million:.4f}/Mtok"
                     )
@@ -5908,9 +5938,10 @@ class LLMPlacementSolverWithTP:
         logger.info(f"Wave model: prefill_batch={opt_prefill_batch} "
                     f"(mnbt={mnbt} // seq_len={S}), "
                     f"prefill_iters={opt_prefill_iters} (ceil({eff_batch}/{opt_prefill_batch}))")
+        _best_gen = ThroughputFunctions.GPU_SPECS.get(best.get('gpu_model', ''), {}).get('generation_factor', 1.0)
         logger.info(f"Throughput: stage={best['stage_throughput']:.0f} tok/s, "
                     f"pipeline_eff={best['pipeline_efficiency']:.0%}, "
-                    f"real_world_eff={self.config.real_world_efficiency:.0%}, "
+                    f"real_world_eff={self.config.real_world_efficiency:.0%}×gen={_best_gen:.2f}, "
                     f"effective={best['effective_throughput']:.0f} tok/s")
         logger.info(f"Cost: ${best['cost_per_hour']:.2f}/hr, "
                     f"${best['cost_per_million']:.4f}/M tokens")
@@ -6207,7 +6238,7 @@ class LLMPlacementSolverWithTP:
         # --- Final throughput chain ---
         logger.info(f"\n[Final] stage_tp={best['stage_throughput']:.0f} "
                     f"× pipeline_eff={best['pipeline_efficiency']:.2f} "
-                    f"× real_world_eff={self.config.real_world_efficiency:.2f} "
+                    f"× real_world_eff={self.config.real_world_efficiency:.2f}×gen={_best_gen:.2f} "
                     f"= {best['effective_throughput']:.0f} tok/s")
 
         # --- What to compare against vLLM ---
