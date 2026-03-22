@@ -940,7 +940,9 @@ class LLMPlacementSolverWithTP:
                  max_output_tokens: Optional[int] = None,
                  max_num_seqs: Optional[int] = None,
                  max_num_batched_tokens: Optional[int] = None,
-                 gpu_memory_utilization: Optional[float] = None):
+                 gpu_memory_utilization: Optional[float] = None,
+                 total_tokens_to_process: Optional[int] = None,
+                 max_total_runtime_hours: Optional[float] = None):
 
         def _read_gurobi_wls_file(wls_path: str) -> Dict[str, Union[str, int]]:
             if not os.path.exists(wls_path):
@@ -1025,6 +1027,8 @@ class LLMPlacementSolverWithTP:
             max_num_seqs=max_num_seqs,
             max_num_batched_tokens=max_num_batched_tokens,
             gpu_memory_utilization=gpu_memory_utilization,
+            total_tokens_to_process=total_tokens_to_process,
+            max_total_runtime_hours=max_total_runtime_hours,
         )
         self.model = None
         self.solution = None
@@ -1352,6 +1356,8 @@ class LLMPlacementSolverWithTP:
         max_num_seqs: Optional[int] = None,
         max_num_batched_tokens: Optional[int] = None,
         gpu_memory_utilization: Optional[float] = None,
+        total_tokens_to_process: Optional[int] = None,
+        max_total_runtime_hours: Optional[float] = None,
     ) -> Config:
         """Load runtime configuration"""
         df = pd.read_csv(filename)
@@ -1459,8 +1465,8 @@ class LLMPlacementSolverWithTP:
             max_total_cost=float(config_dict['max_total_cost']),
             throughput_normalization=float(config_dict['throughput_normalization']),
             cost_normalization=float(config_dict['cost_normalization']),
-            total_tokens_to_process=int(config_dict['total_tokens_to_process']),
-            max_total_runtime_hours=float(config_dict['max_total_runtime_hours']),
+            total_tokens_to_process=total_tokens_to_process if total_tokens_to_process is not None else int(config_dict['total_tokens_to_process']),
+            max_total_runtime_hours=max_total_runtime_hours if max_total_runtime_hours is not None else float(config_dict['max_total_runtime_hours']),
             real_world_efficiency=real_world_efficiency,
             micro_batch_size=micro_batch_size,
             max_input_tokens=max_input_tokens or 0,
@@ -5474,6 +5480,19 @@ class LLMPlacementSolverWithTP:
                     f"weight_mem/layer={self.config.layer_weight_memory_gb:.3f} GB, "
                     f"bytes_per_elem={self.config.bytes_per_element}")
 
+        # SLO constraint
+        slo_active = self.config.max_total_runtime_hours < 999999.0
+        if slo_active:
+            min_throughput_for_slo = self.config.total_tokens_to_process / (
+                self.config.max_total_runtime_hours * 3600
+            )
+            logger.info(f"SLO: {self.config.max_total_runtime_hours:.2f} hours, "
+                        f"tokens_per_replica={self.config.total_tokens_to_process}, "
+                        f"min_throughput={min_throughput_for_slo:.0f} tok/s")
+        else:
+            min_throughput_for_slo = 0.0
+            logger.info("SLO: none (optimizing $/token only)")
+
         total_layers = self.config.num_decoder_layers
         max_pp_stages = self.config.max_pipeline_stages
 
@@ -5703,6 +5722,15 @@ class LLMPlacementSolverWithTP:
                         f"${total_cost_per_hour:.2f}/hr, ${cost_per_million:.4f}/Mtok"
                     )
 
+                    # SLO feasibility check: can this config finish within the deadline?
+                    estimated_runtime_hours = None
+                    meets_slo = True
+                    if slo_active and effective_throughput > 0:
+                        estimated_runtime_hours = self.config.total_tokens_to_process / (
+                            effective_throughput * 3600
+                        )
+                        meets_slo = estimated_runtime_hours <= self.config.max_total_runtime_hours
+
                     config_info = {
                         'family': family,
                         'instances_used': instances[:instances_needed],
@@ -5722,15 +5750,34 @@ class LLMPlacementSolverWithTP:
                         'gpus_per_instance': gpus_per_instance,
                         'gpu_memory_gb': gpu_memory_gb,
                         'nvlink_bw': nvlink_bw,
+                        'estimated_runtime_hours': estimated_runtime_hours,
+                        'meets_slo': meets_slo,
                     }
 
                     all_valid_configs.append(config_info)
 
-                    if cost_per_token < best_cost_per_token:
+                    if meets_slo and cost_per_token < best_cost_per_token:
                         best_cost_per_token = cost_per_token
                         best_solution = config_info
 
+        slo_feasible = [c for c in all_valid_configs if c['meets_slo']]
+        slo_rejected = len(all_valid_configs) - len(slo_feasible)
         logger.info(f"\nEnumerated {len(all_valid_configs)} valid configurations")
+        if slo_active:
+            logger.info(f"SLO filter: {len(slo_feasible)} meet deadline, {slo_rejected} too slow")
+
+        # If SLO is active but nothing meets it, fall back to fastest config
+        if not best_solution and slo_active and all_valid_configs:
+            fastest = max(all_valid_configs, key=lambda c: c['effective_throughput'])
+            best_solution = fastest
+            best_cost_per_token = fastest['cost_per_token']
+            est = fastest.get('estimated_runtime_hours')
+            logger.warning(
+                f"No config meets SLO ({self.config.max_total_runtime_hours:.2f}h). "
+                f"Falling back to fastest: {fastest['family']} TP={fastest['tp_degree']} "
+                f"PP={fastest['pp_stages']} ({fastest['effective_throughput']:.0f} tok/s, "
+                f"est {est:.2f}h)"
+            )
 
         if not best_solution:
             logger.error("No valid homogeneous placement found!")
@@ -5745,18 +5792,27 @@ class LLMPlacementSolverWithTP:
         logger.info("="*80)
         logger.info("TOP 10 HOMOGENEOUS CONFIGURATIONS (by $/M tokens)")
         logger.info("="*80)
+        slo_hdr = " {'ETA(h)':<8}" if slo_active else ""
         logger.info(f"{'Rank':<5} {'Family':<20} {'PP':<4} {'TP':<4} {'Layers/Stage':<13} "
                    f"{'KVPool':<8} {'EffBatch':<9} "
-                   f"{'Throughput':<12} {'$/hour':<10} {'$/M tokens':<12}")
+                   f"{'Throughput':<12} {'$/hour':<10} {'$/M tokens':<12}"
+                   + (" {'ETA(h)':<8} {'SLO':<4}" if slo_active else ""))
         logger.info("-"*115)
 
         for i, cfg in enumerate(all_valid_configs[:10], 1):
             eff_batch = min(self.config.max_num_seqs, cfg['max_concurrent_sequences'])
+            slo_suffix = ""
+            if slo_active:
+                eta = cfg.get('estimated_runtime_hours')
+                eta_str = f"{eta:.2f}" if eta is not None else "N/A"
+                slo_mark = "OK" if cfg['meets_slo'] else "MISS"
+                slo_suffix = f" {eta_str:<8} {slo_mark:<4}"
             logger.info(f"{i:<5} {cfg['family']:<20} {cfg['pp_stages']:<4} {cfg['tp_degree']:<4} "
                        f"{cfg['layers_per_stage']:<13} {cfg['max_concurrent_sequences']:<8} "
                        f"{eff_batch:<9} "
                        f"{cfg['effective_throughput']:<12.0f} ${cfg['cost_per_hour']:<9.2f} "
-                       f"${cfg['cost_per_million']:<11.6f}")
+                       f"${cfg['cost_per_million']:<11.6f}"
+                       + slo_suffix)
 
         # Build solution in the standard format
         best = best_solution
@@ -5858,6 +5914,8 @@ class LLMPlacementSolverWithTP:
             'cost_per_hour': best['cost_per_hour'],
             'cost_per_token': best['cost_per_token'],
             'total_runtime_hours': total_runtime_hours,
+            'estimated_runtime_hours': best.get('estimated_runtime_hours'),
+            'meets_slo': best.get('meets_slo', True),
             'meets_cost_threshold': best['cost_per_token'] <= self.config.max_cost_per_token,
             'tp_configuration': {inst: best['tp_degree'] for inst in best['instances_used']},
             'gpu_assignments': gpu_assignments,
